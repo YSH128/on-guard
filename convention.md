@@ -7,14 +7,24 @@
 ## 1. Branch Convention
 
 ### 1.1 Main Branch
-main (또는 master) : 최종 결과물 및 배포 브랜치
-develop : 개발 통합 브랜치
+main : 최종 결과물 및 배포 브랜치
+dev : 개발 통합 브랜치
 
 ### 1.2 Working Branch
 type/domain/feature-name
 
-추천 domain 리스트:
+#### 추천 type 리스트:
+| Type | Description |
+|---|---|
+| feat | 새로운 기능 추가 |
+| fix | 버그 수정 |
+| refactor | 기능 변경 없는 코드 개선 |
+| docs | 문서 수정 |
+| style | 코드 포맷 수정 (공백, 세미콜론 등) |
+| test | 테스트 코드 |
+| chore | 설정, 빌드, 기타 작업 |
 
+#### 추천 domain 리스트:
 - web: 프론트엔드 및 웹 관련 작업
 
 - ai: 모델 트레이닝, 추론 로직 (얼굴 인식 등)
