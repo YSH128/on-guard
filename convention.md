@@ -67,6 +67,7 @@ type: subject
 | style | 코드 포맷 수정 (공백, 세미콜론 등) |
 | test | 테스트 코드 |
 | chore | 설정, 빌드, 기타 작업 |
+| submit | 개인 학습 과제 제출 |
 
 ---
 
