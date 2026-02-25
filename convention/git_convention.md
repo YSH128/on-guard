@@ -7,11 +7,12 @@
 ## 1. Branch Convention
 
 ### 1.1 Main Branch
-main : 최종 결과물 및 배포 브랜치
+main : 최종 결과물 및 배포 브랜치  
 dev : 개발 통합 브랜치
 
 ### 1.2 Working Branch
-type/domain/feature-name
+[작업] type/domain/feat-name  
+[이슈] type/domain/feat-name-티켓번호
 
 #### 추천 type 리스트:
 | Type | Description |
@@ -25,24 +26,28 @@ type/domain/feature-name
 | chore | 설정, 빌드, 기타 작업 |
 
 #### 추천 domain 리스트:
-- web: 프론트엔드 및 웹 관련 작업
+- fe: 프론트엔드 작업
+
+- be : 백엔드 작업
 
 - ai: 모델 트레이닝, 추론 로직 (얼굴 인식 등)
 
-- embedded (또는 jetson): 하드웨어 제어, 센서 관련
+- embedded: 하드웨어 제어, 센서 관련
 
 - api: 백엔드 통신 및 데이터 처리
 
 #### Example
-feature/web/dashboard-layout
+[작업] feat/web/dashboard-layout
 
-feature/ai/face-embedding
+[작업] feat/ai/face-embedding
 
-fix/embedded/motor-error
+[작업] fix/embedded/motor-error
 
-docs/api/model-accuracy
+[작업] docs/api/model-accuracy
 
-chore/project-setup
+[작업] chore/project-setup
+
+[이슈] feat/signup-api-S14P11A404-28
 
 #### Rules
 - 소문자 사용
@@ -71,7 +76,7 @@ type: subject
 
 ---
 
-### 2.3 Subject Rules
+### 2.3 Subject Rules     
 - 현재형 사용
 - 50자 이내 권장
 - 마침표 사용 금지
