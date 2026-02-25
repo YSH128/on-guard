@@ -11,7 +11,8 @@ main : 최종 결과물 및 배포 브랜치
 dev : 개발 통합 브랜치
 
 ### 1.2 Working Branch
-type/domain/feat-name
+[작업] type/domain/feat-name
+[이슈] type/domain/feat-name-티켓번호
 
 #### 추천 type 리스트:
 | Type | Description |
@@ -36,15 +37,17 @@ type/domain/feat-name
 - api: 백엔드 통신 및 데이터 처리
 
 #### Example
-feat/web/dashboard-layout
+[작업] feat/web/dashboard-layout
 
-feat/ai/face-embedding
+[작업] feat/ai/face-embedding
 
-fix/embedded/motor-error
+[작업] fix/embedded/motor-error
 
-docs/api/model-accuracy
+[작업] docs/api/model-accuracy
 
-chore/project-setup
+[작업] chore/project-setup
+
+[이슈] feature/signup-api-S14P11A404-28
 
 #### Rules
 - 소문자 사용
