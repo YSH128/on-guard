@@ -47,7 +47,7 @@ dev : 개발 통합 브랜치
 
 [작업] chore/project-setup
 
-[이슈] feature/signup-api-S14P11A404-28
+[이슈] feat/signup-api-S14P11A404-28
 
 #### Rules
 - 소문자 사용
@@ -76,7 +76,7 @@ type: subject
 
 ---
 
-### 2.3 Subject Rules
+### 2.3 Subject Rules     
 - 현재형 사용
 - 50자 이내 권장
 - 마침표 사용 금지
