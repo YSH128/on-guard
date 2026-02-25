@@ -11,7 +11,7 @@ main : 최종 결과물 및 배포 브랜치
 dev : 개발 통합 브랜치
 
 ### 1.2 Working Branch
-type/domain/feature-name
+type/domain/feat-name
 
 #### 추천 type 리스트:
 | Type | Description |
@@ -25,18 +25,20 @@ type/domain/feature-name
 | chore | 설정, 빌드, 기타 작업 |
 
 #### 추천 domain 리스트:
-- web: 프론트엔드 및 웹 관련 작업
+- fe: 프론트엔드 작업
+
+- be : 백엔드 작업
 
 - ai: 모델 트레이닝, 추론 로직 (얼굴 인식 등)
 
-- embedded (또는 jetson): 하드웨어 제어, 센서 관련
+- embedded: 하드웨어 제어, 센서 관련
 
 - api: 백엔드 통신 및 데이터 처리
 
 #### Example
-feature/web/dashboard-layout
+feat/web/dashboard-layout
 
-feature/ai/face-embedding
+feat/ai/face-embedding
 
 fix/embedded/motor-error
 
