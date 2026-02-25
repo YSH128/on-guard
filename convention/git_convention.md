@@ -7,11 +7,11 @@
 ## 1. Branch Convention
 
 ### 1.1 Main Branch
-main : 최종 결과물 및 배포 브랜치
+main : 최종 결과물 및 배포 브랜치  
 dev : 개발 통합 브랜치
 
 ### 1.2 Working Branch
-[작업] type/domain/feat-name
+[작업] type/domain/feat-name  
 [이슈] type/domain/feat-name-티켓번호
 
 #### 추천 type 리스트:
