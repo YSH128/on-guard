@@ -1,0 +1,60 @@
+SELECT country FROM singer WHERE age > 20	concert_singer
+SELECT country FROM song_list WHERE singer_age > 20	concert_singer
+SELECT COUNT(*) FROM pets WHERE weight > 10	pets_1
+SELECT COUNT(*) FROM pets WHERE weight > 10	pets_1
+SELECT COUNT(*) FROM pets	pets_1
+SELECT COUNT(*) FROM pets	pets_1
+SELECT COUNT(*) FROM continents	car_1
+SELECT COUNT(*) FROM continents	car_1
+SELECT COUNT(*) FROM airlines	flight_2
+SELECT COUNT(*) FROM airlines	flight_2
+SELECT COUNT(*) FROM airport	flight_2
+SELECT COUNT(*) FROM airports	flight_2
+SELECT COUNT(*) FROM airlines WHERE country = 'USA'	flight_2
+SELECT COUNT(*) FROM airlines WHERE country = 'USA'	flight_2
+SELECT COUNT(*) FROM documents	cre_Doc_Template_Mgt
+SELECT COUNT(*) FROM documents	cre_Doc_Template_Mgt
+SELECT COUNT(*) FROM templates	cre_Doc_Template_Mgt
+SELECT COUNT(*) FROM templates	cre_Doc_Template_Mgt
+SELECT distinct template_type_code FROM templates WHERE template_type_code IS NOT NULL	cre_Doc_Template_Mgt
+SELECT template_type_code FROM template_type_codes WHERE template_type_code = '1'	cre_Doc_Template_Mgt
+SELECT COUNT(*) FROM templates WHERE template_type_code = 'CV'	cre_Doc_Template_Mgt
+SELECT COUNT(*) FROM templates WHERE type = 'CV'	cre_Doc_Template_Mgt
+SELECT COUNT(*) FROM paragraphs	cre_Doc_Template_Mgt
+SELECT COUNT(*) FROM paragraphs	cre_Doc_Template_Mgt
+SELECT name FROM teacher ORDER BY age ASC	course_teach
+SELECT name FROM teacher WHERE age ASC	course_teach
+SELECT COUNT(*) FROM PLAYERS	wta_1
+SELECT COUNT(*) FROM PLAYERS	wta_1
+SELECT COUNT(*) FROM matches	wta_1
+SELECT COUNT(*) FROM table_name	wta_1
+SELECT COUNT(*) FROM players	wta_1
+SELECT COUNT(*) FROM players WHERE country = 'USA'	wta_1
+SELECT COUNT(*) FROM courses	student_transcripts_tracking
+SELECT COUNT(*) FROM courses	student_transcripts_tracking
+SELECT COUNT(*) FROM transcripts WHERE timestamp > NOW() - INTERVAL 1 DAY	student_transcripts_tracking
+SELECT AVG(transcript_date) FROM transcripts	student_transcripts_tracking
+SELECT COUNT(*) FROM transcripts	student_transcripts_tracking
+SELECT COUNT(*) FROM transcripts	student_transcripts_tracking
+SELECT COUNT(*) FROM tv_channel WHERE language = 'English'	tvshow
+SELECT COUNT(*) FROM tv_channels WHERE language = 'English'	tvshow
+SELECT name FROM conductors ORDER BY age ASC	orchestra
+SELECT name FROM conductor ORDER BY age	orchestra
+SELECT AVG(age) FROM dogs	dog_kennels
+SELECT AVG(AGE) FROM DOGS	dog_kennels
+SELECT template_id, COUNT(*) FROM documents GROUP BY template_id	cre_Doc_Template_Mgt
+SELECT template_id FROM documents WHERE template_id IN (SELECT template_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document_id IN (SELECT document_id FROM documents WHERE document	cre_Doc_Template_Mgt
+SELECT template_id, version_number, template_type_code FROM templates WHERE template_id IN (SELECT template_id FROM templates GROUP BY template_id)	cre_Doc_Template_Mgt
+SELECT template_id, template_version_number, template_type_code FROM templates WHERE template_id IN (SELECT template_id FROM templates WHERE template_type_code = 'template_1')	cre_Doc_Template_Mgt
+SELECT COUNT(*) FROM matches WHERE year IN ('2013', '2016')	wta_1
+SELECT COUNT(*) FROM matches WHERE year IN ('2013', '2016')	wta_1
+SELECT MIN(TV_Series_Share) AS min_share, MAX(TV_Series_Share) AS max_share FROM TV_Series_Data	tvshow
+SELECT MAX(share) AS max_share, MIN(share) AS min_share FROM tv_series	tvshow
+SELECT nationality, COUNT(*) FROM people GROUP BY nationality	poker_player
+SELECT COUNT(*) FROM users WHERE nationality = 'USA'	poker_player
+SELECT name FROM people ORDER BY name ASC	poker_player
+SELECT name, birth_date FROM people ORDER BY name ASC	poker_player
+SELECT MAX(p.share) AS max_share, MIN(p.share) AS min_share FROM Performance p WHERE p.type NOT IN ('Live final')	orchestra
+SELECT MAX(share) AS max_share, MIN(share) AS min_share FROM performances WHERE type NOT IN ('Live final')	orchestra
+SELECT student_id, COUNT(*) FROM student_likes GROUP BY student_id	network_1
+SELECT student_id, COUNT(*) FROM likes GROUP BY student_id	network_1
