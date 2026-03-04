@@ -3,6 +3,7 @@ package com.s14p21a404.shutter
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
@@ -38,6 +39,18 @@ class MainActivity : ComponentActivity() {
     ) { permissions ->
         Log.d(TAG, "권한 결과: $permissions")
         checkAllPermissions()
+    }
+
+    // 화면 캡처 동의 런처
+    private val screenCaptureLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK && result.data != null) {
+            Log.d(TAG, "화면 캡처 동의 완료")
+            startServiceWithProjection(result.resultCode, result.data!!)
+        } else {
+            Log.w(TAG, "화면 캡처 동의 거부됨")
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -123,6 +136,7 @@ class MainActivity : ComponentActivity() {
 
     /**
      * 서비스 시작/중지 토글
+     * 시작 시: 화면 캡처 동의 다이얼로그 → 동의 후 서비스 시작
      */
     private fun toggleService() {
         if (serviceRunning.value) {
@@ -130,11 +144,24 @@ class MainActivity : ComponentActivity() {
             serviceRunning.value = false
             Log.d(TAG, "서비스 중지됨")
         } else {
-            val intent = Intent(this, VideoCallDetectService::class.java)
-            startForegroundService(intent)
-            serviceRunning.value = true
-            Log.d(TAG, "서비스 시작됨")
+            // 화면 캡처 동의 요청 → 동의 결과는 screenCaptureLauncher에서 처리
+            val projectionManager = getSystemService(MediaProjectionManager::class.java)
+            screenCaptureLauncher.launch(projectionManager.createScreenCaptureIntent())
         }
+    }
+
+    /**
+     * 화면 캡처 동의 후 서비스 시작
+     * resultCode와 data를 Intent Extra로 Service에 전달
+     */
+    private fun startServiceWithProjection(resultCode: Int, data: Intent) {
+        val intent = Intent(this, VideoCallDetectService::class.java).apply {
+            putExtra(VideoCallDetectService.EXTRA_RESULT_CODE, resultCode)
+            putExtra(VideoCallDetectService.EXTRA_PROJECTION_DATA, data)
+        }
+        startForegroundService(intent)
+        serviceRunning.value = true
+        Log.d(TAG, "서비스 시작됨 (MediaProjection 포함)")
     }
 
     companion object {
