@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: shutter
+  docker:
+    compose:
+      enabled: false
