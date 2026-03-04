@@ -20,6 +20,7 @@ import android.provider.Settings
 import com.s14p21a404.shutter.service.capture.ScreenCaptureManager
 import com.s14p21a404.shutter.service.detector.BroadcastTriggerDetector
 import com.s14p21a404.shutter.service.detector.DeepfakeDetector
+import com.s14p21a404.shutter.service.detector.RealDeepfakeDetector
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -51,10 +52,10 @@ class VideoCallDetectService : Service() {
     private var screenCaptureManager: ScreenCaptureManager? = null
 
     // ── 딥페이크 감지기 ──
-    // TODO: BuildConfig 등으로 Stub ↔ Real 전환
-    //  - BroadcastTriggerDetector: ADB 명령으로 수동 트리거 (현재 사용)
+    // BuildConfig 등으로 Stub ↔ Real 전환
+    //  - BroadcastTriggerDetector: ADB 명령으로 수동 트리거 (테스트용)
     //  - AlwaysDeepfakeDetector: 항상 딥페이크 (자동 테스트)
-    //  - (향후) RealDeepfakeDetector: 실제 캡처 + JNI + C++ AI 추론
+    //  - RealDeepfakeDetector: 실제 캡처 + JNI + C++ AI 추론
     private lateinit var detector: DeepfakeDetector
 
     // ── 통화 상태 콜백 ──
@@ -91,7 +92,8 @@ class VideoCallDetectService : Service() {
         telephonyManager = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
         cameraManager = getSystemService(CAMERA_SERVICE) as CameraManager
         warningOverlayManager = WarningOverlayManager(this)
-        detector = BroadcastTriggerDetector(this)
+        detector = BroadcastTriggerDetector(this)      // ADB 수동 테스트용
+        // detector = RealDeepfakeDetector()            // 실제 JNI 연동 (NDK 빌드 후 전환)
 
         startAsForeground()
         registerCallbacks()
@@ -205,11 +207,11 @@ class VideoCallDetectService : Service() {
         screenCaptureManager = ScreenCaptureManager(
             context = this,
             mediaProjection = projection,
-            onFrameCaptured = { buffer, width, height, _, bitmap ->
+            onFrameCaptured = { buffer, width, height, rowStride, _ ->
                 Log.d(TAG, "프레임 캡처됨: ${width}x${height}, buffer=${buffer.size}bytes")
 
-                // TODO: 향후 RealDeepfakeDetector에서 이 buffer를 JNI에 전달
-                //   frameProcessor.nativeDetectDeepfake(buffer, width, height, rowStride, null)
+                // 캡처된 프레임을 RealDeepfakeDetector → JNI로 전달
+                (detector as? RealDeepfakeDetector)?.feedFrame(buffer, width, height, rowStride)
 
                 // 디버그: 캡처된 프레임을 파일로 저장하여 확인 (필요 시 주석 해제)
 //                 bitmap?.let { bmp ->
