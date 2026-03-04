@@ -14,7 +14,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
-import com.s14p21a404.shutter.ui.WarningDialogActivity
+import android.provider.Settings
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -37,6 +37,7 @@ class VideoCallDetectService : Service() {
     private var isCameraBusy: Boolean = false
 
     private val dialogShown = AtomicBoolean(false)
+    private lateinit var warningOverlayManager: WarningOverlayManager
 
     // ── 통화 상태 콜백 ──
     private val callStateCallback = object : TelephonyCallback(),
@@ -71,6 +72,7 @@ class VideoCallDetectService : Service() {
 
         telephonyManager = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
         cameraManager = getSystemService(CAMERA_SERVICE) as CameraManager
+        warningOverlayManager = WarningOverlayManager(this)
 
         startAsForeground()
         registerCallbacks()
@@ -83,6 +85,7 @@ class VideoCallDetectService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "서비스 종료")
+        warningOverlayManager.dismiss()
         unregisterCallbacks()
     }
 
@@ -129,20 +132,23 @@ class VideoCallDetectService : Service() {
                 showWarningDialog()
             }
         } else {
-            // 통화 종료되면 다음 감지를 위해 초기화
-            dialogShown.set(false)
+            // 통화 종료되면 오버레이 닫기 + 다음 감지를 위해 초기화
+            if (dialogShown.compareAndSet(true, false)) {
+                Log.d(TAG, "통화 종료 → 경고 오버레이 자동 닫기")
+                warningOverlayManager.dismiss()
+            }
         }
     }
 
     /**
-     * 경고 다이얼로그 Activity 실행
+     * 경고 오버레이 표시 (WindowManager.addView)
      */
     private fun showWarningDialog() {
-        val intent = Intent(this, WarningDialogActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        if (!Settings.canDrawOverlays(this)) {
+            Log.w(TAG, "오버레이 권한 없음 — 경고 표시 불가")
+            return
         }
-        startActivity(intent)
+        warningOverlayManager.show()
     }
 
     // ── Foreground Service 설정 ──

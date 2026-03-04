@@ -3,7 +3,9 @@ package com.s14p21a404.shutter
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -28,6 +30,7 @@ class MainActivity : ComponentActivity() {
 
     private val serviceRunning = mutableStateOf(false)
     private val allPermissionsGranted = mutableStateOf(false)
+    private val overlayPermissionGranted = mutableStateOf(false)
 
     // 런타임 권한 요청 런처
     private val permissionLauncher = registerForActivityResult(
@@ -48,7 +51,9 @@ class MainActivity : ComponentActivity() {
                 MainScreen(
                     isServiceRunning = serviceRunning.value,
                     allPermissionsGranted = allPermissionsGranted.value,
+                    overlayPermissionGranted = overlayPermissionGranted.value,
                     onRequestPermissions = { requestAllPermissions() },
+                    onRequestOverlayPermission = { requestOverlayPermission() },
                     onToggleService = { toggleService() }
                 )
             }
@@ -72,8 +77,11 @@ class MainActivity : ComponentActivity() {
             this, Manifest.permission.POST_NOTIFICATIONS
         ) == PackageManager.PERMISSION_GRANTED
 
+        val hasOverlay = Settings.canDrawOverlays(this)
+
         allPermissionsGranted.value = hasPhoneState && hasNotification
-        Log.d(TAG, "권한 상태 - Phone: $hasPhoneState, Notification: $hasNotification")
+        overlayPermissionGranted.value = hasOverlay
+        Log.d(TAG, "권한 상태 - Phone: $hasPhoneState, Notification: $hasNotification, Overlay: $hasOverlay")
     }
 
     /**
@@ -94,8 +102,22 @@ class MainActivity : ComponentActivity() {
             permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
         }
 
+
         if (permissionsToRequest.isNotEmpty()) {
             permissionLauncher.launch(permissionsToRequest.toTypedArray())
+        }
+    }
+
+    /**
+     * 오버레이 권한 요청 (설정 화면으로 이동)
+     */
+    private fun requestOverlayPermission() {
+        if (!Settings.canDrawOverlays(this)) {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:$packageName")
+            )
+            startActivity(intent)
         }
     }
 
@@ -128,7 +150,9 @@ class MainActivity : ComponentActivity() {
 fun MainScreen(
     isServiceRunning: Boolean,
     allPermissionsGranted: Boolean,
+    overlayPermissionGranted: Boolean,
     onRequestPermissions: () -> Unit,
+    onRequestOverlayPermission: () -> Unit,
     onToggleService: () -> Unit
 ) {
     Scaffold(
@@ -224,8 +248,39 @@ fun MainScreen(
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            } else {
-                // 서비스 토글 버튼
+            }
+
+            // 오버레이 권한 미충족 시 설정 이동 버튼
+            if (allPermissionsGranted && !overlayPermissionGranted) {
+                Button(
+                    onClick = onRequestOverlayPermission,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFFF5722)
+                    )
+                ) {
+                    Text(
+                        text = "오버레이 권한 허용하기",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "영상통화 위에 경고를 표시하려면\n'다른 앱 위에 표시' 권한이 필요합니다.\n설정 화면에서 직접 허용해주세요.",
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // 모든 권한 충족 시 서비스 토글 버튼
+            if (allPermissionsGranted && overlayPermissionGranted) {
                 Button(
                     onClick = onToggleService,
                     modifier = Modifier

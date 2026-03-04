@@ -11,6 +11,9 @@
     <!-- 알림 권한 (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- 다른 앱 위에 오버레이 표시 -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -32,12 +35,6 @@
             </intent-filter>
         </activity>
 
-        <!-- 영상통화 감지 경고 다이얼로그 -->
-        <activity
-            android:name=".ui.WarningDialogActivity"
-            android:exported="false"
-            android:excludeFromRecents="true"
-            android:theme="@style/Theme.Shutter.Dialog" />
 
         <!-- 영상통화 감지 Foreground Service -->
         <service
