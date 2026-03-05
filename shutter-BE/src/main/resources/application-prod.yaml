@@ -1,0 +1,36 @@
+spring:
+  # ───── 운영 환경 설정 (EC2 Docker 배포) ─────
+  datasource:
+    url: jdbc:mysql://${DB_HOST:mysql}:${DB_PORT:3306}/${DB_NAME}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+
+  jpa:
+    show-sql: false # 운영에서는 SQL 미출력
+
+# Actuator - 운영에서는 헬스체크만 (공통 설정 유지)
+
+# 운영 로그 설정
+logging:
+  level:
+    root: WARN
+    com.shutter: INFO
+  file:
+    name: /var/log/shutter/app.log
+
+# Swagger UI (운영에서 비활성화)
+springdoc:
+  swagger-ui:
+    enabled: false
+  api-docs:
+    enabled: false
