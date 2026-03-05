@@ -2,22 +2,22 @@ package com.shutter.api.global.exception;
 
 import com.shutter.api.global.common.ErrorResponse;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.bind.support.WebExchangeBindException;
-import org.springframework.web.server.ServerWebInputException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(WebExchangeBindException.class)
-    public ResponseEntity<ErrorResponse> handleValidation(WebExchangeBindException ex) {
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
         return ResponseEntity.badRequest()
                 .body(new ErrorResponse("INVALID_PAYLOAD", "Invalid telemetry request"));
     }
 
-    @ExceptionHandler(ServerWebInputException.class)
-    public ResponseEntity<ErrorResponse> handleServerWebInput(ServerWebInputException ex) {
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleMessageNotReadable(HttpMessageNotReadableException ex) {
         return ResponseEntity.badRequest()
                 .body(new ErrorResponse("INVALID_PAYLOAD", "Invalid telemetry request"));
     }

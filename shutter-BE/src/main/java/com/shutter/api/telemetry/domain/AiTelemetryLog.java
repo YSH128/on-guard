@@ -1,16 +1,15 @@
 package com.shutter.api.telemetry.domain;
 
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.relational.core.mapping.Column;
-import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.LocalDateTime;
 
-@Table("ai_telemetry_logs")
+@Entity
+@Table(name = "ai_telemetry_logs")
 @Getter
 @Builder
 @NoArgsConstructor
@@ -18,38 +17,39 @@ import java.time.LocalDateTime;
 public class AiTelemetryLog {
 
     @Id
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer id;
 
-    @Column("user_id")
+    @Column(name = "user_id")
     private Integer userId;
 
-    @Column("model_version")
+    @Column(name = "model_version", nullable = false)
     private String modelVersion;
 
-    @Column("model_type")
+    @Column(name = "model_type", nullable = false)
     private String modelType;
 
-    @Column("inference_success")
+    @Column(name = "inference_success", nullable = false)
     private Boolean inferenceSuccess;
 
-    @Column("failure_type")
+    @Column(name = "failure_type")
     private String failureType;
 
-    @Column("inference_latency_ms")
+    @Column(name = "inference_latency_ms", nullable = false)
     private Long inferenceLatencyMs;
 
-    @Column("risk_score")
+    @Column(name = "risk_score")
     private Double riskScore;
 
-    @Column("timestamp")
+    @Column(name = "timestamp", nullable = false)
     private LocalDateTime timestamp;
 
-    @Column("device_hash")
+    @Column(name = "device_hash", nullable = false)
     private String deviceHash;
 
-    @Column("session_id")
+    @Column(name = "session_id", nullable = false)
     private String sessionId;
 
-    @Column("device_temperature")
+    @Column(name = "device_temperature", nullable = false)
     private Float deviceTemperature;
 }

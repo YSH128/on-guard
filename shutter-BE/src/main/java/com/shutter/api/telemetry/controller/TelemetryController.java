@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import reactor.core.publisher.Mono;
 
 import java.util.Map;
 
@@ -22,10 +21,8 @@ public class TelemetryController {
     private final TelemetryService telemetryService;
 
     @PostMapping
-    public Mono<ResponseEntity<ApiResponse<?>>> receive(@Valid @RequestBody TelemetryRequest request) {
-        return telemetryService.saveTelemetry(request)
-                .map(count -> ResponseEntity.ok(
-                        ApiResponse.of("telemetry received", Map.of("received", count))
-                ));
+    public ResponseEntity<ApiResponse<?>> receive(@Valid @RequestBody TelemetryRequest request) {
+        int count = telemetryService.saveTelemetry(request);
+        return ResponseEntity.ok(ApiResponse.of("telemetry received", Map.of("received", count)));
     }
 }

@@ -3,43 +3,31 @@ package com.shutter.api.telemetry.service;
 import com.shutter.api.telemetry.domain.AiTelemetryLog;
 import com.shutter.api.telemetry.dto.request.TelemetryRequest;
 import com.shutter.api.telemetry.repository.AiTelemetryLogRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.DisposableBean;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import reactor.core.Disposable;
-import reactor.core.publisher.Mono;
-import reactor.core.publisher.Sinks;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 @Slf4j
 @Service
-public class TelemetryService implements DisposableBean {
+@RequiredArgsConstructor
+public class TelemetryService {
 
     private static final int BATCH_SIZE = 100;
-    private static final Duration BATCH_TIMEOUT = Duration.ofSeconds(1);
 
     private final AiTelemetryLogRepository telemetryLogRepository;
-    private final Sinks.Many<AiTelemetryLog> eventSink;
-    private final Disposable subscription;
+    private final Queue<AiTelemetryLog> buffer = new ConcurrentLinkedQueue<>();
 
-    public TelemetryService(AiTelemetryLogRepository telemetryLogRepository) {
-        this.telemetryLogRepository = telemetryLogRepository;
-        this.eventSink = Sinks.many().multicast().onBackpressureBuffer(10_000);
-
-        this.subscription = eventSink.asFlux()
-                .bufferTimeout(BATCH_SIZE, BATCH_TIMEOUT)
-                .flatMap(telemetryLogRepository::saveAll)
-                .subscribe(
-                        saved -> {},
-                        error -> log.error("Batch insert failed", error)
-                );
-    }
-
-    public Mono<Integer> saveTelemetry(TelemetryRequest request) {
+    public int saveTelemetry(TelemetryRequest request) {
         LocalDateTime timestamp = parseTimestamp(request.getTimestamp());
 
         AiTelemetryLog telemetryLog = AiTelemetryLog.builder()
@@ -55,12 +43,23 @@ public class TelemetryService implements DisposableBean {
                 .deviceTemperature(request.getDeviceTemperature() != null ? request.getDeviceTemperature() : 0.0f)
                 .build();
 
-        Sinks.EmitResult result = eventSink.tryEmitNext(telemetryLog);
-        if (result.isFailure()) {
-            log.warn("Event buffer overflow, telemetry event dropped: {}", result);
-        }
+        buffer.offer(telemetryLog);
+        return 1;
+    }
 
-        return Mono.just(1);
+    @Scheduled(fixedDelay = 1000)
+    @Transactional
+    public void flushBuffer() {
+        List<AiTelemetryLog> batch = new ArrayList<>();
+        AiTelemetryLog item;
+        int count = 0;
+        while ((item = buffer.poll()) != null && count++ < BATCH_SIZE) {
+            batch.add(item);
+        }
+        if (!batch.isEmpty()) {
+            telemetryLogRepository.saveAll(batch);
+            log.debug("Batch inserted {} telemetry records", batch.size());
+        }
     }
 
     private LocalDateTime parseTimestamp(String timestamp) {
@@ -73,10 +72,5 @@ public class TelemetryService implements DisposableBean {
                 throw new IllegalArgumentException("Invalid timestamp format: " + timestamp);
             }
         }
-    }
-
-    @Override
-    public void destroy() {
-        subscription.dispose();
     }
 }
