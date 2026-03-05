@@ -1,0 +1,586 @@
+{
+  "title": "AI Telemetry Monitoring",
+  "uid": "ai-telemetry",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "Asia/Seoul",
+  "tags": ["ai", "telemetry", "monitoring"],
+  "editable": true,
+  "graphTooltip": 1,
+  "annotations": { "list": [] },
+  "templating": {
+    "list": [
+      {
+        "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+        "definition": "SELECT DISTINCT device_hash FROM ai_telemetry_logs ORDER BY device_hash",
+        "hide": 0,
+        "includeAll": true,
+        "allValue": "%",
+        "multi": false,
+        "name": "device",
+        "label": "Device",
+        "options": [],
+        "query": "SELECT DISTINCT device_hash FROM ai_telemetry_logs ORDER BY device_hash",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "links": [],
+  "panels": [
+
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Total Inferences",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "blue", "value": null }]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(*) AS value FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`)",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Success Rate",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 80 },
+              { "color": "green", "value": 90 }
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT ROUND(SUM(inference_success) / COUNT(*) * 100, 1) AS value FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`)",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Failure Rate",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "red", "value": 20 }
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT ROUND((COUNT(*) - SUM(inference_success)) / COUNT(*) * 100, 1) AS value FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`)",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Avg Latency",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 3700 },
+              { "color": "red", "value": 6400 }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT ROUND(AVG(inference_latency_ms), 0) AS value FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`)",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "p95 Latency",
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 3700 },
+              { "color": "red", "value": 6400 }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT MAX(inference_latency_ms) AS value FROM (SELECT inference_latency_ms, PERCENT_RANK() OVER (ORDER BY inference_latency_ms) AS pct FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`)) t WHERE pct <= 0.95",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "p99 Latency",
+      "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 3700 },
+              { "color": "red", "value": 6400 }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT MAX(inference_latency_ms) AS value FROM (SELECT inference_latency_ms, PERCENT_RANK() OVER (ORDER BY inference_latency_ms) AS pct FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`)) t WHERE pct <= 0.99",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Inference Count Over Time",
+      "gridPos": { "x": 0, "y": 4, "w": 8, "h": 8 },
+      "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, $__interval), COUNT(*) AS \"Inference Count\" FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Success / Failure Rate Over Time",
+      "gridPos": { "x": 8, "y": 4, "w": 8, "h": 8 },
+      "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, $__interval), ROUND(SUM(inference_success) / COUNT(*) * 100, 1) AS \"Success Rate (%)\", ROUND((COUNT(*) - SUM(inference_success)) / COUNT(*) * 100, 1) AS \"Failure Rate (%)\" FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Latency Over Time",
+      "gridPos": { "x": 16, "y": 4, "w": 8, "h": 8 },
+      "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, $__interval), ROUND(AVG(inference_latency_ms), 0) AS \"Avg Latency\", MAX(inference_latency_ms) AS \"Max Latency\" FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 10,
+      "type": "barchart",
+      "title": "Success Rate by Model Version",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "barWidth": 0.6,
+        "groupWidth": 0.7,
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" },
+        "xField": "model_version"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT CONCAT(model_type, ' ', model_version) AS model_version, ROUND(SUM(inference_success) / COUNT(*) * 100, 1) AS \"Success Rate (%)\", COUNT(*) AS \"Total Count\" FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) GROUP BY model_type, model_version ORDER BY model_type, model_version",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 11,
+      "type": "barchart",
+      "title": "Avg Latency by Model Type",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "barWidth": 0.5,
+        "groupWidth": 0.7,
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" },
+        "xField": "model_type"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT model_type, ROUND(AVG(inference_latency_ms), 0) AS \"Avg Latency\", MAX(inference_latency_ms) AS \"Max Latency\", MIN(inference_latency_ms) AS \"Min Latency\" FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) GROUP BY model_type",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 12,
+      "type": "piechart",
+      "title": "Risk Score Distribution",
+      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
+      "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" } },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] },
+        "pieType": "pie",
+        "tooltip": { "mode": "single" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT CONCAT(model_type, ' - ', CASE WHEN risk_score < 0.3 THEN 'Low (0~0.3)' WHEN risk_score < 0.7 THEN 'Medium (0.3~0.7)' ELSE 'High (0.7~1.0)' END) AS risk_level, COUNT(*) AS count FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND risk_score IS NOT NULL GROUP BY model_type, CASE WHEN risk_score < 0.3 THEN 'Low' WHEN risk_score < 0.7 THEN 'Medium' ELSE 'High' END ORDER BY model_type, risk_level",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 13,
+      "type": "piechart",
+      "title": "Failure Type Distribution",
+      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
+      "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" } },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] },
+        "pieType": "pie",
+        "tooltip": { "mode": "single" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COALESCE(failure_type, 'UNKNOWN') AS failure_type, COUNT(*) AS count FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND inference_success = 0 GROUP BY failure_type ORDER BY count DESC",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Device Temperature Over Time",
+      "gridPos": { "x": 0, "y": 28, "w": 24, "h": 8 },
+      "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "celsius",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 35 },
+              { "color": "red", "value": 40 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, $__interval), ROUND(AVG(device_temperature), 1) AS \"Avg Temperature\", MAX(device_temperature) AS \"Max Temperature\" FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    }
+
+    ,
+
+    {
+      "id": 15,
+      "type": "table",
+      "title": "Device Stats (기기별 성능 요약)",
+      "gridPos": { "x": 0, "y": 36, "w": 24, "h": 10 },
+      "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "success_rate (%)" },
+            "properties": [
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 80 }, { "color": "green", "value": 90 }] } },
+              { "id": "custom.displayMode", "value": "color-background" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "avg_temp (°C)" },
+            "properties": [
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 35 }, { "color": "red", "value": 40 }] } },
+              { "id": "custom.displayMode", "value": "color-background" }
+            ]
+          }
+        ]
+      },
+      "options": { "sortBy": [{ "displayName": "total_inferences", "desc": true }] },
+      "targets": [
+        {
+          "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT device_hash, COUNT(*) AS total_inferences, ROUND(SUM(inference_success) / COUNT(*) * 100, 1) AS `success_rate (%)`, ROUND((COUNT(*) - SUM(inference_success)) / COUNT(*) * 100, 1) AS `failure_rate (%)`, ROUND(AVG(inference_latency_ms), 0) AS `avg_latency (ms)`, ROUND(AVG(device_temperature), 1) AS `avg_temp (°C)`, MAX(device_temperature) AS `max_temp (°C)`, ROUND(AVG(risk_score), 3) AS avg_risk_score FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND device_hash LIKE '$device' GROUP BY device_hash ORDER BY total_inferences DESC",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 16,
+      "type": "table",
+      "title": "문제 기기 탐지 (실패율 10% 초과)",
+      "gridPos": { "x": 0, "y": 46, "w": 24, "h": 8 },
+      "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "failure_rate (%)" },
+            "properties": [
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 10 }, { "color": "red", "value": 20 }] } },
+              { "id": "custom.displayMode", "value": "color-background" }
+            ]
+          }
+        ]
+      },
+      "options": { "sortBy": [{ "displayName": "failure_rate (%)", "desc": true }] },
+      "targets": [
+        {
+          "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT device_hash, COUNT(*) AS total_inferences, ROUND((COUNT(*) - SUM(inference_success)) / COUNT(*) * 100, 1) AS `failure_rate (%)`, ROUND(AVG(inference_latency_ms), 0) AS `avg_latency (ms)`, ROUND(AVG(device_temperature), 1) AS `avg_temp (°C)`, GROUP_CONCAT(DISTINCT COALESCE(failure_type, 'UNKNOWN') SEPARATOR ', ') AS failure_types FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) GROUP BY device_hash HAVING (COUNT(*) - SUM(inference_success)) / COUNT(*) * 100 > 10 ORDER BY `failure_rate (%)` DESC",
+          "refId": "A"
+        }
+      ]
+    }
+
+  ]
+}
