@@ -80,6 +80,13 @@ val extractAARForNativeBuild by tasks.registering(Copy::class) {
         // 추출된 파일이 저장될 경로 설정
         into(layout.buildDirectory.dir("native_libs/pytorch"))
     }
+
+    // OpenCV
+    val opencvAar = nativeAarDeps.files.find { it.name.contains("opencv-android") }
+    if (opencvAar != null) {
+        from(zipTree(opencvAar))
+        into(layout.buildDirectory.dir("native_libs/opencv"))
+    }
 }
 
 // C++ 빌드(preBuild) 전에 추출 Task가 먼저 실행되도록 설정

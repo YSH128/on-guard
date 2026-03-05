@@ -21,6 +21,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         init {
+            System.loadLibrary("opencv_java4")
             System.loadLibrary("shutter_android_ai")
         }
     }
