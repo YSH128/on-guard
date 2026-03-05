@@ -19,6 +19,11 @@ spring:
       hibernate:
         format_sql: true
 
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    serialization:
+      write-dates-as-timestamps: false
+
   data:
     redis:
       host: ${REDIS_HOST}
