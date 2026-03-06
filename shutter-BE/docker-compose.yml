@@ -107,9 +107,32 @@ services:
       - shutter-network
     restart: unless-stopped
 
+  # ───── Grafana ─────
+  grafana:
+    image: "grafana/grafana:latest"
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - DB_NAME=${DB_NAME}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - shutter-network
+    restart: unless-stopped
+
 volumes:
   mysql_data:
   redis_data:
+  grafana_data:
   certbot-webroot:
 
 networks:

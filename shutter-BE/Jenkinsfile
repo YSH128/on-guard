@@ -1,0 +1,110 @@
+pipeline {
+    agent any
+
+    environment {
+        IMAGE_NAME  = "shutter-be"
+        DEPLOY_PATH = "/home/ubuntu/shutter"   // EC2 배포 경로
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+                echo "Branch: ${env.GIT_BRANCH}"
+            }
+        }
+
+        stage('Build') {
+            steps {
+                dir('shutter-BE') {
+                    sh 'chmod +x gradlew'
+                    sh './gradlew bootJar -x test --no-daemon'
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                dir('shutter-BE') {
+                    sh './gradlew test --no-daemon'
+                }
+            }
+            post {
+                always {
+                    junit(
+                        testResults: 'shutter-BE/build/test-results/test/*.xml',
+                        allowEmptyResults: true
+                    )
+                }
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                dir('shutter-BE') {
+                    sh """
+                        docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} .
+                        docker tag ${IMAGE_NAME}:${BUILD_NUMBER} ${IMAGE_NAME}:latest
+                    """
+                }
+            }
+        }
+
+        stage('Deploy (Blue-Green)') {
+            steps {
+                script {
+                    // 현재 운영 중인 컨테이너 확인 (blue or green)
+                    def current = sh(
+                        script: "docker inspect --format='{{.Name}}' spring-blue 2>/dev/null || echo 'none'",
+                        returnStdout: true
+                    ).trim()
+
+                    def next    = (current == '/spring-blue') ? 'green' : 'blue'
+                    def nextName = "spring-${next}"
+
+                    echo "현재: ${current} → 다음: ${nextName}"
+
+                    dir('shutter-BE') {
+                        // 1. 새 버전 컨테이너 실행
+                        sh """
+                            docker compose --profile ${next} up -d --build ${nextName}
+                        """
+
+                        // 2. 헬스체크 (최대 60초)
+                        sh """
+                            for i in \$(seq 1 12); do
+                                STATUS=\$(docker inspect --format='{{.State.Health.Status}}' ${nextName} 2>/dev/null || echo 'starting')
+                                echo "Health: \$STATUS (\$i/12)"
+                                if [ "\$STATUS" = "healthy" ]; then
+                                    echo "헬스체크 통과!"
+                                    break
+                                fi
+                                sleep 5
+                            done
+                        """
+
+                        // 3. nginx upstream 전환
+                        sh """
+                            sed -i 's|server spring-.*:8080|server ${nextName}:8080|g' nginx/nginx.conf
+                            docker compose exec nginx nginx -s reload
+                        """
+
+                        // 4. 이전 버전 종료
+                        def prevName = (next == 'blue') ? 'spring-green' : 'spring-blue'
+                        sh "docker stop ${prevName} 2>/dev/null || true"
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ 배포 성공! Build #${BUILD_NUMBER}"
+        }
+        failure {
+            echo "❌ 배포 실패! Build #${BUILD_NUMBER}"
+        }
+    }
+}

@@ -31,6 +31,7 @@ public class TelemetryService {
         LocalDateTime timestamp = parseTimestamp(request.getTimestamp());
 
         AiTelemetryLog telemetryLog = AiTelemetryLog.builder()
+                .userId(request.getUserId())
                 .modelType(request.getModelType())
                 .modelVersion(request.getModelVersion())
                 .inferenceSuccess(request.getInferenceSuccess())
@@ -41,6 +42,11 @@ public class TelemetryService {
                 .deviceHash(request.getDeviceHash())
                 .sessionId(request.getSessionId())
                 .deviceTemperature(request.getDeviceTemperature() != null ? request.getDeviceTemperature() : 0.0f)
+                .appPssMemory(request.getAppPssMemory())
+                .thermalThrottlingStatus(request.getThermalThrottlingStatus())
+                .threadCpuTime(request.getThreadCpuTime())
+                .batteryCurrentNow(request.getBatteryCurrentNow())
+                .modelLoadLatencyMs(request.getModelLoadLatencyMs())
                 .build();
 
         buffer.offer(telemetryLog);
@@ -56,9 +62,14 @@ public class TelemetryService {
         while ((item = buffer.poll()) != null && count++ < BATCH_SIZE) {
             batch.add(item);
         }
-        if (!batch.isEmpty()) {
+        if (batch.isEmpty()) return;
+
+        try {
             telemetryLogRepository.saveAll(batch);
             log.debug("Batch inserted {} telemetry records", batch.size());
+        } catch (Exception e) {
+            log.error("Batch insert failed ({} records), re-queuing for retry: {}", batch.size(), e.getMessage());
+            batch.forEach(buffer::offer);
         }
     }
 

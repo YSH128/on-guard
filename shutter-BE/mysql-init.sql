@@ -49,6 +49,11 @@ CREATE TABLE ai_telemetry_logs (
   device_hash VARCHAR(255) NOT NULL,
   session_id VARCHAR(255) NOT NULL,
   device_temperature FLOAT NOT NULL,
+  app_pss_memory INT NOT NULL,
+  thermal_throttling_status INT NOT NULL,
+  thread_cpu_time BIGINT NOT NULL,
+  battery_current_now FLOAT NOT NULL,
+  model_load_latency_ms INT,
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
 CREATE INDEX idx_ai_telemetry_logs_user_id ON ai_telemetry_logs (user_id);
