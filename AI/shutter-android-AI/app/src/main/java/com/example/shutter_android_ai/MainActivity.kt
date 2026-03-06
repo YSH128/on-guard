@@ -73,7 +73,7 @@ class MainActivity : AppCompatActivity() {
                     val startCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
 
                     // 2. 결과를 배열로 받습니다. [Score, LoadTime, InferTime]
-                    val results: FloatArray = detectDeepfake(modelPath, audioData)
+                    val results: FloatArray = detectDeepfakeAudio(modelPath, audioData)
 
                     // 추론 종료 직후 스레드 CPU 시간 기록 및 순수 연산 시간 계산
                     val endCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
