@@ -38,3 +38,13 @@ springdoc:
     enabled: true
   api-docs:
     enabled: true
+
+# Kakao OAuth
+kakao:
+  rest-api-key: ${KAKAO_REST_API_KEY}
+
+# JWT
+jwt:
+  secret: ${JWT_SECRET}
+  access-expiry-ms: ${JWT_ACCESS_EXPIRY_MS:3600000} # 기본 1시간
+  refresh-expiry-ms: ${JWT_REFRESH_EXPIRY_MS:1209600000} # 기본 14일
