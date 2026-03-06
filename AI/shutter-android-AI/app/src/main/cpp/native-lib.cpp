@@ -14,6 +14,16 @@
 #include <vector>
 #include <chrono> // 시간 측정용
 #include <torch/script.h>
+#include <opencv2/opencv.hpp>
+
+// 전처리 함수
+cv::Mat preprocessFrame(cv::Mat& src) {
+    if (src.empty()) return cv::Mat();
+    cv::Mat dst;
+    cv::resize(src, dst, cv::Size(224, 224));
+    cv::cvtColor(dst, dst, cv::COLOR_BGR2RGB);
+    return dst;
+}
 
 extern "C" JNIEXPORT jfloatArray JNICALL
 Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfake(
@@ -52,7 +62,7 @@ Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfake(
 
     // 3. 추론 시간 측정 시작
     auto start_inference = std::chrono::high_resolution_clock::now();
-
+    
     std::vector<torch::jit::IValue> inputs;
     inputs.push_back(input_tensor);
     at::Tensor output = module.forward(inputs).toTensor();
@@ -68,4 +78,12 @@ Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfake(
 
     env->SetFloatArrayRegion(resultMap, 0, 3, results);
     return resultMap;
+}
+
+// 영상 처리를 위한 추가 JNI (필요시 사용)
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_example_shutter_1android_1ai_MainActivity_processFrame(JNIEnv* env, jobject, jlong matAddr) {
+    cv::Mat& frame = *(cv::Mat*)matAddr;
+    cv::Mat processed = preprocessFrame(frame);
+    return nullptr; 
 }

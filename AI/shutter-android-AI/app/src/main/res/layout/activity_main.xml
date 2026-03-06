@@ -25,6 +25,15 @@
     android:gravity="center"
     android:padding="16dp">
 
+    <TextView
+        android:id="@+id/tvOpenCVStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="OpenCV 상태 확인 중..."
+        android:textSize="18sp"
+        android:textColor="#0000FF"
+        android:layout_marginBottom="20dp" />
+
     <Button
         android:id="@+id/btnTestInference"
         android:layout_width="wrap_content"
