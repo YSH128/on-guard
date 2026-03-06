@@ -11,6 +11,9 @@ cmake_minimum_required(VERSION 3.22.1)
 # build script scope).
 project("shutter_android_ai")
 
+# CMakeLists.txt 파일 상단 혹은 중간에 추가
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -v")
+
 # 1. 내 프로젝트의 기본 라이브러리 타겟 생성
 add_library(${CMAKE_PROJECT_NAME} SHARED
     native-lib.cpp)
@@ -28,6 +31,10 @@ add_library(fbjni SHARED IMPORTED)
 set_target_properties(fbjni PROPERTIES IMPORTED_LOCATION
         ${PYTORCH_DIR}/jni/${ANDROID_ABI}/libfbjni.so)
 
+add_library(c++_shared SHARED IMPORTED)
+set_target_properties(c++_shared PROPERTIES IMPORTED_LOCATION
+        ${PYTORCH_DIR}/jni/${ANDROID_ABI}/libc++_shared.so)
+
 # 5. 헤더 파일 경로 포함
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${PYTORCH_DIR}/headers)
 
@@ -35,5 +42,6 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${PYTORCH_DIR}/headers)
 target_link_libraries(${CMAKE_PROJECT_NAME}
     pytorch_jni
     fbjni
+    c++_shared
     android
     log)

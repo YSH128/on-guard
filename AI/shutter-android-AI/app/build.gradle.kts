@@ -13,6 +13,7 @@ android {
     compileSdk = 36
     ndkVersion = "21.4.7075529"
 
+
     defaultConfig {
         applicationId = "com.example.shutter_android_ai"
         minSdk = 34
@@ -24,6 +25,10 @@ android {
             cmake {
                 // C++17 표준 사용 설정
                 cppFlags += "-std=c++17"
+
+                arguments(
+                    "-DANDROID_STL=c++_shared"
+                )
             }
         }
         // ndk 필터 설정 (테스트 기기에 맞게 설정, 보통 arm64-v8a 사용)
