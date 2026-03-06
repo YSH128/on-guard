@@ -31,6 +31,7 @@ public class TelemetryService {
         LocalDateTime timestamp = parseTimestamp(request.getTimestamp());
 
         AiTelemetryLog telemetryLog = AiTelemetryLog.builder()
+                .userId(request.getUserId())
                 .modelType(request.getModelType())
                 .modelVersion(request.getModelVersion())
                 .inferenceSuccess(request.getInferenceSuccess())
