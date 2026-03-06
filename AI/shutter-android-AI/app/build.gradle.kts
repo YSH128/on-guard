@@ -69,7 +69,6 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
 
     implementation("org.pytorch:pytorch_android:$pytorchVersion")
-    implementation("org.pytorch:pytorch_android_torchvision:${pytorchVersion}")
 }
 
 val extractAARForNativeBuild by tasks.registering(Copy::class) {
@@ -79,13 +78,6 @@ val extractAARForNativeBuild by tasks.registering(Copy::class) {
         from(zipTree(pytorchAar))
         // 추출된 파일이 저장될 경로 설정
         into(layout.buildDirectory.dir("native_libs/pytorch"))
-    }
-
-    // OpenCV
-    val opencvAar = nativeAarDeps.files.find { it.name.contains("opencv-android") }
-    if (opencvAar != null) {
-        from(zipTree(opencvAar))
-        into(layout.buildDirectory.dir("native_libs/opencv"))
     }
 }
 

@@ -11,43 +11,29 @@ cmake_minimum_required(VERSION 3.22.1)
 # build script scope).
 project("shutter_android_ai")
 
-# 내 프로젝트의 기본 라이브러리 타겟 생성
+# 1. 내 프로젝트의 기본 라이브러리 타겟 생성
 add_library(${CMAKE_PROJECT_NAME} SHARED
     native-lib.cpp)
 
-# 추출된 PyTorch 경로 변수 설정
+# 2. 추출된 PyTorch 경로 변수 설정
 set(PYTORCH_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../build/native_libs/pytorch)
-set(OPENCV_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../build/native_libs/opencv)
 
-# OpenCV 설정
-set(OpenCV_DIR ${OPENCV_DIR}/jni)
-find_package(OpenCV REQUIRED)
-
-# 내 라이브러리 생성
-add_library(${CMAKE_PROJECT_NAME} SHARED native-lib.cpp)
-
-# PyTorch Full 버전 라이브러리 (libpytorch_jni.so) 가져오기
+# 3. PyTorch Full 버전 라이브러리 (libpytorch_jni.so) 가져오기
 add_library(pytorch_jni SHARED IMPORTED)
 set_target_properties(pytorch_jni PROPERTIES IMPORTED_LOCATION
         ${PYTORCH_DIR}/jni/${ANDROID_ABI}/libpytorch_jni.so)
 
-# fbjni 라이브러리 가져오기 (종속성)
+# 4. fbjni 라이브러리 가져오기 (종속성)
 add_library(fbjni SHARED IMPORTED)
 set_target_properties(fbjni PROPERTIES IMPORTED_LOCATION
         ${PYTORCH_DIR}/jni/${ANDROID_ABI}/libfbjni.so)
 
-# 헤더 파일 경로 포함
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE 
-    ${PYTORCH_DIR}/headers
-    ${OpenCV_INCLUDE_DIRS}
-)
+# 5. 헤더 파일 경로 포함
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${PYTORCH_DIR}/headers)
 
-# 타겟 라이브러리에 외부 라이브러리 링크
+# 6. 타겟 라이브러리에 외부 라이브러리 링크
 target_link_libraries(${CMAKE_PROJECT_NAME}
-    ${OpenCV_LIBS}
     pytorch_jni
     fbjni
-    torch_code
     android
-    log
-)
+    log)
