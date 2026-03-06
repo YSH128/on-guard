@@ -120,6 +120,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
       - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
     depends_on:
       mysql:
