@@ -25,9 +25,11 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
 }
 
-// ★ configuration 타임에 즉시 AAR 추출
 val nativeLibsDir = layout.buildDirectory.dir("native_libs").get().asFile
 
 nativeAarDeps.resolvedConfiguration.resolvedArtifacts.forEach { artifact ->
@@ -50,7 +52,6 @@ nativeAarDeps.resolvedConfiguration.resolvedArtifacts.forEach { artifact ->
     }
 }
 
-// ★ OpenCV 헤더 다운로드 태스크 (de.undercouch.download 플러그인 사용)
 val opencvSdkZip = nativeLibsDir.resolve("opencv-sdk.zip")
 val opencvHeaderFile = nativeLibsDir.resolve("opencv/jni/include/opencv2/opencv.hpp")
 
@@ -59,13 +60,12 @@ val downloadOpenCVSDK by tasks.registering(Download::class) {
     src("https://sourceforge.net/projects/opencvlibrary/files/4.5.3/opencv-4.5.3-android-sdk.zip/download")
     dest(opencvSdkZip)
     overwrite(false)
-    println("📥 OpenCV SDK 다운로드 준비 중...")
 }
 
 val extractOpenCVHeaders by tasks.registering(Copy::class) {
     onlyIf { !opencvHeaderFile.exists() }
     dependsOn(downloadOpenCVSDK)
-    from(zipTree(opencvSdkZip)) {
+    from(Callable { zipTree(opencvSdkZip) }) {
         include("OpenCV-android-sdk/sdk/native/jni/include/**")
         eachFile {
             val segments = relativePath.segments.toMutableList()
@@ -92,21 +92,21 @@ android {
 
         externalNativeBuild {
             cmake {
-                // C++17 표준 사용 설정
                 cppFlags += "-std=c++17"
+                arguments("-DANDROID_STL=c++_shared")
             }
         }
-        // ndk 필터 설정 (테스트 기기에 맞게 설정, 보통 arm64-v8a 사용)
         ndk {
             abiFilters.add("arm64-v8a")
         }
-        packaging {
-            resources {
-                pickFirsts += "**/libc++_shared.so"
-            }
-            jniLibs {
-                pickFirsts += "**/libc++_shared.so"
-            }
+    }
+
+    packaging {
+        resources {
+            pickFirsts += "**/libc++_shared.so"
+        }
+        jniLibs {
+            pickFirsts += "**/libc++_shared.so"
         }
     }
 
@@ -141,7 +141,6 @@ val extractPyTorch by tasks.registering(Copy::class) {
     }
     pytorchAar?.let {
         from(zipTree(it))
-        // 추출된 파일이 저장될 경로 설정
         into(layout.buildDirectory.dir("native_libs/pytorch"))
     }
 }
@@ -155,7 +154,6 @@ val extractOpenCV by tasks.registering(Copy::class) {
     }
 }
 
-// C++ 빌드(preBuild) 전에 추출 Task가 먼저 실행되도록 설정
 tasks.named("preBuild") {
     dependsOn(extractPyTorch, extractOpenCV, extractOpenCVHeaders)
 }
