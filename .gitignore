@@ -312,3 +312,11 @@ mydocs/
 
 # Andorid Studio
 .idea/
+
+
+# --------------AI---------------
+*.flac
+*.jpg
+*.mp4
+*.pt
+*.ptl
