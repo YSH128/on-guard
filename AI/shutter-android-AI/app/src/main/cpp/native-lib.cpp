@@ -124,8 +124,12 @@ Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeAudio(
         auto start_inference = std::chrono::high_resolution_clock::now();
         
         // ImageNet 기준 Regularization
-        auto mean = torch::tensor({0.485, 0.456, 0.406}).view({1, 3, 1, 1});
-        auto std = torch::tensor({0.229, 0.224, 0.225}).view({1, 3, 1, 1});
+        float mean_vals[3] = {0.485f, 0.456f, 0.406f};
+        float std_vals[3]  = {0.229f, 0.224f, 0.225f};
+
+        auto mean = torch::from_blob(mean_vals, {1, 3, 1, 1}).clone();
+        auto std  = torch::from_blob(std_vals,  {1, 3, 1, 1}).clone();
+
         input_tensor = (input_tensor - mean) / std;
         
         // inference
