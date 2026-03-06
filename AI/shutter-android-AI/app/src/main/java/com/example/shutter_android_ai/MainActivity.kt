@@ -21,6 +21,18 @@ import com.example.shutter_android_ai.R
 
 import kotlin.concurrent.thread
 
+import com.example.shutter_android_ai.telemetry.DeviceStatusProvider
+
+import androidx.lifecycle.lifecycleScope
+import com.example.shutter_android_ai.network.RetrofitClient
+import com.example.shutter_android_ai.network.TelemetryRequest
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
+
 class MainActivity : AppCompatActivity() {
 
     // C++ JNI 함수 선언
@@ -57,13 +69,72 @@ class MainActivity : AppCompatActivity() {
                     val audioPath = getAssetFilePath(this@MainActivity, "test.flac")
                     val audioData = decodeAudioFromFile(audioPath, 64000)
 
+                    // 추론 시작 직전의 현재 스레드 CPU 시간 기록
+                    val startCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
+
                     // 2. 결과를 배열로 받습니다. [Score, LoadTime, InferTime]
-                    val results: FloatArray = detectDeepfakeAudio(modelPath, audioData)
+                    val results: FloatArray = detectDeepfake(modelPath, audioData)
+
+                    // 추론 종료 직후 스레드 CPU 시간 기록 및 순수 연산 시간 계산
+                    val endCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
+                    val inferenceThreadCpuTime = endCpuTimeMs - startCpuTimeMs
+
+                    // 나머지 하드웨어 지표 수집 (Context는 this@MainActivity 사용)
+                    val currentTemp = DeviceStatusProvider.getDeviceTemperature(this@MainActivity)
+                    val pssMemoryKb = DeviceStatusProvider.getAppPssMemory()
+                    val thermalStatus = DeviceStatusProvider.getThermalThrottlingStatus(this@MainActivity)
+                    val batteryCurrentmA = DeviceStatusProvider.getBatteryCurrentNow(this@MainActivity)
+
+                    // 기기 모델명 취득 (DeviceStatusProvider에 추가했다고 가정)
+                    val deviceModel = DeviceStatusProvider.getDeviceModelName()
 
                     // 3. 배열 인덱스를 통해 안전하게 값을 가져옵니다.
                     val score = results[0]
                     val loadTime = results[1]
                     val inferenceTime = results[2]
+
+                    val isSuccess = score > -1.0f
+
+                    // ========== [추가된 Retrofit 전송 로직 시작] ==========
+                    // 현재 시간 ISO 8601 포맷으로 생성
+                    val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.getDefault())
+                    val currentTimeStr = sdf.format(Date())
+
+                    // 서버로 전송할 Request 객체 조립
+                    val telemetryRequest = TelemetryRequest(
+                        user_id = 1,
+                        model_type = "DEEPVOICE",
+                        model_version = "v1.0.0",
+                        inference_success = isSuccess,
+                        failure_type = if (isSuccess) null else "MODEL_LOAD_ERROR",
+                        inference_latency_ms = inferenceTime.toLong(),
+                        risk_score = score,
+                        timestamp = currentTimeStr,
+                        device_hash = deviceModel,
+                        // device_model = deviceModel,
+                        session_id = UUID.randomUUID().toString(), // 임시 세션 ID (실제 통화 ID로 교체 필요)
+                        device_temperature = currentTemp,
+                        app_pss_memory = pssMemoryKb,
+                        thermal_throttling_status = thermalStatus,
+                        thread_cpu_time = inferenceThreadCpuTime,
+                        battery_current_now = batteryCurrentmA,
+                        model_load_latency_ms = loadTime.toLong()
+                    )
+
+                    // 코루틴을 사용하여 백그라운드에서 네트워크 요청 전송
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        try {
+                            val response = RetrofitClient.api.sendTelemetry(telemetryRequest)
+                            if (response.isSuccessful) {
+                                android.util.Log.d("Telemetry", "데이터 전송 성공")
+                            } else {
+                                android.util.Log.e("Telemetry", "데이터 전송 실패: ${response.code()}")
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("Telemetry", "네트워크 에러: ${e.message}")
+                        }
+                    }
+                    // ========== [추가된 Retrofit 전송 로직 끝] ==========
 
                     runOnUiThread {
                         if (score <= -1.0f) { // -1.0 이하면 로드 실패로 간주
@@ -74,6 +145,13 @@ class MainActivity : AppCompatActivity() {
                                 Score: ${String.format("%.4f", score)}
                                 Load: ${String.format("%.2f", loadTime)} ms
                                 Infer: ${String.format("%.2f", inferenceTime)} ms
+
+                                [하드웨어 모니터링]
+                                Temp: ${String.format("%.2f", currentTemp)}°C
+                                RAM (PSS): $pssMemoryKb KB
+                                CPU Time: $inferenceThreadCpuTime ms
+                                Current: ${String.format("%.2f", batteryCurrentmA)} mA
+                                Thermal Status: $thermalStatus
                             """.trimIndent()
                             tvResult.text = resultText
                         }
@@ -211,5 +289,16 @@ class MainActivity : AppCompatActivity() {
             }
         }
         return file.absolutePath
+    }
+
+    // 이 함수를 MainActivity 내부 맨 아래에 추가해 주세요.
+    private fun getOrCreateDeviceHash(): String {
+        val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        var deviceHash = prefs.getString("device_hash", null)
+        if (deviceHash == null) {
+            deviceHash = UUID.randomUUID().toString()
+            prefs.edit().putString("device_hash", deviceHash).apply()
+        }
+        return deviceHash
     }
 }
