@@ -41,6 +41,11 @@ public class TelemetryService {
                 .deviceHash(request.getDeviceHash())
                 .sessionId(request.getSessionId())
                 .deviceTemperature(request.getDeviceTemperature() != null ? request.getDeviceTemperature() : 0.0f)
+                .appPssMemory(request.getAppPssMemory())
+                .thermalThrottlingStatus(request.getThermalThrottlingStatus())
+                .threadCpuTime(request.getThreadCpuTime())
+                .batteryCurrentNow(request.getBatteryCurrentNow())
+                .modelLoadLatencyMs(request.getModelLoadLatencyMs())
                 .build();
 
         buffer.offer(telemetryLog);

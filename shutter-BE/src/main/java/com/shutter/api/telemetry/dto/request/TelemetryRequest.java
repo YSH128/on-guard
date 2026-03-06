@@ -1,5 +1,7 @@
 package com.shutter.api.telemetry.dto.request;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -41,4 +43,19 @@ public class TelemetryRequest {
     private String sessionId;
 
     private Float deviceTemperature;
+
+    @NotNull
+    private Integer appPssMemory;
+
+    @NotNull
+    @Min(0) @Max(6)
+    private Integer thermalThrottlingStatus;
+
+    @NotNull
+    private Long threadCpuTime;
+
+    @NotNull
+    private Float batteryCurrentNow;
+
+    private Integer modelLoadLatencyMs;
 }
