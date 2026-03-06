@@ -41,4 +41,20 @@ public class TelemetryRequest {
     private String sessionId;
 
     private Float deviceTemperature;
+
+    private Integer userId;
+
+    @NotNull
+    private Integer appPssMemory;
+
+    @NotNull
+    private Integer thermalThrottlingStatus;
+
+    @NotNull
+    private Long threadCpuTime;
+
+    @NotNull
+    private Float batteryCurrentNow;
+
+    private Integer modelLoadLatencyMs;
 }

@@ -52,4 +52,19 @@ public class AiTelemetryLog {
 
     @Column(name = "device_temperature", nullable = false)
     private Float deviceTemperature;
+
+    @Column(name = "app_pss_memory", nullable = false)
+    private Integer appPssMemory;
+
+    @Column(name = "thermal_throttling_status", nullable = false)
+    private Integer thermalThrottlingStatus;
+
+    @Column(name = "thread_cpu_time", nullable = false)
+    private Long threadCpuTime;
+
+    @Column(name = "battery_current_now", nullable = false)
+    private Float batteryCurrentNow;
+
+    @Column(name = "model_load_latency_ms")
+    private Integer modelLoadLatencyMs;
 }
