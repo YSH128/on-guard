@@ -553,10 +553,54 @@
     },
 
     {
+      "id": 17,
+      "type": "table",
+      "title": "모델별 성능 요약",
+      "gridPos": { "x": 0, "y": 46, "w": 24, "h": 8 },
+      "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "success_rate (%)" },
+            "properties": [
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 80 }, { "color": "green", "value": 90 }] } },
+              { "id": "custom.displayMode", "value": "color-background" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "failure_rate (%)" },
+            "properties": [
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 10 }, { "color": "red", "value": 20 }] } },
+              { "id": "custom.displayMode", "value": "color-background" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "avg_latency (ms)" },
+            "properties": [
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 3700 }, { "color": "red", "value": 6400 }] } },
+              { "id": "custom.displayMode", "value": "color-background" }
+            ]
+          }
+        ]
+      },
+      "options": { "sortBy": [{ "displayName": "total_inferences", "desc": true }] },
+      "targets": [
+        {
+          "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT model_type, model_version, COUNT(*) AS total_inferences, ROUND(SUM(inference_success) / COUNT(*) * 100, 1) AS `success_rate (%)`, ROUND((COUNT(*) - SUM(inference_success)) / COUNT(*) * 100, 1) AS `failure_rate (%)`, ROUND(AVG(inference_latency_ms), 0) AS `avg_latency (ms)`, ROUND(AVG(risk_score), 3) AS avg_risk_score FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) GROUP BY model_type, model_version ORDER BY model_type, model_version",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
       "id": 16,
       "type": "table",
       "title": "문제 기기 탐지 (실패율 10% 초과)",
-      "gridPos": { "x": 0, "y": 46, "w": 24, "h": 8 },
+      "gridPos": { "x": 0, "y": 54, "w": 24, "h": 8 },
       "datasource": { "type": "mysql", "uid": "aff3w4y7zad4wd" },
       "fieldConfig": {
         "defaults": { "color": { "mode": "thresholds" } },

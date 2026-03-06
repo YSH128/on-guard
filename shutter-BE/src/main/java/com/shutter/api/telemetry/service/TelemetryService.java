@@ -56,9 +56,14 @@ public class TelemetryService {
         while ((item = buffer.poll()) != null && count++ < BATCH_SIZE) {
             batch.add(item);
         }
-        if (!batch.isEmpty()) {
+        if (batch.isEmpty()) return;
+
+        try {
             telemetryLogRepository.saveAll(batch);
             log.debug("Batch inserted {} telemetry records", batch.size());
+        } catch (Exception e) {
+            log.error("Batch insert failed ({} records), re-queuing for retry: {}", batch.size(), e.getMessage());
+            batch.forEach(buffer::offer);
         }
     }
 
