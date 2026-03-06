@@ -16,32 +16,55 @@ set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -v")
 
 # 1. 내 프로젝트의 기본 라이브러리 타겟 생성
 add_library(${CMAKE_PROJECT_NAME} SHARED
-    native-lib.cpp)
+        native-lib.cpp)
 
-# 2. 추출된 PyTorch 경로 변수 설정
-set(PYTORCH_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../build/native_libs/pytorch)
+# 2. 루트 경로 설정
+set(LIBS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../build/native_libs)
+set(PYTORCH_DIR ${LIBS_DIR}/pytorch)
+set(OPENCV_DIR ${LIBS_DIR}/opencv)
 
-# 3. PyTorch Full 버전 라이브러리 (libpytorch_jni.so) 가져오기
+# 3. OpenCV 헤더 경로 탐색
+set(OPENCV_INCLUDE_DIR ${OPENCV_DIR}/sdk/native/jni/include)
+if(NOT EXISTS ${OPENCV_INCLUDE_DIR})
+    set(OPENCV_INCLUDE_DIR ${OPENCV_DIR}/jni/include)
+endif()
+
+# 4. 인클루드 경로 등록
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+    ${PYTORCH_DIR}/headers
+    ${OPENCV_INCLUDE_DIR}
+)
+
+# 5. 라이브러리 파일(.so) 연결
 add_library(pytorch_jni SHARED IMPORTED)
-set_target_properties(pytorch_jni PROPERTIES IMPORTED_LOCATION
-        ${PYTORCH_DIR}/jni/${ANDROID_ABI}/libpytorch_jni.so)
+set_target_properties(pytorch_jni PROPERTIES
+    IMPORTED_LOCATION ${PYTORCH_DIR}/jni/${ANDROID_ABI}/libpytorch_jni.so
+)
 
-# 4. fbjni 라이브러리 가져오기 (종속성)
 add_library(fbjni SHARED IMPORTED)
-set_target_properties(fbjni PROPERTIES IMPORTED_LOCATION
-        ${PYTORCH_DIR}/jni/${ANDROID_ABI}/libfbjni.so)
+set_target_properties(fbjni PROPERTIES IMPORTED_LOCATION ${PYTORCH_DIR}/jni/${ANDROID_ABI}/libfbjni.so)
 
 add_library(c++_shared SHARED IMPORTED)
 set_target_properties(c++_shared PROPERTIES IMPORTED_LOCATION
         ${PYTORCH_DIR}/jni/${ANDROID_ABI}/libc++_shared.so)
 
-# 5. 헤더 파일 경로 포함
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${PYTORCH_DIR}/headers)
+add_library(opencv_java SHARED IMPORTED)
+if(EXISTS ${OPENCV_DIR}/sdk/native/libs/${ANDROID_ABI}/libopencv_java4.so)
+    set_target_properties(opencv_java PROPERTIES
+        IMPORTED_LOCATION ${OPENCV_DIR}/sdk/native/libs/${ANDROID_ABI}/libopencv_java4.so
+    )
+else()
+    set_target_properties(opencv_java PROPERTIES
+        IMPORTED_LOCATION ${OPENCV_DIR}/jni/${ANDROID_ABI}/libopencv_java4.so
+    )
+endif()
 
-# 6. 타겟 라이브러리에 외부 라이브러리 링크
+# 6. 최종 링크
 target_link_libraries(${CMAKE_PROJECT_NAME}
     pytorch_jni
     fbjni
     c++_shared
+    opencv_java
     android
-    log)
+    log
+)

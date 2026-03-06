@@ -9,6 +9,7 @@ import android.widget.Button
 import android.widget.TextView
 
 import android.os.Bundle
+import org.opencv.android.OpenCVLoader
 
 import java.io.File
 import java.io.FileOutputStream
@@ -54,10 +55,15 @@ class MainActivity : AppCompatActivity() {
         val tvResult = findViewById<TextView>(R.id.tvResult)
         val btnVisualDetect = findViewById<Button>(R.id.btnVisualDetect)
         val tvVisualResult = findViewById<TextView>(R.id.tvVisualResult)
+        val tvOpenCVStatus = findViewById<TextView>(R.id.tvOpenCVStatus)
 
-        // [삭제] binding 관련 중복 코드 제거
-        // binding = ActivityMainBinding.inflate(layoutInflater)
-        // setContentView(binding.root)
+        // [추가] OpenCV 설치 및 버전 확인
+        if (OpenCVLoader.initDebug()) {
+            val version = org.opencv.core.Core.VERSION
+            tvOpenCVStatus.text = "OpenCV 로드 성공 (v$version)"
+        } else {
+            tvOpenCVStatus.text = "OpenCV 로드 실패"
+        }
 
         // [수정] binding. 대신 위에서 선언한 변수명(btnTestInference) 사용
         btnTestInference.setOnClickListener {
