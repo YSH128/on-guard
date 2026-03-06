@@ -14,6 +14,16 @@
 #include <vector>
 #include <chrono> // 시간 측정용
 #include <torch/script.h>
+#include <opencv2/opencv.hpp>
+
+// 전처리 함수
+cv::Mat preprocessFrame(cv::Mat& src) {
+    if (src.empty()) return cv::Mat();
+    cv::Mat dst;
+    cv::resize(src, dst, cv::Size(224, 224));
+    cv::cvtColor(dst, dst, cv::COLOR_BGR2RGB);
+    return dst;
+}
 
 // 시간 측정을 위한 유틸리티 함수
 float get_ms(std::chrono::high_resolution_clock::time_point start){
