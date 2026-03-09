@@ -16,15 +16,6 @@ float get_ms(std::chrono::high_resolution_clock::time_point start){
     return std::chrono::duration<float, std::milli>(end - start).count();
 }
 
-// 전처리 함수
-cv::Mat preprocessFrame(cv::Mat& src) {
-    if (src.empty()) return cv::Mat();
-    cv::Mat dst;
-    cv::resize(src, dst, cv::Size(224, 224));
-    cv::cvtColor(dst, dst, cv::COLOR_BGR2RGB);
-    return dst;
-}
-
 class DeepfakeDetector {
 public:
     torch::jit::script::Module audioModule;
@@ -196,17 +187,9 @@ Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeAudio(
 
 /**
  * Face Deepfake Detection
- */
-extern "C" JNIEXPORT jfloatArray JNICALL
-Java_com_example_shutter_1android_1ai_MainActivity_processFrame(JNIEnv* env, jobject, jlong matAddr) {
-    cv::Mat& frame = *(cv::Mat*)matAddr;
-    cv::Mat processed = preprocessFrame(frame);
-    return nullptr; 
-}
-/**
  * 동영상 경로를 받아 프레임 추출 후 Face Deepfake Detection
  * 반환: [FakeProb, RealProb, LoadTime, InferTime]
- */
+ **/
 extern "C" JNIEXPORT jfloatArray JNICALL
 Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeVisual(
         JNIEnv* env,
