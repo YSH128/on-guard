@@ -64,6 +64,13 @@
         android:textSize="14sp" />
 
     <Button
+        android:id="@+id/btnCamVisualize"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="CAM 시각화 보기" />
+
+    <Button
         android:id="@+id/btnAudioDetect"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

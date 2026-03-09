@@ -17,6 +17,8 @@ import java.nio.ByteOrder
 
 import androidx.appcompat.app.AppCompatActivity
 
+import android.content.Intent
+import android.widget.Toast
 import kotlin.concurrent.thread
 
 import com.example.shutter_android_ai.telemetry.DeviceStatusProvider
@@ -41,6 +43,10 @@ class MainActivity : AppCompatActivity() {
     private val deviceModel by lazy { DeviceStatusProvider.getDeviceModelName() }
 
     companion object {
+        // 시각화 액티비티에서 참조하는 마지막 추론 결과
+        var lastVideoPath: String = ""
+        var lastResults: FloatArray = floatArrayOf()
+
         init {
             System.loadLibrary("shutter_android_ai")
         }
@@ -139,6 +145,15 @@ class MainActivity : AppCompatActivity() {
                 tvVisualResult.text = "에러: fakeVideo.mp4 파일을 assets 폴더에서 찾을 수 없습니다."
             }
         }
+
+        val btnCamVisualize = findViewById<Button>(R.id.btnCamVisualize)
+        btnCamVisualize.setOnClickListener {
+            if (lastResults.size >= 58) {
+                startActivity(Intent(this@MainActivity, CamVisualizationActivity::class.java))
+            } else {
+                Toast.makeText(this@MainActivity, "먼저 페이스 감지를 실행하세요", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun request_deepfake_detection(type: String, filePath: String, resultTextView: TextView) {
@@ -167,6 +182,9 @@ class MainActivity : AppCompatActivity() {
                     isSuccess = score > -1.0f
                 } else if (type == "FACE") {
                     results = detectDeepfakeVisual(filePath)
+                    // 시각화 액티비티용 결과 저장
+                    lastVideoPath = filePath
+                    lastResults = results
                     score = results[0]
                     loadTime = results[2]
                     inferenceTime = results[3]
