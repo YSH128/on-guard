@@ -11,7 +11,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.TemporalAccessor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
@@ -23,6 +26,17 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 public class TelemetryService {
 
     private static final int BATCH_SIZE = 100;
+
+    /**
+     * ISO_OFFSET_DATE_TIME (e.g. 2024-01-01T12:00:00+09:00) 와
+     * ISO_LOCAL_DATE_TIME  (e.g. 2024-01-01T12:00:00)         둘 다 허용.
+     */
+    private static final DateTimeFormatter TIMESTAMP_FORMATTER = new DateTimeFormatterBuilder()
+            .append(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+            .optionalStart()
+            .appendOffsetId()
+            .optionalEnd()
+            .toFormatter();
 
     private final AiTelemetryLogRepository telemetryLogRepository;
     private final Queue<AiTelemetryLog> buffer = new ConcurrentLinkedQueue<>();
@@ -75,13 +89,17 @@ public class TelemetryService {
 
     private LocalDateTime parseTimestamp(String timestamp) {
         try {
-            return OffsetDateTime.parse(timestamp).toLocalDateTime();
-        } catch (DateTimeParseException e) {
-            try {
-                return LocalDateTime.parse(timestamp);
-            } catch (DateTimeParseException e2) {
-                throw new IllegalArgumentException("Invalid timestamp format: " + timestamp);
+            TemporalAccessor parsed = TIMESTAMP_FORMATTER.parseBest(
+                    timestamp, OffsetDateTime::from, LocalDateTime::from);
+            if (parsed instanceof OffsetDateTime odt) {
+                return odt.toLocalDateTime();
             }
+            return (LocalDateTime) parsed;
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException(
+                    "Invalid timestamp format: " + timestamp
+                    + ". Accepted formats: ISO_OFFSET_DATE_TIME (2024-01-01T12:00:00+09:00)"
+                    + " or ISO_LOCAL_DATE_TIME (2024-01-01T12:00:00)");
         }
     }
 }
