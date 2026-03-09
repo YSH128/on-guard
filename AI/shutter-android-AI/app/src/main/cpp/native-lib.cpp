@@ -80,47 +80,6 @@ public:
 
 static DeepfakeDetector detector;
 
-// 다중 프레임 추출 (앞에서부터 frameCount개 순차 추출 후 평균)
-std::vector<float> extractFrameFromVideo(const std::string& videoPath, int frameCount = 10) {
-    cv::VideoCapture cap(videoPath);
-    if (!cap.isOpened()) return {};
-
-    const int W = 224, H = 224, C = 3;
-    std::vector<float> averaged(W * H * C, 0.0f);
-    int validCount = 0;
-
-    for (int i = 0; i < frameCount; i++) {
-        cv::Mat frame;
-        cap.read(frame);
-        if (frame.empty()) break;
-
-        cv::Mat resized;
-        cv::resize(frame, resized, cv::Size(W, H));
-
-        cv::Mat rgb;
-        cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
-
-        cv::Mat floatMat;
-        rgb.convertTo(floatMat, CV_32F, 1.0f / 255.0f);
-
-        float* ptr = (float*)floatMat.datastart;
-        for (int j = 0; j < W * H * C; j++) {
-            averaged[j] += ptr[j];
-        }
-        validCount++;
-    }
-
-    cap.release();
-
-    if (validCount == 0) return {};
-
-    for (float& v : averaged) {
-        v /= (float)validCount;
-    }
-
-    return averaged;
-}
-
 extern "C" JNIEXPORT jfloatArray JNICALL
 Java_com_example_shutter_1android_1ai_MainActivity_loadModels(
         JNIEnv* env,
