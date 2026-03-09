@@ -2,7 +2,7 @@
   "title": "AI Telemetry Monitoring",
   "uid": "ai-telemetry",
   "schemaVersion": 38,
-  "version": 1,
+  "version": 9,
   "refresh": "30s",
   "time": { "from": "now-7d", "to": "now" },
   "timezone": "Asia/Seoul",
@@ -22,7 +22,24 @@
         "name": "user",
         "label": "User ID",
         "options": [],
+        "current": { "selected": false, "text": "All", "value": "$__all" },
         "query": "SELECT DISTINCT user_id FROM ai_telemetry_logs WHERE user_id IS NOT NULL ORDER BY user_id",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "datasource": { "type": "mysql", "uid": "shutter-mysql" },
+        "definition": "SELECT DISTINCT device_hash FROM ai_telemetry_logs WHERE (${user} = -1 OR user_id = ${user}) AND device_hash LIKE '%' ORDER BY device_hash",
+        "hide": 0,
+        "includeAll": true,
+        "allValue": "NULL",
+        "multi": false,
+        "name": "device",
+        "label": "Device",
+        "options": [],
+        "current": { "selected": false, "text": "All", "value": "$__all" },
+        "query": "SELECT DISTINCT device_hash FROM ai_telemetry_logs WHERE (${user} = -1 OR user_id = ${user}) AND device_hash LIKE '%' ORDER BY device_hash",
         "refresh": 2,
         "sort": 1,
         "type": "query"
@@ -41,10 +58,7 @@
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [{ "color": "blue", "value": null }]
-          },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] },
           "unit": "short"
         },
         "overrides": []
@@ -62,7 +76,7 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT COUNT(*) AS value FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user)",
+          "rawSql": "SELECT COUNT(*) AS value FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring})",
           "refId": "A"
         }
       ]
@@ -85,9 +99,7 @@
               { "color": "green", "value": 90 }
             ]
           },
-          "unit": "percent",
-          "min": 0,
-          "max": 100
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -104,7 +116,7 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT ROUND(SUM(inference_success) / COUNT(*) * 100, 1) AS value FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user)",
+          "rawSql": "SELECT ROUND(SUM(inference_success) / COUNT(*) * 100, 1) AS value FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring})",
           "refId": "A"
         }
       ]
@@ -123,13 +135,11 @@
             "mode": "absolute",
             "steps": [
               { "color": "green", "value": null },
-              { "color": "yellow", "value": 10 },
-              { "color": "red", "value": 20 }
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 15 }
             ]
           },
-          "unit": "percent",
-          "min": 0,
-          "max": 100
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -146,7 +156,7 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT ROUND((COUNT(*) - SUM(inference_success)) / COUNT(*) * 100, 1) AS value FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user)",
+          "rawSql": "SELECT ROUND((COUNT(*) - SUM(inference_success)) / COUNT(*) * 100, 1) AS value FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring})",
           "refId": "A"
         }
       ]
@@ -186,7 +196,7 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT ROUND(AVG(inference_latency_ms), 0) AS value FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user)",
+          "rawSql": "SELECT ROUND(AVG(inference_latency_ms), 0) AS value FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring})",
           "refId": "A"
         }
       ]
@@ -226,7 +236,7 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT MAX(inference_latency_ms) AS value FROM (SELECT inference_latency_ms, PERCENT_RANK() OVER (ORDER BY inference_latency_ms) AS pct FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user)) t WHERE pct <= 0.95",
+          "rawSql": "SELECT MAX(inference_latency_ms) AS value FROM (SELECT inference_latency_ms, PERCENT_RANK() OVER (ORDER BY inference_latency_ms) AS pct FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring})) t WHERE pct <= 0.95",
           "refId": "A"
         }
       ]
@@ -266,7 +276,7 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT MAX(inference_latency_ms) AS value FROM (SELECT inference_latency_ms, PERCENT_RANK() OVER (ORDER BY inference_latency_ms) AS pct FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user)) t WHERE pct <= 0.99",
+          "rawSql": "SELECT MAX(inference_latency_ms) AS value FROM (SELECT inference_latency_ms, PERCENT_RANK() OVER (ORDER BY inference_latency_ms) AS pct FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring})) t WHERE pct <= 0.99",
           "refId": "A"
         }
       ]
@@ -276,7 +286,7 @@
       "id": 7,
       "type": "timeseries",
       "title": "Inference Count Over Time",
-      "gridPos": { "x": 0, "y": 4, "w": 8, "h": 8 },
+      "gridPos": { "x": 0, "y": 4, "w": 24, "h": 8 },
       "datasource": { "type": "mysql", "uid": "shutter-mysql" },
       "fieldConfig": {
         "defaults": {
@@ -294,7 +304,7 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, $__interval), COUNT(*) AS \"Inference Count\" FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user) GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, $__interval), COUNT(*) AS \"Inference Count\" FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring}) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ]
@@ -304,15 +314,13 @@
       "id": 8,
       "type": "timeseries",
       "title": "Success / Failure Rate Over Time",
-      "gridPos": { "x": 8, "y": 4, "w": 8, "h": 8 },
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
       "datasource": { "type": "mysql", "uid": "shutter-mysql" },
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
           "custom": { "lineWidth": 2, "fillOpacity": 10 },
-          "unit": "percent",
-          "min": 0,
-          "max": 100
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -325,7 +333,7 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, $__interval), ROUND(SUM(inference_success) / COUNT(*) * 100, 1) AS \"Success Rate (%)\", ROUND((COUNT(*) - SUM(inference_success)) / COUNT(*) * 100, 1) AS \"Failure Rate (%)\" FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user) GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, $__interval), ROUND(SUM(inference_success) / COUNT(*) * 100, 1) AS \"Success Rate (%)\", ROUND((COUNT(*) - SUM(inference_success)) / COUNT(*) * 100, 1) AS \"Failure Rate (%)\" FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring}) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ]
@@ -335,7 +343,7 @@
       "id": 9,
       "type": "timeseries",
       "title": "Latency Over Time",
-      "gridPos": { "x": 16, "y": 4, "w": 8, "h": 8 },
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
       "datasource": { "type": "mysql", "uid": "shutter-mysql" },
       "fieldConfig": {
         "defaults": {
@@ -354,7 +362,7 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, $__interval), ROUND(AVG(inference_latency_ms), 0) AS \"Avg Latency\", MAX(inference_latency_ms) AS \"Max Latency\" FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user) GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, $__interval), ROUND(AVG(inference_latency_ms), 0) AS \"Avg Latency\", MAX(inference_latency_ms) AS \"Max Latency\" FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring}) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ]
@@ -364,20 +372,14 @@
       "id": 10,
       "type": "barchart",
       "title": "Success Rate by Model Version",
-      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
       "datasource": { "type": "mysql", "uid": "shutter-mysql" },
       "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "unit": "percent",
-          "min": 0,
-          "max": 100
-        },
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "percent" },
         "overrides": []
       },
       "options": {
-        "barWidth": 0.6,
-        "groupWidth": 0.7,
+        "barWidth": 0.7,
         "legend": { "displayMode": "list", "placement": "bottom" },
         "tooltip": { "mode": "multi" },
         "xField": "model_version"
@@ -387,7 +389,7 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT CONCAT(model_type, ' ', model_version) AS model_version, ROUND(SUM(inference_success) / COUNT(*) * 100, 1) AS \"Success Rate (%)\", COUNT(*) AS \"Total Count\" FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user) GROUP BY model_type, model_version ORDER BY model_type, model_version",
+          "rawSql": "SELECT CONCAT(model_type, ' ', model_version) AS model_version, ROUND(SUM(inference_success) / COUNT(*) * 100, 1) AS \"Success Rate (%)\", COUNT(*) AS \"Total Count\" FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring}) GROUP BY model_type, model_version ORDER BY model_type, model_version",
           "refId": "A"
         }
       ]
@@ -397,18 +399,14 @@
       "id": 11,
       "type": "barchart",
       "title": "Avg Latency by Model Type",
-      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
       "datasource": { "type": "mysql", "uid": "shutter-mysql" },
       "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "unit": "ms"
-        },
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "ms" },
         "overrides": []
       },
       "options": {
-        "barWidth": 0.5,
-        "groupWidth": 0.7,
+        "barWidth": 0.7,
         "legend": { "displayMode": "list", "placement": "bottom" },
         "tooltip": { "mode": "multi" },
         "xField": "model_type"
@@ -418,7 +416,7 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT model_type, ROUND(AVG(inference_latency_ms), 0) AS \"Avg Latency\", MAX(inference_latency_ms) AS \"Max Latency\", MIN(inference_latency_ms) AS \"Min Latency\" FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user) GROUP BY model_type",
+          "rawSql": "SELECT model_type, ROUND(AVG(inference_latency_ms), 0) AS \"Avg Latency\", MAX(inference_latency_ms) AS \"Max Latency\", MIN(inference_latency_ms) AS \"Min Latency\" FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring}) GROUP BY model_type",
           "refId": "A"
         }
       ]
@@ -428,7 +426,7 @@
       "id": 12,
       "type": "piechart",
       "title": "Risk Score Distribution",
-      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 28, "w": 12, "h": 8 },
       "datasource": { "type": "mysql", "uid": "shutter-mysql" },
       "fieldConfig": {
         "defaults": { "color": { "mode": "palette-classic" } },
@@ -444,18 +442,12 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT risk_level, COUNT(*) AS total FROM (SELECT CONCAT(model_type, ' - ', CASE WHEN risk_score < 0.3 THEN 'Low (0~0.3)' WHEN risk_score < 0.7 THEN 'Medium (0.3~0.7)' ELSE 'High (0.7~1.0)' END) AS risk_level FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user) AND risk_score IS NOT NULL) sub GROUP BY risk_level ORDER BY risk_level",
+          "rawSql": "SELECT risk_level, COUNT(*) AS total FROM (SELECT CONCAT(model_type, ' - ', CASE WHEN risk_score < 0.3 THEN 'Low (0~0.3)' WHEN risk_score < 0.7 THEN 'Medium (0.3~0.7)' ELSE 'High (0.7~1.0)' END) AS risk_level FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring}) AND risk_score IS NOT NULL) sub GROUP BY risk_level ORDER BY risk_level",
           "refId": "A"
         }
       ],
       "transformations": [
-        {
-          "id": "rowsToFields",
-          "options": {
-            "nameField": "risk_level",
-            "valueField": "total"
-          }
-        }
+        { "id": "rowsToFields", "options": { "nameField": "risk_level", "valueField": "total" } }
       ]
     },
 
@@ -463,7 +455,7 @@
       "id": 13,
       "type": "piechart",
       "title": "Failure Type Distribution",
-      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
+      "gridPos": { "x": 12, "y": 28, "w": 12, "h": 8 },
       "datasource": { "type": "mysql", "uid": "shutter-mysql" },
       "fieldConfig": {
         "defaults": { "color": { "mode": "palette-classic" } },
@@ -479,18 +471,12 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT failure_type, cnt FROM (SELECT COALESCE(failure_type, 'UNKNOWN') AS failure_type, COUNT(*) AS cnt FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user) AND inference_success = 0 GROUP BY COALESCE(failure_type, 'UNKNOWN')) sub ORDER BY cnt DESC",
+          "rawSql": "SELECT failure_type, cnt FROM (SELECT COALESCE(failure_type, 'UNKNOWN') AS failure_type, COUNT(*) AS cnt FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring}) AND inference_success = 0 GROUP BY COALESCE(failure_type, 'UNKNOWN')) sub ORDER BY cnt DESC",
           "refId": "A"
         }
       ],
       "transformations": [
-        {
-          "id": "rowsToFields",
-          "options": {
-            "nameField": "failure_type",
-            "valueField": "cnt"
-          }
-        }
+        { "id": "rowsToFields", "options": { "nameField": "failure_type", "valueField": "cnt" } }
       ]
     },
 
@@ -498,7 +484,7 @@
       "id": 14,
       "type": "timeseries",
       "title": "Device Temperature Over Time",
-      "gridPos": { "x": 0, "y": 28, "w": 24, "h": 8 },
+      "gridPos": { "x": 0, "y": 36, "w": 24, "h": 8 },
       "datasource": { "type": "mysql", "uid": "shutter-mysql" },
       "fieldConfig": {
         "defaults": {
@@ -525,19 +511,17 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, $__interval), ROUND(AVG(device_temperature), 1) AS \"Avg Temperature\", MAX(device_temperature) AS \"Max Temperature\" FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user) GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, $__interval), ROUND(AVG(device_temperature), 1) AS \"Avg Temperature\", MAX(device_temperature) AS \"Max Temperature\" FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring}) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ]
-    }
-
-    ,
+    },
 
     {
       "id": 15,
       "type": "table",
       "title": "Device Stats (기기별 성능 요약)",
-      "gridPos": { "x": 0, "y": 36, "w": 24, "h": 10 },
+      "gridPos": { "x": 0, "y": 44, "w": 24, "h": 10 },
       "datasource": { "type": "mysql", "uid": "shutter-mysql" },
       "fieldConfig": {
         "defaults": { "color": { "mode": "thresholds" } },
@@ -564,7 +548,7 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT device_hash, COUNT(*) AS total_inferences, ROUND(SUM(inference_success) / COUNT(*) * 100, 1) AS `success_rate (%)`, ROUND((COUNT(*) - SUM(inference_success)) / COUNT(*) * 100, 1) AS `failure_rate (%)`, ROUND(AVG(inference_latency_ms), 0) AS `avg_latency (ms)`, ROUND(AVG(device_temperature), 1) AS `avg_temp (°C)`, MAX(device_temperature) AS `max_temp (°C)`, ROUND(AVG(risk_score), 3) AS avg_risk_score FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user) GROUP BY device_hash ORDER BY total_inferences DESC",
+          "rawSql": "SELECT device_hash, COUNT(*) AS total_inferences, ROUND(SUM(inference_success) / COUNT(*) * 100, 1) AS `success_rate (%)`, ROUND((COUNT(*) - SUM(inference_success)) / COUNT(*) * 100, 1) AS `failure_rate (%)`, ROUND(AVG(inference_latency_ms), 0) AS `avg_latency (ms)`, ROUND(AVG(device_temperature), 1) AS `avg_temp (°C)`, MAX(device_temperature) AS `max_temp (°C)`, ROUND(AVG(risk_score), 3) AS avg_risk_score FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring}) GROUP BY device_hash ORDER BY total_inferences DESC",
           "refId": "A"
         }
       ]
@@ -574,7 +558,7 @@
       "id": 17,
       "type": "table",
       "title": "모델별 성능 요약",
-      "gridPos": { "x": 0, "y": 46, "w": 24, "h": 8 },
+      "gridPos": { "x": 0, "y": 54, "w": 24, "h": 8 },
       "datasource": { "type": "mysql", "uid": "shutter-mysql" },
       "fieldConfig": {
         "defaults": { "color": { "mode": "thresholds" } },
@@ -608,7 +592,7 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT model_type, model_version, COUNT(*) AS total_inferences, ROUND(SUM(inference_success) / COUNT(*) * 100, 1) AS `success_rate (%)`, ROUND((COUNT(*) - SUM(inference_success)) / COUNT(*) * 100, 1) AS `failure_rate (%)`, ROUND(AVG(inference_latency_ms), 0) AS `avg_latency (ms)`, ROUND(AVG(risk_score), 3) AS avg_risk_score FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user) GROUP BY model_type, model_version ORDER BY model_type, model_version",
+          "rawSql": "SELECT model_type, model_version, COUNT(*) AS total_inferences, ROUND(SUM(inference_success) / COUNT(*) * 100, 1) AS `success_rate (%)`, ROUND((COUNT(*) - SUM(inference_success)) / COUNT(*) * 100, 1) AS `failure_rate (%)`, ROUND(AVG(inference_latency_ms), 0) AS `avg_latency (ms)`, ROUND(AVG(risk_score), 3) AS avg_risk_score FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring}) GROUP BY model_type, model_version ORDER BY model_type, model_version",
           "refId": "A"
         }
       ]
@@ -617,8 +601,8 @@
     {
       "id": 16,
       "type": "table",
-      "title": "문제 기기 탐지 (실패율 10% 초과)",
-      "gridPos": { "x": 0, "y": 54, "w": 24, "h": 8 },
+      "title": "문제 기기 목록 (실패율 10% 초과)",
+      "gridPos": { "x": 0, "y": 62, "w": 24, "h": 8 },
       "datasource": { "type": "mysql", "uid": "shutter-mysql" },
       "fieldConfig": {
         "defaults": { "color": { "mode": "thresholds" } },
@@ -638,7 +622,7 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT device_hash, COUNT(*) AS total_inferences, ROUND((COUNT(*) - SUM(inference_success)) / COUNT(*) * 100, 1) AS `failure_rate (%)`, ROUND(AVG(inference_latency_ms), 0) AS `avg_latency (ms)`, ROUND(AVG(device_temperature), 1) AS `avg_temp (°C)`, GROUP_CONCAT(DISTINCT COALESCE(failure_type, 'UNKNOWN') SEPARATOR ', ') AS failure_types FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user) GROUP BY device_hash HAVING (COUNT(*) - SUM(inference_success)) / COUNT(*) * 100 > 10 ORDER BY `failure_rate (%)` DESC",
+          "rawSql": "SELECT device_hash, COUNT(*) AS total_inferences, ROUND((COUNT(*) - SUM(inference_success)) / COUNT(*) * 100, 1) AS `failure_rate (%)`, ROUND(AVG(inference_latency_ms), 0) AS `avg_latency (ms)`, ROUND(AVG(device_temperature), 1) AS `avg_temp (°C)`, GROUP_CONCAT(DISTINCT COALESCE(failure_type, 'UNKNOWN') SEPARATOR ', ') AS failure_types FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring}) GROUP BY device_hash HAVING (COUNT(*) - SUM(inference_success)) / COUNT(*) * 100 > 10 ORDER BY `failure_rate (%)` DESC",
           "refId": "A"
         }
       ]
@@ -648,7 +632,7 @@
       "id": 18,
       "type": "timeseries",
       "title": "App PSS Memory 추이 (KB)",
-      "gridPos": { "x": 0, "y": 62, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 70, "w": 12, "h": 8 },
       "datasource": { "type": "mysql", "uid": "shutter-mysql" },
       "fieldConfig": {
         "defaults": {
@@ -664,7 +648,7 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, '1m'), AVG(app_pss_memory) AS 'avg_pss_kb' FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user) GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, '1m'), AVG(app_pss_memory) AS 'avg_pss_kb' FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring}) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ]
@@ -674,7 +658,7 @@
       "id": 19,
       "type": "timeseries",
       "title": "Battery Current 추이 (mA)",
-      "gridPos": { "x": 12, "y": 62, "w": 12, "h": 8 },
+      "gridPos": { "x": 12, "y": 70, "w": 12, "h": 8 },
       "datasource": { "type": "mysql", "uid": "shutter-mysql" },
       "fieldConfig": {
         "defaults": {
@@ -690,7 +674,7 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, '1m'), AVG(battery_current_now) AS 'avg_battery_mA' FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user) GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, '1m'), AVG(battery_current_now) AS 'avg_battery_mA' FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring}) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ]
@@ -701,7 +685,7 @@
       "type": "timeseries",
       "title": "Thermal Throttling Status 추이",
       "description": "0=NONE, 1=LIGHT, 2=MODERATE, 3=SEVERE, 4=CRITICAL, 5=EMERGENCY, 6=SHUTDOWN",
-      "gridPos": { "x": 0, "y": 70, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 78, "w": 12, "h": 8 },
       "datasource": { "type": "mysql", "uid": "shutter-mysql" },
       "fieldConfig": {
         "defaults": {
@@ -727,7 +711,7 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, '1m'), MAX(thermal_throttling_status) AS 'max_throttling_status' FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user) GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, '1m'), MAX(thermal_throttling_status) AS 'max_throttling_status' FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring}) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ]
@@ -737,7 +721,7 @@
       "id": 21,
       "type": "timeseries",
       "title": "Thread CPU Time vs Inference Latency (ms)",
-      "gridPos": { "x": 12, "y": 70, "w": 12, "h": 8 },
+      "gridPos": { "x": 12, "y": 78, "w": 12, "h": 8 },
       "datasource": { "type": "mysql", "uid": "shutter-mysql" },
       "fieldConfig": {
         "defaults": {
@@ -753,7 +737,7 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, '1m'), AVG(thread_cpu_time) AS 'avg_thread_cpu_ms', AVG(inference_latency_ms) AS 'avg_inference_ms' FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user) GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, '1m'), AVG(thread_cpu_time) AS 'avg_thread_cpu_ms', AVG(inference_latency_ms) AS 'avg_inference_ms' FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring}) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ]
@@ -763,7 +747,7 @@
       "id": 22,
       "type": "timeseries",
       "title": "Model Load Latency 추이 (ms)",
-      "gridPos": { "x": 0, "y": 78, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 86, "w": 12, "h": 8 },
       "datasource": { "type": "mysql", "uid": "shutter-mysql" },
       "fieldConfig": {
         "defaults": {
@@ -783,7 +767,7 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, '1m'), AVG(model_load_latency_ms) AS 'avg_model_load_ms' FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user) AND model_load_latency_ms IS NOT NULL GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT $__timeGroupAlias(`timestamp`, '1m'), AVG(model_load_latency_ms) AS 'avg_model_load_ms' FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring}) AND model_load_latency_ms IS NOT NULL GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ]
@@ -793,7 +777,7 @@
       "id": 23,
       "type": "table",
       "title": "유저별 성능 요약",
-      "gridPos": { "x": 0, "y": 86, "w": 24, "h": 8 },
+      "gridPos": { "x": 0, "y": 94, "w": 24, "h": 8 },
       "datasource": { "type": "mysql", "uid": "shutter-mysql" },
       "fieldConfig": {
         "defaults": { "color": { "mode": "thresholds" } },
@@ -820,7 +804,7 @@
           "datasource": { "type": "mysql", "uid": "shutter-mysql" },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT COALESCE(CAST(user_id AS CHAR), 'anonymous') AS user_id, COUNT(*) AS total_inferences, ROUND(SUM(inference_success) / COUNT(*) * 100, 1) AS `success_rate (%)`, ROUND(AVG(inference_latency_ms), 0) AS `avg_latency (ms)`, ROUND(AVG(app_pss_memory), 0) AS `avg_pss_kb`, MAX(thermal_throttling_status) AS max_thermal_status, ROUND(AVG(battery_current_now), 1) AS `avg_battery_mA` FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND ($user = -1 OR user_id = $user) GROUP BY user_id ORDER BY total_inferences DESC",
+          "rawSql": "SELECT COALESCE(CAST(user_id AS CHAR), 'anonymous') AS user_id, COUNT(*) AS total_inferences, ROUND(SUM(inference_success) / COUNT(*) * 100, 1) AS `success_rate (%)`, ROUND(AVG(inference_latency_ms), 0) AS `avg_latency (ms)`, ROUND(AVG(app_pss_memory), 0) AS `avg_pss_kb`, MAX(thermal_throttling_status) AS max_thermal_status, ROUND(AVG(battery_current_now), 1) AS `avg_battery_mA` FROM ai_telemetry_logs WHERE $__timeFilter(`timestamp`) AND (${user} = -1 OR user_id = ${user}) AND (${device:sqlstring} IS NULL OR device_hash = ${device:sqlstring}) GROUP BY user_id ORDER BY total_inferences DESC",
           "refId": "A"
         }
       ]
@@ -828,3 +812,4 @@
 
   ]
 }
+
