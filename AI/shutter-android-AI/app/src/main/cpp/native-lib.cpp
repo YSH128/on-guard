@@ -4,12 +4,118 @@
 #include <chrono>
 #include <torch/script.h>
 #include <opencv2/opencv.hpp>
+#include <android/log.h>
+
+#define LOG_TAG "NativeLib"
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 
 // 시간 측정을 위한 유틸리티 함수
-float get_ms(std::chrono::high_resolution_clock::time_point start) {
+float get_ms(std::chrono::high_resolution_clock::time_point start){
     auto end = std::chrono::high_resolution_clock::now();
     return std::chrono::duration<float, std::milli>(end - start).count();
 }
+
+// 전처리 함수
+cv::Mat preprocessFrame(cv::Mat& src) {
+    if (src.empty()) return cv::Mat();
+    cv::Mat dst;
+    cv::resize(src, dst, cv::Size(224, 224));
+    cv::cvtColor(dst, dst, cv::COLOR_BGR2RGB);
+    return dst;
+}
+
+class DeepfakeDetector {
+public:
+    torch::jit::script::Module audioModule;
+    torch::jit::script::Module faceModule;
+    bool isAudioLoaded = false;
+    bool isFaceLoaded = false;
+    float audioLoadTime = 0.0f;
+    float faceLoadTime = 0.0f;
+
+    bool loadModels(const std::string& audioPath, const std::string& facePath) {
+        bool success = true;
+
+        if (!isAudioLoaded) {
+            try {
+                auto start_audio = std::chrono::high_resolution_clock::now();
+                audioModule = torch::jit::load(audioPath);
+                audioModule.eval();
+                audioLoadTime = get_ms(start_audio);
+                isAudioLoaded = true;
+                LOGD("Audio model loaded successfully. Time: %.2f ms", audioLoadTime);
+            } catch (const c10::Error& e) {
+                LOGE("Error loading audio model");
+                isAudioLoaded = false;
+                success = false;
+            }
+        }
+
+        if (!isFaceLoaded) {
+            try {
+                auto start_face = std::chrono::high_resolution_clock::now();
+                faceModule = torch::jit::load(facePath);
+                faceModule.eval();
+                faceLoadTime = get_ms(start_face);
+                isFaceLoaded = true;
+                LOGD("Face model loaded successfully. Time: %.2f ms", faceLoadTime);
+            } catch (const c10::Error& e) {
+                LOGE("Error loading face model");
+                isFaceLoaded = false;
+                success = false;
+            }
+        }
+
+        return success;
+    }
+
+    std::vector<float> detectAudio(const float* audioData, int length) {
+        if (!isAudioLoaded) return {-1.0f, 0.0f, 0.0f};
+
+        auto start_inference = std::chrono::high_resolution_clock::now();
+        auto options = torch::TensorOptions().dtype(torch::kFloat32);
+        torch::Tensor input_tensor = torch::from_blob((void*)audioData, {1, length}, options);
+
+        std::vector<torch::jit::IValue> inputs;
+        inputs.push_back(input_tensor);
+
+        at::Tensor output = audioModule.forward(inputs).toTensor();
+        float score = output.item<float>();
+        
+        float inferenceTime = get_ms(start_inference);
+        return {score, audioLoadTime, inferenceTime};
+    }
+
+    std::vector<float> detectFace(const float* imageData) {
+        if (!isFaceLoaded) return {-1.0f, -1.0f, 0.0f, 0.0f};
+
+        auto start_inference = std::chrono::high_resolution_clock::now();
+        auto options = torch::TensorOptions().dtype(torch::kFloat32);
+        torch::Tensor input_tensor = torch::from_blob((void*)imageData, {1, 224, 224, 3}, options);
+        input_tensor = input_tensor.permute({0, 3, 1, 2});
+
+        float mean_vals[3] = {0.485f, 0.456f, 0.406f};
+        float std_vals[3]  = {0.229f, 0.224f, 0.225f};
+
+        auto mean = torch::from_blob(mean_vals, {1, 3, 1, 1}).clone();
+        auto std  = torch::from_blob(std_vals,  {1, 3, 1, 1}).clone();
+
+        input_tensor = (input_tensor - mean) / std;
+
+        std::vector<torch::jit::IValue> inputs;
+        inputs.push_back(input_tensor);
+
+        at::Tensor output = faceModule.forward(inputs).toTensor();
+        at::Tensor prob = torch::softmax(output, 1);
+
+        float fakeProb = prob[0][1].item<float>();
+        float realProb = prob[0][0].item<float>();
+        float inferenceTime = get_ms(start_inference);
+
+        return {fakeProb, realProb, faceLoadTime, inferenceTime};
+    }
+};
 
 // 동영상에서 중간 프레임 1장을 추출해 224x224x3 float 배열로 반환
 std::vector<float> extractFrameFromVideo(const std::string& videoPath) {
@@ -44,69 +150,59 @@ std::vector<float> extractFrameFromVideo(const std::string& videoPath) {
     return result;
 }
 
-/**
- * Audio Deepfake Detection
- */
+// Global instance to handle models
+static DeepfakeDetector detector;
+
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_example_shutter_1android_1ai_MainActivity_loadModels(
+        JNIEnv* env,
+        jobject /* this */,
+        jstring audioModelPath,
+        jstring faceModelPath) {
+            
+    const char* aPath = env->GetStringUTFChars(audioModelPath, nullptr);
+    const char* fPath = env->GetStringUTFChars(faceModelPath, nullptr);
+    
+    bool loadSuccess = detector.loadModels(aPath, fPath);
+
+    env->ReleaseStringUTFChars(audioModelPath, aPath);
+    env->ReleaseStringUTFChars(faceModelPath, fPath);
+
+    float results[3] = { loadSuccess ? 1.0f : 0.0f, detector.audioLoadTime, detector.faceLoadTime };
+    jfloatArray resultMap = env->NewFloatArray(3);
+    env->SetFloatArrayRegion(resultMap, 0, 3, results);
+
+    return resultMap;
+}
 
 extern "C" JNIEXPORT jfloatArray JNICALL
 Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeAudio(
         JNIEnv* env,
         jobject /* this */,
-        jstring modelPath,
         jfloatArray audioData) {
-
-    // 결과 저장을 위한 배열 (0: score, 1: load_time, 2: inference_time)
-    jfloatArray resultMap = env->NewFloatArray(3);
-    float results[3] = { -1.0f, 0.0f, 0.0f };
-
-    const char* path = env->GetStringUTFChars(modelPath, nullptr);
-
-    // 1. 모델 로드 시간 측정 시작
-    auto start_load = std::chrono::high_resolution_clock::now();
-
-    torch::jit::script::Module module;
-    try {
-        module = torch::jit::load(path); // 오디오 모델 로드
-    } catch (const c10::Error& e) {
-        env->ReleaseStringUTFChars(modelPath, path);
-        results[0] = -1.0f; // 로드 실패
-        env->SetFloatArrayRegion(resultMap, 0, 3, results);
-        return resultMap;
-    }
-
-    results[1] = get_ms(start_load);
-
-    // 2. 데이터 준비 (JNI floatArray를 C++ 배열로 변환)
+    
     jfloat* data = env->GetFloatArrayElements(audioData, nullptr);
     jsize length = env->GetArrayLength(audioData);
 
-    // Raw 데이터를 PyTorch Tensor로 변환 (1D Audio: {1, length})
-    auto options = torch::TensorOptions().dtype(torch::kFloat32);
-    torch::Tensor input_tensor = torch::from_blob(data, {1, length}, options);
+    std::vector<float> results = detector.detectAudio(data, length);
 
-    // 3. 추론 시간 측정 시작
-    auto start_inference = std::chrono::high_resolution_clock::now();
-
-    std::vector<torch::jit::IValue> inputs;
-    inputs.push_back(input_tensor);
-
-    at::Tensor output = module.forward(inputs).toTensor(); // propagation 실행
-    float score = output.item<float>(); // 결과 tensor에서 단일 값 추출
-
-    results[2] = get_ms(start_inference);
-    results[0] = score;
-
-    // 4. 메모리 해제 및 결과 반환
     env->ReleaseFloatArrayElements(audioData, data, JNI_ABORT);
-    env->ReleaseStringUTFChars(modelPath, path);
 
-    env->SetFloatArrayRegion(resultMap, 0, 3, results);
+    jfloatArray resultMap = env->NewFloatArray(results.size());
+    env->SetFloatArrayRegion(resultMap, 0, results.size(), results.data());
+    
     return resultMap;
 }
 
 /**
  * Face Deepfake Detection
  */
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_example_shutter_1android_1ai_MainActivity_processFrame(JNIEnv* env, jobject, jlong matAddr) {
+    cv::Mat& frame = *(cv::Mat*)matAddr;
+    cv::Mat processed = preprocessFrame(frame);
+    return nullptr; 
+}
 /**
  * 동영상 경로를 받아 프레임 추출 후 Face Deepfake Detection
  * 반환: [FakeProb, RealProb, LoadTime, InferTime]
@@ -115,14 +211,8 @@ extern "C" JNIEXPORT jfloatArray JNICALL
 Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeVisual(
         JNIEnv* env,
         jobject /* this */,
-        jstring modelPath,
         jstring videoPath) {
 
-    // 결과: 0, Fake 확률, 1: Real 확률, 2: Load 시간, 3: Inference 시간
-    jfloatArray resultMap = env->NewFloatArray(4);
-    float results[4] = { -1.0f, -1.0f, 0.0f, 0.0f };
-
-    const char* path = env->GetStringUTFChars(modelPath, nullptr);
     const char* vPath = env->GetStringUTFChars(videoPath, nullptr);
 
     // 동영상에서 프레임 추출
@@ -130,55 +220,16 @@ Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeVisual(
     env->ReleaseStringUTFChars(videoPath, vPath);
 
     if (frameData.empty()) {
-        env->ReleaseStringUTFChars(modelPath, path);
-        results[0] = -2.0f; // 프레임 추출 실패
+        jfloatArray resultMap = env->NewFloatArray(4);
+        float results[4] = { -2.0f, -1.0f, 0.0f, 0.0f }; // 프레임 추출 실패
         env->SetFloatArrayRegion(resultMap, 0, 4, results);
         return resultMap;
     }
 
-    // 모델 로드
-    auto start_load = std::chrono::high_resolution_clock::now();
-    torch::jit::script::Module module;
-    try {
-        module = torch::jit::load(path);
-        module.eval();
-    } catch (const c10::Error& e) {
-        env->ReleaseStringUTFChars(modelPath, path);
-        env->SetFloatArrayRegion(resultMap, 0, 4, results);
-        return resultMap;
-    }
-    results[2] = get_ms(start_load);
+    std::vector<float> results = detector.detectFace(frameData.data());
 
-    // FloatArray → Tensor 변환 (1, 224, 224, 3) → permute → (1, 3, 224, 224)
-    auto options = torch::TensorOptions().dtype(torch::kFloat32);
-    torch::Tensor input_tensor = torch::from_blob(
-        frameData.data(), {1, 224, 224, 3}, options).clone();
-    input_tensor = input_tensor.permute({0, 3, 1, 2});
-
-    // ImageNet 기준 Regularization
-    float mean_vals[3] = {0.485f, 0.456f, 0.406f};
-    float std_vals[3]  = {0.229f, 0.224f, 0.225f};
-
-    auto mean = torch::from_blob(mean_vals, {1, 3, 1, 1}).clone();
-    auto std  = torch::from_blob(std_vals,  {1, 3, 1, 1}).clone();
-
-    input_tensor = (input_tensor - mean) / std;
-
-    // inference
-    auto start_inference = std::chrono::high_resolution_clock::now();
-    std::vector<torch::jit::IValue> inputs;
-    inputs.push_back(input_tensor);
-    at::Tensor output = module.forward(inputs).toTensor();
-
-    at::Tensor prob = torch::softmax(output, 1);
-
-    results[3] = get_ms(start_inference);
-
-    results[0] = prob[0][1].item<float>(); // Fake Prob
-    results[1] = prob[0][0].item<float>(); // Real Prob
-
-    env->ReleaseStringUTFChars(modelPath, path);
-    env->SetFloatArrayRegion(resultMap, 0, 4, results);
+    jfloatArray resultMap = env->NewFloatArray(results.size());
+    env->SetFloatArrayRegion(resultMap, 0, results.size(), results.data());
 
     return resultMap;
 }

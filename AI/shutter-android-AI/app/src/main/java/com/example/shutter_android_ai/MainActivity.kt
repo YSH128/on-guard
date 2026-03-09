@@ -36,8 +36,11 @@ import java.util.UUID
 class MainActivity : AppCompatActivity() {
 
     // C++ JNI 함수 선언
-    private external fun detectDeepfakeAudio(modelPath: String, audioData: FloatArray): FloatArray
-    private external fun detectDeepfakeVisual(modelPath: String, videoPath: String): FloatArray  // ★ String으로 변경
+    private external fun loadModels(audioModelPath: String, faceModelPath: String): FloatArray
+    private external fun detectDeepfakeAudio(audioData: FloatArray): FloatArray
+    private external fun detectDeepfakeVisual(videoPath: String): FloatArray
+
+    private val deviceModel by lazy { DeviceStatusProvider.getDeviceModelName() }
 
     companion object {
         init {
@@ -49,14 +52,16 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // [통일] 뷰 찾기 로직 유지
-        val btnTestInference = findViewById<Button>(R.id.btnTestInference)
-        val tvResult = findViewById<TextView>(R.id.tvResult)
+        // 뷰 찾기 로직
+        val btnLoadModels = findViewById<Button>(R.id.btnLoadModels)
+        val tvLoadStatus = findViewById<TextView>(R.id.tvLoadStatus)
+        val btnAudioDetect = findViewById<Button>(R.id.btnAudioDetect)
+        val tvAudioResult = findViewById<TextView>(R.id.tvAudioResult)
         val btnVisualDetect = findViewById<Button>(R.id.btnVisualDetect)
         val tvVisualResult = findViewById<TextView>(R.id.tvVisualResult)
         val tvOpenCVStatus = findViewById<TextView>(R.id.tvOpenCVStatus)
 
-        // [추가] OpenCV 설치 및 버전 확인
+        // OpenCV 설치 및 버전 확인
         if (OpenCVLoader.initDebug()) {
             val version = org.opencv.core.Core.VERSION
             tvOpenCVStatus.text = "OpenCV 로드 성공 (v$version)"
@@ -64,145 +69,213 @@ class MainActivity : AppCompatActivity() {
             tvOpenCVStatus.text = "OpenCV 로드 실패"
         }
 
-        // [수정] binding. 대신 위에서 선언한 변수명(btnTestInference) 사용
-        btnTestInference.setOnClickListener {
-            tvResult.text = "오디오 분석 중..."
-
+        btnLoadModels.setOnClickListener {
+            tvLoadStatus.text = "모델 로드 중..."
             thread {
                 try {
-                    val modelPath = getAssetFilePath(this@MainActivity, "voice_deepfake_model.pt")
-                    val audioPath = getAssetFilePath(this@MainActivity, "test.flac")
-                    val audioData = decodeAudioFromFile(audioPath, 64000)
-
-                    // 추론 시작 직전의 현재 스레드 CPU 시간 기록
+                    val audioPath = getAssetFilePath(this@MainActivity, "voice_deepfake_model.pt")
+                    val facePath = getAssetFilePath(this@MainActivity, "face_deepfake_model.pt")
+                    
                     val startCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
-         
-                    // 2. 결과를 배열로 받습니다. [Score, LoadTime, InferTime]
-                    val results: FloatArray = detectDeepfakeAudio(modelPath, audioData)
                     
-                    // 추론 종료 직후 스레드 CPU 시간 기록 및 순수 연산 시간 계산
+                    val results = loadModels(audioPath, facePath)
+                    
                     val endCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
-                    val inferenceThreadCpuTime = endCpuTimeMs - startCpuTimeMs
-
-                    // 나머지 하드웨어 지표 수집 (Context는 this@MainActivity 사용)
-                    val currentTemp = DeviceStatusProvider.getDeviceTemperature(this@MainActivity)
-                    val pssMemoryKb = DeviceStatusProvider.getAppPssMemory()
-                    val thermalStatus = DeviceStatusProvider.getThermalThrottlingStatus(this@MainActivity)
-                    val batteryCurrentmA = DeviceStatusProvider.getBatteryCurrentNow(this@MainActivity)
-
-                    // 기기 모델명 취득 (DeviceStatusProvider에 추가했다고 가정)
-                    val deviceModel = DeviceStatusProvider.getDeviceModelName()
+                    val loadThreadCpuTime = endCpuTimeMs - startCpuTimeMs
                     
-                    // 3. 배열 인덱스를 통해 안전하게 값을 가져옵니다.
-                    val score = results[0]
-                    val loadTime = results[1]
-                    val inferenceTime = results[2]
-
-                    val isSuccess = score > -1.0f
-
-                    // ========== [추가된 Retrofit 전송 로직 시작] ==========
-                    // 현재 시간 ISO 8601 포맷으로 생성
-                    val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.getDefault())
-                    val currentTimeStr = sdf.format(Date())
-
-                    // 서버로 전송할 Request 객체 조립
-                    val telemetryRequest = TelemetryRequest(
-                        user_id = 1,
-                        model_type = "DEEPVOICE",
-                        model_version = "v1.0.0",
-                        inference_success = isSuccess,
-                        failure_type = if (isSuccess) null else "MODEL_LOAD_ERROR",
-                        inference_latency_ms = inferenceTime.toLong(),
-                        risk_score = score,
-                        timestamp = currentTimeStr,
-                        device_hash = deviceModel,
-                        // device_model = deviceModel,
-                        session_id = UUID.randomUUID().toString(),
-                        device_temperature = currentTemp,
-                        app_pss_memory = pssMemoryKb,
-                        thermal_throttling_status = thermalStatus,
-                        thread_cpu_time = inferenceThreadCpuTime,
-                        battery_current_now = batteryCurrentmA,
-                        model_load_latency_ms = loadTime.toLong()
+                    val success = results[0] > 0.0f
+                    val audioLoadTime = results[1]
+                    val faceLoadTime = results[2]
+                    
+                    // Send telemetry for Audio Load
+                    sendTelemetryData(
+                        modelType = "DEEPVOICE",
+                        isSuccess = success,
+                        failureType = if (success) null else "MODEL_LOAD_ERROR",
+                        inferenceLatencyMs = 0L,
+                        riskScore = 0.0f,
+                        modelLoadLatencyMs = audioLoadTime.toLong(),
+                        threadCpuTimeMs = loadThreadCpuTime / 2
                     )
 
-                    // 코루틴을 사용하여 백그라운드에서 네트워크 요청 전송
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        try {
-                            val response = RetrofitClient.api.sendTelemetry(telemetryRequest)
-                            if (response.isSuccessful) {
-                                android.util.Log.d("Telemetry", "데이터 전송 성공")
-                            } else {
-                                android.util.Log.e("Telemetry", "데이터 전송 실패: ${response.code()}")
-                            }
-                        } catch (e: Exception) {
-                            android.util.Log.e("Telemetry", "네트워크 에러: ${e.message}")
-                        }
-                    }
-                    // ========== [추가된 Retrofit 전송 로직 끝] ==========
-
+                    // Send telemetry for Face Load
+                    sendTelemetryData(
+                        modelType = "FACE",
+                        isSuccess = success,
+                        failureType = if (success) null else "MODEL_LOAD_ERROR",
+                        inferenceLatencyMs = 0L,
+                        riskScore = 0.0f,
+                        modelLoadLatencyMs = faceLoadTime.toLong(),
+                        threadCpuTimeMs = loadThreadCpuTime / 2
+                    )
+                    
                     runOnUiThread {
-                        if (score <= -1.0f) { // -1.0 이하면 로드 실패로 간주
-                            tvResult.text = "에러: 모델 로드 실패"
+                        if (success) {
+                            tvLoadStatus.text = "모델 로드 성공!\n오디오 모델: ${String.format("%.2f", audioLoadTime)} ms\n페이스 모델: ${String.format("%.2f", faceLoadTime)} ms"
                         } else {
-                            val resultText = """
-                                [오디오 추론 성공]
-                                Score: ${String.format("%.4f", score)}
-                                Load: ${String.format("%.2f", loadTime)} ms
-                                Infer: ${String.format("%.2f", inferenceTime)} ms
-
-                                [하드웨어 모니터링]
-                                Temp: ${String.format("%.2f", currentTemp)}°C
-                                RAM (PSS): $pssMemoryKb KB
-                                CPU Time: $inferenceThreadCpuTime ms
-                                Current: ${String.format("%.2f", batteryCurrentmA)} mA
-                                Thermal Status: $thermalStatus
-                            """.trimIndent()
-                            tvResult.text = resultText
+                            tvLoadStatus.text = "모델 로드 실패!"
                         }
                     }
                 } catch (e: Exception) {
                     runOnUiThread {
-                        tvResult.text = "에러 발생: ${e.message}"
+                        tvLoadStatus.text = "에러: ${e.message}"
                     }
                 }
             }
         }
 
-        // [수정] binding. 대신 위에서 선언한 변수명(btnVisualDetect) 사용
+        btnAudioDetect.setOnClickListener {
+            try {
+                val audioPath = getAssetFilePath(this@MainActivity, "test.flac")
+                request_deepfake_detection("DEEPVOICE", audioPath, tvAudioResult)
+            } catch (e: Exception) {
+                tvAudioResult.text = "에러: test.flac 파일을 assets 폴더에서 찾을 수 없습니다."
+            }
+        }
+
         btnVisualDetect.setOnClickListener {
-            tvVisualResult.text = "페이스 분석 중..."
+            try {
+                val videoPath = getAssetFilePath(this@MainActivity, "fakeVideo.mp4")
+                request_deepfake_detection("FACE", videoPath, tvVisualResult)
+            } catch (e: Exception) {
+                tvVisualResult.text = "에러: fakeVideo.mp4 파일을 assets 폴더에서 찾을 수 없습니다."
+            }
+        }
+    }
 
-            thread {
-                try {
-                    val modelPath = getAssetFilePath(this@MainActivity, "face_deepfake_model.pt")
-                    val videoPath = getAssetFilePath(this@MainActivity, "fakeVideo.mp4")
+    private fun request_deepfake_detection(type: String, filePath: String, resultTextView: TextView) {
+        val typeName = if (type == "DEEPVOICE") "오디오" else "페이스"
+        resultTextView.text = "$typeName 분석 중..."
 
-                    // ★ videoPath(String)를 직접 전달
-                    val results: FloatArray = detectDeepfakeVisual(modelPath, videoPath)
+        thread {
+            try {
+                val startCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
+                val results: FloatArray
+                var isSuccess = false
+                var score = 0.0f
+                var loadTime = 0.0f
+                var inferenceTime = 0.0f
+                var isFake = false
+                var status = ""
+                var faceFakeProb = 0.0f
+                var faceRealProb = 0.0f
 
-                    runOnUiThread {
-                        when {
-                            results[0] <= -2.0f -> tvVisualResult.text = "에러: 동영상 프레임 추출 실패"
-                            results[0] <= -1.0f -> tvVisualResult.text = "에러: 비주얼 모델 로드 실패"
-                            else -> {
-                                val isFake = results[0] > results[1]
-                                val status = if (isFake) "FAKE" else "REAL"
-                                tvVisualResult.text = """
-                                    [비주얼 추론 성공 - $status]
-                                    Fake: ${String.format("%.2f%%", results[0] * 100)}
-                                    Real: ${String.format("%.2f%%", results[1] * 100)}
-                                    Load: ${String.format("%.2f", results[2])} ms
-                                    Infer: ${String.format("%.2f", results[3])} ms
-                                """.trimIndent()
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    runOnUiThread {
-                        tvVisualResult.text = "비주얼 에러: ${e.message}"
+                if (type == "DEEPVOICE") {
+                    val audioData = decodeAudioFromFile(filePath, 64000)
+                    results = detectDeepfakeAudio(audioData)
+                    score = results[0]
+                    loadTime = results[1]
+                    inferenceTime = results[2]
+                    isSuccess = score > -1.0f
+                } else if (type == "FACE") {
+                    results = detectDeepfakeVisual(filePath)
+                    score = results[0]
+                    loadTime = results[2]
+                    inferenceTime = results[3]
+                    isSuccess = score > -1.0f
+                    if (isSuccess) {
+                        isFake = results[0] > results[1]
+                        status = if (isFake) "FAKE" else "REAL"
+                        faceFakeProb = results[0]
+                        faceRealProb = results[1]
                     }
                 }
+
+                val endCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
+                val inferenceThreadCpuTime = endCpuTimeMs - startCpuTimeMs
+
+                sendTelemetryData(
+                    modelType = type,
+                    isSuccess = isSuccess,
+                    failureType = if (isSuccess) null else "INFERENCE_ERROR",
+                    inferenceLatencyMs = inferenceTime.toLong(),
+                    riskScore = score,
+                    modelLoadLatencyMs = loadTime.toLong(),
+                    threadCpuTimeMs = inferenceThreadCpuTime
+                )
+
+                val currentTemp = DeviceStatusProvider.getDeviceTemperature(this@MainActivity)
+                val pssMemoryKb = DeviceStatusProvider.getAppPssMemory()
+                val thermalStatus = DeviceStatusProvider.getThermalThrottlingStatus(this@MainActivity)
+                val batteryCurrentmA = DeviceStatusProvider.getBatteryCurrentNow(this@MainActivity)
+
+                runOnUiThread {
+                    if (!isSuccess) {
+                        resultTextView.text = "에러: 모델 로드 또는 추론 실패"
+                    } else {
+                        val header = if (type == "FACE") "[$typeName 추론 성공 - $status]\nFake: ${String.format("%.2f%%", faceFakeProb * 100)}\nReal: ${String.format("%.2f%%", faceRealProb * 100)}" 
+                                     else "[$typeName 추론 성공]\nScore: ${String.format("%.4f", score)}"
+
+                        val resultText = """
+                            $header
+                            Load: ${String.format("%.2f", loadTime)} ms
+                            Infer: ${String.format("%.2f", inferenceTime)} ms
+
+                            [하드웨어 모니터링]
+                            Temp: ${String.format("%.2f", currentTemp)}°C
+                            RAM (PSS): $pssMemoryKb KB
+                            CPU Time: $inferenceThreadCpuTime ms
+                            Current: ${String.format("%.2f", batteryCurrentmA)} mA
+                            Thermal Status: $thermalStatus
+                        """.trimIndent()
+                        
+                        resultTextView.text = resultText
+                    }
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    resultTextView.text = "$typeName 에러: ${e.message}"
+                }
+            }
+        }
+    }
+
+    private fun sendTelemetryData(
+        modelType: String,
+        isSuccess: Boolean,
+        failureType: String?,
+        inferenceLatencyMs: Long,
+        riskScore: Float,
+        modelLoadLatencyMs: Long,
+        threadCpuTimeMs: Long
+    ) {
+        val currentTemp = DeviceStatusProvider.getDeviceTemperature(this@MainActivity)
+        val pssMemoryKb = DeviceStatusProvider.getAppPssMemory()
+        val thermalStatus = DeviceStatusProvider.getThermalThrottlingStatus(this@MainActivity)
+        val batteryCurrentmA = DeviceStatusProvider.getBatteryCurrentNow(this@MainActivity)
+        
+        val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.getDefault())
+        val currentTimeStr = sdf.format(Date())
+
+        val request = TelemetryRequest(
+            user_id = 1,
+            model_type = modelType,
+            model_version = "v1.0.0",
+            inference_success = isSuccess,
+            failure_type = failureType,
+            inference_latency_ms = inferenceLatencyMs,
+            risk_score = riskScore,
+            timestamp = currentTimeStr,
+            device_hash = deviceModel,
+            session_id = UUID.randomUUID().toString(),
+            device_temperature = currentTemp,
+            app_pss_memory = pssMemoryKb,
+            thermal_throttling_status = thermalStatus,
+            thread_cpu_time = threadCpuTimeMs,
+            battery_current_now = batteryCurrentmA,
+            model_load_latency_ms = modelLoadLatencyMs
+        )
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val response = RetrofitClient.api.sendTelemetry(request)
+                if (response.isSuccessful) {
+                    android.util.Log.d("Telemetry", "데이터 전송 성공 ($modelType)")
+                } else {
+                    android.util.Log.e("Telemetry", "데이터 전송 실패: ${response.code()} ($modelType)")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("Telemetry", "네트워크 에러: ${e.message} ($modelType)")
             }
         }
     }
