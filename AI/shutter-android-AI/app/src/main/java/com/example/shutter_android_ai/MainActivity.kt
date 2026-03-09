@@ -37,7 +37,7 @@ class MainActivity : AppCompatActivity() {
 
     // C++ JNI 함수 선언
     private external fun detectDeepfakeAudio(modelPath: String, audioData: FloatArray): FloatArray
-    private external fun detectDeepfakeVisual(modelPath: String, videoPath: String): FloatArray  // ★ String으로 변경
+    private external fun detectDeepfakeVisual(modelPath: String, videoPath: String): FloatArray
 
     companion object {
         init {
@@ -178,7 +178,7 @@ class MainActivity : AppCompatActivity() {
                     val modelPath = getAssetFilePath(this@MainActivity, "face_deepfake_model.pt")
                     val videoPath = getAssetFilePath(this@MainActivity, "fakeVideo.mp4")
 
-                    // ★ videoPath(String)를 직접 전달
+                    // videoPath(String)를 직접 전달
                     val results: FloatArray = detectDeepfakeVisual(modelPath, videoPath)
 
                     runOnUiThread {
