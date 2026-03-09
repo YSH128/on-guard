@@ -3,6 +3,8 @@ package com.shutter.api.user.service;
 import com.shutter.api.global.auth.kakao.KakaoApiClient;
 import com.shutter.api.global.auth.kakao.KakaoUserInfoResponse;
 import com.shutter.api.global.auth.token.KakaoTokenService;
+import com.shutter.api.global.exception.BusinessException;
+import com.shutter.api.global.exception.ErrorCode;
 import com.shutter.api.global.jwt.JwtProvider;
 import com.shutter.api.global.jwt.JwtRefreshTokenService;
 import com.shutter.api.user.domain.User;
@@ -71,17 +73,17 @@ public class AuthService {
     public String refresh(String refreshToken) {
         // 1. 토큰 유효성 검증
         if (!jwtProvider.validateToken(refreshToken)) {
-            throw new IllegalArgumentException("유효하지 않은 Refresh Token입니다.");
+            throw new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN);
         }
 
         Long userId = jwtProvider.getUserId(refreshToken);
 
         // 2. Redis 저장 토큰과 일치 여부 확인
         String storedToken = jwtRefreshTokenService.find(userId)
-                .orElseThrow(() -> new IllegalArgumentException("만료되었거나 로그아웃된 Refresh Token입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN, "만료되었거나 로그아웃된 Refresh Token입니다."));
 
         if (!storedToken.equals(refreshToken)) {
-            throw new IllegalArgumentException("Refresh Token이 일치하지 않습니다.");
+            throw new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN, "Refresh Token이 일치하지 않습니다.");
         }
 
         // 3. 새 Access Token 발급
@@ -89,3 +91,4 @@ public class AuthService {
         return jwtProvider.generateAccessToken(userId);
     }
 }
+
