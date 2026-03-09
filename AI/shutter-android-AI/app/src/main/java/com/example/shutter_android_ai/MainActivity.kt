@@ -18,7 +18,6 @@ import java.nio.ByteOrder
 import androidx.appcompat.app.AppCompatActivity
 
 import com.example.shutter_android_ai.R
-// Binding import는 필요 없으므로 제거해도 무방합니다.
 
 import kotlin.concurrent.thread
 
@@ -38,7 +37,7 @@ class MainActivity : AppCompatActivity() {
 
     // C++ JNI 함수 선언
     private external fun detectDeepfakeAudio(modelPath: String, audioData: FloatArray): FloatArray
-    private external fun detectDeepfakeVisual(modelPath: String, imageData: FloatArray): FloatArray
+    private external fun detectDeepfakeVisual(modelPath: String, videoPath: String): FloatArray  // ★ String으로 변경
 
     companion object {
         init {
@@ -77,10 +76,10 @@ class MainActivity : AppCompatActivity() {
 
                     // 추론 시작 직전의 현재 스레드 CPU 시간 기록
                     val startCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
-
+         
                     // 2. 결과를 배열로 받습니다. [Score, LoadTime, InferTime]
                     val results: FloatArray = detectDeepfakeAudio(modelPath, audioData)
-
+                    
                     // 추론 종료 직후 스레드 CPU 시간 기록 및 순수 연산 시간 계산
                     val endCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
                     val inferenceThreadCpuTime = endCpuTimeMs - startCpuTimeMs
@@ -93,7 +92,7 @@ class MainActivity : AppCompatActivity() {
 
                     // 기기 모델명 취득 (DeviceStatusProvider에 추가했다고 가정)
                     val deviceModel = DeviceStatusProvider.getDeviceModelName()
-
+                    
                     // 3. 배열 인덱스를 통해 안전하게 값을 가져옵니다.
                     val score = results[0]
                     val loadTime = results[1]
@@ -118,7 +117,7 @@ class MainActivity : AppCompatActivity() {
                         timestamp = currentTimeStr,
                         device_hash = deviceModel,
                         // device_model = deviceModel,
-                        session_id = UUID.randomUUID().toString(), // 임시 세션 ID (실제 통화 ID로 교체 필요)
+                        session_id = UUID.randomUUID().toString(),
                         device_temperature = currentTemp,
                         app_pss_memory = pssMemoryKb,
                         thermal_throttling_status = thermalStatus,
@@ -171,30 +170,32 @@ class MainActivity : AppCompatActivity() {
         }
 
         // [수정] binding. 대신 위에서 선언한 변수명(btnVisualDetect) 사용
-        btnVisualDetect.setOnClickListener{
+        btnVisualDetect.setOnClickListener {
             tvVisualResult.text = "페이스 분석 중..."
 
-            thread{
-                try{
+            thread {
+                try {
                     val modelPath = getAssetFilePath(this@MainActivity, "face_deepfake_model.pt")
-                    val dummyImage = FloatArray(224 * 224 * 3) { 0.5f }
+                    val videoPath = getAssetFilePath(this@MainActivity, "fakeVideo.mp4")
 
-                    // [0:FakeProb, 1:RealProb, 2:LoadTime, 3:InferTime]
-                    val results: FloatArray = detectDeepfakeVisual(modelPath, dummyImage)
+                    // ★ videoPath(String)를 직접 전달
+                    val results: FloatArray = detectDeepfakeVisual(modelPath, videoPath)
 
-                    runOnUiThread{
-                        if (results[0] <= -1.0f) {
-                            tvVisualResult.text = "에러: 비주얼 모델 로드 실패"
-                        } else {
-                            val isFake = results[0] > results[1]
-                            val status = if (isFake) "FAKE" else "REAL"
-                            tvVisualResult.text = """
-                                [비주얼 추론 성공 - $status]
-                                Fake: ${String.format("%.2f%%", results[0] * 100)}
-                                Real: ${String.format("%.2f%%", results[1] * 100)}
-                                Load: ${String.format("%.2f", results[2])} ms
-                                Infer: ${String.format("%.2f", results[3])} ms
-                            """.trimIndent()
+                    runOnUiThread {
+                        when {
+                            results[0] <= -2.0f -> tvVisualResult.text = "에러: 동영상 프레임 추출 실패"
+                            results[0] <= -1.0f -> tvVisualResult.text = "에러: 비주얼 모델 로드 실패"
+                            else -> {
+                                val isFake = results[0] > results[1]
+                                val status = if (isFake) "FAKE" else "REAL"
+                                tvVisualResult.text = """
+                                    [비주얼 추론 성공 - $status]
+                                    Fake: ${String.format("%.2f%%", results[0] * 100)}
+                                    Real: ${String.format("%.2f%%", results[1] * 100)}
+                                    Load: ${String.format("%.2f", results[2])} ms
+                                    Infer: ${String.format("%.2f", results[3])} ms
+                                """.trimIndent()
+                            }
                         }
                     }
                 } catch (e: Exception) {
@@ -260,7 +261,7 @@ class MainActivity : AppCompatActivity() {
                     buffer.limit(info.offset + info.size)
                     buffer.order(ByteOrder.LITTLE_ENDIAN)
                     val shortBuffer = buffer.asShortBuffer()
-
+                    
                     while (shortBuffer.hasRemaining()) {
                         floatList.add(shortBuffer.get().toFloat() / 32768.0f)
                     }
