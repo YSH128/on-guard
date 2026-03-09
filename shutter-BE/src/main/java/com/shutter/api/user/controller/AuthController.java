@@ -2,6 +2,7 @@ package com.shutter.api.user.controller;
 
 import com.shutter.api.global.common.ApiResponse;
 import com.shutter.api.user.dto.request.KakaoLoginRequest;
+import com.shutter.api.user.dto.request.TokenRefreshRequest;
 import com.shutter.api.user.dto.response.LoginResponse;
 import com.shutter.api.user.service.AuthService;
 import jakarta.validation.Valid;
@@ -34,5 +35,18 @@ public class AuthController {
                 request.kakaoRefreshToken()
         );
         return ResponseEntity.ok(ApiResponse.of("로그인 성공", response));
+    }
+
+    /**
+     * JWT Access Token 재발급
+     *
+     * Refresh Token이 유효하고 Redis에 저장된 값과 일치하면 새 Access Token 반환.
+     */
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<String>> refresh(
+            @Valid @RequestBody TokenRefreshRequest request
+    ) {
+        String newAccessToken = authService.refresh(request.refreshToken());
+        return ResponseEntity.ok(ApiResponse.of("토큰 갱신 성공", newAccessToken));
     }
 }

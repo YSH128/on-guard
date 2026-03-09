@@ -4,6 +4,7 @@ import com.shutter.api.global.auth.kakao.KakaoApiClient;
 import com.shutter.api.global.auth.kakao.KakaoUserInfoResponse;
 import com.shutter.api.global.auth.token.KakaoTokenService;
 import com.shutter.api.global.jwt.JwtProvider;
+import com.shutter.api.global.jwt.JwtRefreshTokenService;
 import com.shutter.api.user.domain.User;
 import com.shutter.api.user.dto.response.LoginResponse;
 import com.shutter.api.user.repository.UserRepository;
@@ -21,6 +22,7 @@ public class AuthService {
     private final KakaoTokenService kakaoTokenService;
     private final UserRepository userRepository;
     private final JwtProvider jwtProvider;
+    private final JwtRefreshTokenService jwtRefreshTokenService;
 
     /**
      * 카카오 로그인 / 자동 회원가입
@@ -28,7 +30,7 @@ public class AuthService {
      * 1. 카카오 Access Token으로 유저 정보 조회 (토큰 유효성 검증)
      * 2. 신규 유저면 users 테이블에 INSERT, 기존 유저면 조회
      * 3. 카카오 토큰 Redis에 저장 (알림 전송용)
-     * 4. 자체 JWT 발급 후 반환
+     * 4. 자체 JWT 발급 + Refresh Token Redis 저장
      */
     @Transactional
     public LoginResponse login(String kakaoAccessToken, String kakaoRefreshToken) {
@@ -45,14 +47,45 @@ public class AuthService {
                             .build());
                 });
 
+        Long userId = user.getId().longValue();
+
         // 3. 카카오 토큰 Redis 저장 (알림 메시지 전송용)
-        kakaoTokenService.saveTokens(user.getId().longValue(), kakaoAccessToken, kakaoRefreshToken);
+        kakaoTokenService.saveTokens(userId, kakaoAccessToken, kakaoRefreshToken);
 
-        // 4. 자체 JWT 발급
-        String accessToken = jwtProvider.generateAccessToken(user.getId().longValue());
-        String refreshToken = jwtProvider.generateRefreshToken(user.getId().longValue());
+        // 4. 자체 JWT 발급 + Refresh Token Redis 저장
+        String accessToken  = jwtProvider.generateAccessToken(userId);
+        String refreshToken = jwtProvider.generateRefreshToken(userId);
+        jwtRefreshTokenService.save(userId, refreshToken);
 
-        log.info("Login success. userId={}", user.getId());
+        log.info("Login success. userId={}", userId);
         return new LoginResponse(accessToken, refreshToken);
+    }
+
+    /**
+     * JWT Access Token 재발급
+     *
+     * 1. Refresh Token 서명/만료 검증
+     * 2. Redis에 저장된 Refresh Token과 일치 여부 확인 (탈취 방지)
+     * 3. 새 Access Token 발급
+     */
+    public String refresh(String refreshToken) {
+        // 1. 토큰 유효성 검증
+        if (!jwtProvider.validateToken(refreshToken)) {
+            throw new IllegalArgumentException("유효하지 않은 Refresh Token입니다.");
+        }
+
+        Long userId = jwtProvider.getUserId(refreshToken);
+
+        // 2. Redis 저장 토큰과 일치 여부 확인
+        String storedToken = jwtRefreshTokenService.find(userId)
+                .orElseThrow(() -> new IllegalArgumentException("만료되었거나 로그아웃된 Refresh Token입니다."));
+
+        if (!storedToken.equals(refreshToken)) {
+            throw new IllegalArgumentException("Refresh Token이 일치하지 않습니다.");
+        }
+
+        // 3. 새 Access Token 발급
+        log.info("Access token refreshed. userId={}", userId);
+        return jwtProvider.generateAccessToken(userId);
     }
 }
