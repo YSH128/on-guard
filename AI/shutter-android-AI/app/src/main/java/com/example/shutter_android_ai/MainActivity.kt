@@ -17,8 +17,6 @@ import java.nio.ByteOrder
 
 import androidx.appcompat.app.AppCompatActivity
 
-import com.example.shutter_android_ai.R
-
 import kotlin.concurrent.thread
 
 import com.example.shutter_android_ai.telemetry.DeviceStatusProvider
@@ -369,16 +367,5 @@ class MainActivity : AppCompatActivity() {
             }
         }
         return file.absolutePath
-    }
-
-    // 이 함수를 MainActivity 내부 맨 아래에 추가해 주세요.
-    private fun getOrCreateDeviceHash(): String {
-        val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        var deviceHash = prefs.getString("device_hash", null)
-        if (deviceHash == null) {
-            deviceHash = UUID.randomUUID().toString()
-            prefs.edit().putString("device_hash", deviceHash).apply()
-        }
-        return deviceHash
     }
 }
