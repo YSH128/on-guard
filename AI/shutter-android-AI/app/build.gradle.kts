@@ -85,7 +85,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.shutter_android_ai"
-        minSdk = 34
+        minSdk = 33
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
