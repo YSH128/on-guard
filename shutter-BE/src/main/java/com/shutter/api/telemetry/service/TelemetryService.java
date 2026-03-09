@@ -26,6 +26,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 public class TelemetryService {
 
     private static final int BATCH_SIZE = 100;
+    private static final int MAX_RETRY = 3;
 
     /**
      * ISO_OFFSET_DATE_TIME (e.g. 2024-01-01T12:00:00+09:00) 와
@@ -39,7 +40,16 @@ public class TelemetryService {
             .toFormatter();
 
     private final AiTelemetryLogRepository telemetryLogRepository;
-    private final Queue<AiTelemetryLog> buffer = new ConcurrentLinkedQueue<>();
+    private final Queue<RetryableItem> buffer = new ConcurrentLinkedQueue<>();
+
+    private record RetryableItem(AiTelemetryLog log, int retryCount) {
+        RetryableItem(AiTelemetryLog log) {
+            this(log, 0);
+        }
+        RetryableItem withRetry() {
+            return new RetryableItem(log, retryCount + 1);
+        }
+    }
 
     public int saveTelemetry(TelemetryRequest request) {
         LocalDateTime timestamp = parseTimestamp(request.getTimestamp());
@@ -63,15 +73,15 @@ public class TelemetryService {
                 .modelLoadLatencyMs(request.getModelLoadLatencyMs())
                 .build();
 
-        buffer.offer(telemetryLog);
+        buffer.offer(new RetryableItem(telemetryLog));
         return 1;
     }
 
     @Scheduled(fixedDelay = 1000)
     @Transactional
     public void flushBuffer() {
-        List<AiTelemetryLog> batch = new ArrayList<>();
-        AiTelemetryLog item;
+        List<RetryableItem> batch = new ArrayList<>();
+        RetryableItem item;
         int count = 0;
         while ((item = buffer.poll()) != null && count++ < BATCH_SIZE) {
             batch.add(item);
@@ -79,11 +89,21 @@ public class TelemetryService {
         if (batch.isEmpty()) return;
 
         try {
-            telemetryLogRepository.saveAll(batch);
+            telemetryLogRepository.saveAll(batch.stream().map(RetryableItem::log).toList());
             log.debug("Batch inserted {} telemetry records", batch.size());
         } catch (Exception e) {
-            log.error("Batch insert failed ({} records), re-queuing for retry: {}", batch.size(), e.getMessage());
-            batch.forEach(buffer::offer);
+            log.error("Batch insert failed ({} records): {}", batch.size(), e.getMessage());
+            batch.stream()
+                    .map(RetryableItem::withRetry)
+                    .filter(retried -> {
+                        if (retried.retryCount() > MAX_RETRY) {
+                            log.error("Dropping telemetry record after {} retries: userId={}, timestamp={}",
+                                    MAX_RETRY, retried.log().getUserId(), retried.log().getTimestamp());
+                            return false;
+                        }
+                        return true;
+                    })
+                    .forEach(buffer::offer);
         }
     }
 
