@@ -35,30 +35,47 @@
         android:layout_marginBottom="20dp" />
 
     <Button
-        android:id="@+id/btnTestInference"
+        android:id="@+id/btnLoadModels"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="AI 추론 테스트 시작" />
+        android:text="딥페이크 모델 (Face, Audio) 로드" />
 
     <TextView
-        android:id="@+id/tvResult"
+        android:id="@+id/tvLoadStatus"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:text="결과 대기 중..."
-        android:textSize="18sp"
-        android:textStyle="bold" />
+        android:layout_marginTop="8dp"
+        android:text="모델 대기 중..."
+        android:textSize="16sp" />
 
     <Button
         android:id="@+id/btnVisualDetect"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Visual Detection" />
+        android:layout_marginTop="24dp"
+        android:text="페이스 딥페이크 감지 실행" />
 
     <TextView
         android:id="@+id/tvVisualResult"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Visual Result" />
+        android:layout_marginTop="8dp"
+        android:text="Visual Result"
+        android:textSize="14sp" />
+
+    <Button
+        android:id="@+id/btnAudioDetect"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="보이스 딥페이크 감지 실행" />
+
+    <TextView
+        android:id="@+id/tvAudioResult"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Audio Result"
+        android:textSize="14sp" />
 
 </LinearLayout>
