@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
     private val allPermissionsGranted = mutableStateOf(false)
     private val overlayPermissionGranted = mutableStateOf(false)
 
+
     // 런타임 권한 요청 런처
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -76,6 +77,10 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         checkAllPermissions()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
     }
 
     /**
