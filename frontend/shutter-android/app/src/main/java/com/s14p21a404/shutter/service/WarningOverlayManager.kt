@@ -19,80 +19,210 @@ class WarningOverlayManager(private val context: Context) {
     private val windowManager =
         context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
-    private var overlayView: View? = null
+    /** 관리 중인 모든 윈도우 */
+    private val overlayViews = mutableListOf<View>()
+
     private var facePreviewImageView: ImageView? = null
 
-    /** 화면 상단 overlay 비율 */
-    private val overlayRatio = 0.78
+    /** 상단 오버레이 높이 비율 */
+    private val topRatio = 0.78f
+
+    /** 하단 hole 위치/크기 (하단 윈도우 내 비율) */
+    private val holeCenterXRatio = 0.5f
+    private val holeCenterYRatio = 0.55f
+    private val holeRadiusRatio = 0.1f
 
     // ─────────────────────────────────────────────
     // Public API
     // ─────────────────────────────────────────────
 
     fun show() {
-
-        if (overlayView != null) {
+        if (overlayViews.isNotEmpty()) {
             Log.d(TAG, "overlay already showing")
             return
         }
 
-        val screenHeight = context.resources.displayMetrics.heightPixels
-        val overlayHeight = (screenHeight * overlayRatio).roundToInt()
+        val dm = context.resources.displayMetrics
+        val screenW = dm.widthPixels
+        val screenH = dm.heightPixels
+        val topHeight = (screenH * topRatio).roundToInt()
+        val bottomHeight = screenH - topHeight
 
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            overlayHeight,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP
+        // hole의 절대 좌표 (하단 윈도우 내)
+        val holeCx = (screenW * holeCenterXRatio).roundToInt()
+        val holeCy = (bottomHeight * holeCenterYRatio).roundToInt()
+        val holeR = (screenW * holeRadiusRatio).roundToInt()
+
+        // ────────────────────────────────────
+        // 1) 상단 윈도우: 카드 + dim (터치 차단)
+        // ────────────────────────────────────
+        addOverlay(
+            view = buildTopOverlay(),
+            width = WindowManager.LayoutParams.MATCH_PARENT,
+            height = topHeight,
+            gravity = Gravity.TOP,
+            touchable = true
+        )
+
+        // ────────────────────────────────────
+        // 2) 하단 시각 레이어: hole 뚫린 dim (터치 통과)
+        // ────────────────────────────────────
+        addOverlay(
+            view = HoledOverlayView(
+                context = context,
+                holeCenterXRatio = holeCenterXRatio,
+                holeCenterYRatio = holeCenterYRatio,
+                holeRadiusRatio = holeRadiusRatio,
+                dimColor = Color.parseColor("#CC000000"),
+                fadeWidth = dpToPx(20).toFloat()
+            ),
+            width = WindowManager.LayoutParams.MATCH_PARENT,
+            height = bottomHeight,
+            gravity = Gravity.BOTTOM,
+            touchable = false   // FLAG_NOT_TOUCHABLE — 시각 전용
+        )
+
+        // ────────────────────────────────────
+        // 3) 터치 차단 윈도우: hole 밖 영역 (투명, 터치만 차단)
+        //    hole 위쪽 가로 전체 스트립
+        //    hole 좌측 / 우측 스트립
+        //    hole 아래쪽 가로 전체 스트립
+        // ────────────────────────────────────
+        val holeTop = holeCy - holeR        // 하단 윈도우 내 hole 상단 y
+        val holeBottom = holeCy + holeR     // 하단 윈도우 내 hole 하단 y
+        val holeLeft = holeCx - holeR       // hole 좌측 x
+        val holeRight = holeCx + holeR      // hole 우측 x
+        val holeDiameter = holeR * 2
+
+        // 위쪽 strip (하단 윈도우 최상단 ~ hole 상단)
+        if (holeTop > 0) {
+            addOverlay(
+                view = transparentBlockView(),
+                width = screenW,
+                height = holeTop,
+                gravity = Gravity.BOTTOM or Gravity.START,
+                touchable = true,
+                yOffset = bottomHeight - holeTop  // 하단 윈도우 최상단 위치
+            )
         }
 
-        val view = buildOverlayView()
-        overlayView = view
+        // 좌측 strip (hole 좌측)
+        if (holeLeft > 0) {
+            addOverlay(
+                view = transparentBlockView(),
+                width = holeLeft,
+                height = holeDiameter,
+                gravity = Gravity.BOTTOM or Gravity.START,
+                touchable = true,
+                yOffset = bottomHeight - holeBottom
+            )
+        }
 
-        try {
-            windowManager.addView(view, params)
-        } catch (e: Exception) {
-            Log.e(TAG, "overlay add error", e)
-            overlayView = null
+        // 우측 strip (hole 우측)
+        val rightWidth = screenW - holeRight
+        if (rightWidth > 0) {
+            addOverlay(
+                view = transparentBlockView(),
+                width = rightWidth,
+                height = holeDiameter,
+                gravity = Gravity.BOTTOM or Gravity.END,
+                touchable = true,
+                yOffset = bottomHeight - holeBottom
+            )
+        }
+
+        // 아래쪽 strip (hole 하단 ~ 화면 하단)
+        val belowHeight = bottomHeight - holeBottom
+        if (belowHeight > 0) {
+            addOverlay(
+                view = transparentBlockView(),
+                width = screenW,
+                height = belowHeight,
+                gravity = Gravity.BOTTOM or Gravity.START,
+                touchable = true,
+                yOffset = 0
+            )
         }
     }
 
     fun dismiss() {
-        overlayView?.let {
+        overlayViews.forEach { view ->
             try {
-                windowManager.removeView(it)
+                windowManager.removeView(view)
             } catch (e: Exception) {
                 Log.e(TAG, "overlay remove error", e)
             }
         }
-        overlayView = null
+        overlayViews.clear()
         facePreviewImageView = null
     }
 
-    fun isShowing(): Boolean = overlayView != null
+    fun isShowing(): Boolean = overlayViews.isNotEmpty()
 
     fun updateFacePreview(bitmap: Bitmap?) {
         facePreviewImageView?.post {
-
             if (bitmap == null) {
                 facePreviewImageView?.visibility = View.GONE
                 return@post
             }
-
             facePreviewImageView?.setImageBitmap(bitmap)
             facePreviewImageView?.visibility = View.VISIBLE
         }
     }
 
     // ─────────────────────────────────────────────
-    // Overlay Layout
+    // Window 헬퍼
     // ─────────────────────────────────────────────
 
-    private fun buildOverlayView(): View {
+    private fun addOverlay(
+        view: View,
+        width: Int,
+        height: Int,
+        gravity: Int,
+        touchable: Boolean,
+        yOffset: Int = 0
+    ) {
+        val flags = if (touchable) {
+            // 터치를 받되, 포커스는 안 가져감
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+        } else {
+            // 터치 완전 통과 (시각 전용)
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+        }
+
+        val params = WindowManager.LayoutParams(
+            width, height,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            flags,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            this.gravity = gravity
+            this.y = yOffset
+        }
+
+        try {
+            windowManager.addView(view, params)
+            overlayViews.add(view)
+        } catch (e: Exception) {
+            Log.e(TAG, "overlay add error", e)
+        }
+    }
+
+    /** 투명하지만 터치를 차단하는 빈 View */
+    private fun transparentBlockView(): View {
+        return View(context).apply {
+            setOnTouchListener { _, _ -> true }
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // Top Overlay (카드 + dim 배경)
+    // ─────────────────────────────────────────────
+
+    private fun buildTopOverlay(): View {
 
         val fadeHeight = dpToPx(48)
 
@@ -100,53 +230,31 @@ class WarningOverlayManager(private val context: Context) {
             setOnTouchListener { _, _ -> true }
         }
 
-        // 검정 배경 (하단 fade 영역만큼 짧게)
+        // dim 배경
         val dimView = View(context).apply {
             setBackgroundColor(Color.parseColor("#CC000000"))
         }
+        root.addView(dimView, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ).apply { bottomMargin = fadeHeight })
 
-        root.addView(
-            dimView,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            ).apply {
-                bottomMargin = fadeHeight
-            }
-        )
-
-        // 하단 fade out (좁은 폭, 검정 → 투명)
+        // 하단 fade
         val fadeView = View(context).apply {
             background = GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(
-                    Color.parseColor("#CC000000"),
-                    Color.TRANSPARENT
-                )
+                intArrayOf(Color.parseColor("#CC000000"), Color.TRANSPARENT)
             )
         }
+        root.addView(fadeView, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, fadeHeight, Gravity.BOTTOM
+        ))
 
-        root.addView(
-            fadeView,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                fadeHeight,
-                Gravity.BOTTOM
-            )
-        )
-
-        // glass card — 중앙 배치 (fade 영향 없음)
-        val card = buildGlassCard()
-
-        root.addView(
-            card,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                gravity = Gravity.CENTER
-            }
-        )
+        // glass card
+        root.addView(buildGlassCard(), FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        ).apply { gravity = Gravity.CENTER })
 
         return root
     }
@@ -156,77 +264,48 @@ class WarningOverlayManager(private val context: Context) {
     // ─────────────────────────────────────────────
 
     private fun buildGlassCard(): View {
-
         val screenWidth = context.resources.displayMetrics.widthPixels
         val cardWidth = (screenWidth * 0.72f).roundToInt()
         val borderWidth = dpToPx(2)
-
         val radius = dpToPx(24).toFloat()
 
-        // 바깥쪽: 그라데이션 테두리 역할
         val borderFrame = FrameLayout(context).apply {
             background = GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(
-                    Color.parseColor("#AAFFFFFF"),   // 위쪽 밝은 테두리
-                    Color.parseColor("#44A67C5B"),   // 중간 brown 테두리
-                    Color.parseColor("#11FFFFFF")    // 아래쪽 연한 테두리
+                    Color.parseColor("#AAFFFFFF"),
+                    Color.parseColor("#44A67C5B"),
+                    Color.parseColor("#11FFFFFF")
                 )
-            ).apply {
-                cornerRadius = radius
-            }
+            ).apply { cornerRadius = radius }
             elevation = dpToPx(6).toFloat()
         }
 
-        // 안쪽: 실제 카드 콘텐츠
         val card = LinearLayout(context).apply {
-
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-
-            setPadding(
-                dpToPx(22),
-                dpToPx(18),
-                dpToPx(22),
-                dpToPx(18)
-            )
-
+            setPadding(dpToPx(22), dpToPx(18), dpToPx(22), dpToPx(18))
             background = GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(
-                    Color.parseColor("#CCA67C5B"),  // 위쪽 brown glass
-                    Color.parseColor("#33444444"),   // 중간 무채색 전환
-                    Color.parseColor("#22FFFFFF")   // 아래쪽 무채색 glass
+                    Color.parseColor("#CCA67C5B"),
+                    Color.parseColor("#33444444"),
+                    Color.parseColor("#22FFFFFF")
                 )
-            ).apply {
-                cornerRadius = radius
-            }
+            ).apply { cornerRadius = radius }
         }
 
-        borderFrame.addView(
-            card,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(borderWidth, borderWidth, borderWidth, borderWidth)
-            }
-        )
+        borderFrame.addView(card, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins(borderWidth, borderWidth, borderWidth, borderWidth) })
 
-        val wrapper = LinearLayout(context).apply {
-            gravity = Gravity.CENTER
-        }
-
-        wrapper.addView(
-            borderFrame,
-            LinearLayout.LayoutParams(
-                cardWidth,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        )
+        val wrapper = LinearLayout(context).apply { gravity = Gravity.CENTER }
+        wrapper.addView(borderFrame, LinearLayout.LayoutParams(
+            cardWidth, LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
 
         buildCardContent(card)
-
         return wrapper
     }
 
@@ -240,21 +319,17 @@ class WarningOverlayManager(private val context: Context) {
         val iconBorderSize = dpToPx(60)
         val iconInnerSize = dpToPx(56)
 
-        // 바깥쪽: 그라데이션 링
         val iconRing = FrameLayout(context).apply {
             background = GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(
-                    Color.parseColor("#CCFFFFFF"),   // 위쪽 밝은 링
-                    Color.parseColor("#44A67C5B"),   // 중간 brown 링
-                    Color.parseColor("#22FFFFFF")    // 아래쪽 연한 링
+                    Color.parseColor("#CCFFFFFF"),
+                    Color.parseColor("#44A67C5B"),
+                    Color.parseColor("#22FFFFFF")
                 )
-            ).apply {
-                shape = GradientDrawable.OVAL
-            }
+            ).apply { shape = GradientDrawable.OVAL }
         }
 
-        // 안쪽: 아이콘 배경
         val iconContainer = FrameLayout(context).apply {
             background = GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
@@ -263,9 +338,7 @@ class WarningOverlayManager(private val context: Context) {
                     Color.parseColor("#33FFFFFF"),
                     Color.parseColor("#22FFFFFF")
                 )
-            ).apply {
-                shape = GradientDrawable.OVAL
-            }
+            ).apply { shape = GradientDrawable.OVAL }
         }
 
         val icon = TextView(context).apply {
@@ -275,158 +348,88 @@ class WarningOverlayManager(private val context: Context) {
             gravity = Gravity.CENTER
         }
 
-        iconContainer.addView(
-            icon,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                Gravity.CENTER
-            )
-        )
-
-        iconRing.addView(
-            iconContainer,
-            FrameLayout.LayoutParams(
-                iconInnerSize,
-                iconInnerSize,
-                Gravity.CENTER
-            )
-        )
-
-        parent.addView(
-            iconRing,
-            LinearLayout.LayoutParams(
-                iconBorderSize,
-                iconBorderSize
-            ).apply {
-                gravity = Gravity.CENTER_HORIZONTAL
-                topMargin = dpToPx(16)
-                bottomMargin = dpToPx(12)
-            }
-        )
+        iconContainer.addView(icon, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER
+        ))
+        iconRing.addView(iconContainer, FrameLayout.LayoutParams(
+            iconInnerSize, iconInnerSize, Gravity.CENTER
+        ))
+        parent.addView(iconRing, LinearLayout.LayoutParams(
+            iconBorderSize, iconBorderSize
+        ).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            topMargin = dpToPx(16); bottomMargin = dpToPx(12)
+        })
 
         // title
         parent.addView(TextView(context).apply {
-
             text = "AI 위조 감지"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
             setTextColor(Color.WHITE)
-
-            typeface = Typeface.create(
-                "sans-serif-medium",
-                Typeface.BOLD
-            )
-
-        }, wrapParams().apply {
-            bottomMargin = dpToPx(16)
-        })
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+        }, wrapParams().apply { bottomMargin = dpToPx(16) })
 
         // divider
         parent.addView(View(context).apply {
-
             setBackgroundColor(Color.parseColor("#33FFFFFF"))
-
         }, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            dpToPx(2)
-        ).apply {
-            bottomMargin = dpToPx(20)
-        })
-
+            LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(2)
+        ).apply { bottomMargin = dpToPx(20) })
 
         // preview container
         val previewBox = FrameLayout(context).apply {
-
             background = GradientDrawable().apply {
-
                 setColor(Color.parseColor("#AAAAAA"))
-
-                setStroke(
-                    dpToPx(1),
-                    Color.parseColor("#26FFFFFF")
-                )
+                setStroke(dpToPx(1), Color.parseColor("#26FFFFFF"))
             }
         }
 
         facePreviewImageView = ImageView(context).apply {
-
             scaleType = ImageView.ScaleType.CENTER_CROP
             visibility = View.GONE
         }
 
-        previewBox.addView(
-            facePreviewImageView,
-            FrameLayout.LayoutParams(
-                dpToPx(72),
-                dpToPx(72),
-                Gravity.CENTER
-            )
-        )
-
-        parent.addView(
-            previewBox,
-            LinearLayout.LayoutParams(
-                dpToPx(180),
-                dpToPx(180)
-            ).apply {
-                gravity = Gravity.CENTER_HORIZONTAL
-                bottomMargin = dpToPx(24)
-            }
-        )
+        previewBox.addView(facePreviewImageView, FrameLayout.LayoutParams(
+            dpToPx(72), dpToPx(72), Gravity.CENTER
+        ))
+        parent.addView(previewBox, LinearLayout.LayoutParams(
+            dpToPx(180), dpToPx(180)
+        ).apply {
+            gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = dpToPx(24)
+        })
 
         // warning text
         parent.addView(TextView(context).apply {
-
             text = "딥페이크 의심 영상이 감지되었습니다"
-
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-
             setTextColor(Color.parseColor("#FF8A80"))
-
             gravity = Gravity.CENTER
-
             typeface = Typeface.DEFAULT_BOLD
-
-        }, wrapParams().apply {
-            bottomMargin = dpToPx(4)
-        })
+        }, wrapParams().apply { bottomMargin = dpToPx(4) })
 
         // guide text
         parent.addView(TextView(context).apply {
-
             text = "통화를 종료해주세요 ▼"
-
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
-
             setTextColor(Color.parseColor("#B3FFFFFF"))
-
             gravity = Gravity.CENTER
-
-        }, wrapParams().apply {
-            bottomMargin = dpToPx(24)
-        })
+        }, wrapParams().apply { bottomMargin = dpToPx(24) })
     }
 
     // ─────────────────────────────────────────────
     // Utils
     // ─────────────────────────────────────────────
 
-    private fun wrapParams(): LinearLayout.LayoutParams {
+    private fun wrapParams() = LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.WRAP_CONTENT,
+        LinearLayout.LayoutParams.WRAP_CONTENT
+    )
 
-        return LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        )
-    }
-
-    private fun dpToPx(dp: Int): Int {
-
-        return TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_DIP,
-            dp.toFloat(),
-            context.resources.displayMetrics
-        ).toInt()
-    }
+    private fun dpToPx(dp: Int): Int = TypedValue.applyDimension(
+        TypedValue.COMPLEX_UNIT_DIP, dp.toFloat(),
+        context.resources.displayMetrics
+    ).toInt()
 
     companion object {
         private const val TAG = "WarningOverlay"
