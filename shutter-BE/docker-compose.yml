@@ -36,6 +36,10 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
+      - KAKAO_REST_API_KEY=${KAKAO_REST_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ACCESS_EXPIRY_MS=${JWT_ACCESS_EXPIRY_MS}
+      - JWT_REFRESH_EXPIRY_MS=${JWT_REFRESH_EXPIRY_MS}
     depends_on:
       mysql:
         condition: service_healthy
@@ -66,6 +70,10 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
+      - KAKAO_REST_API_KEY=${KAKAO_REST_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ACCESS_EXPIRY_MS=${JWT_ACCESS_EXPIRY_MS}
+      - JWT_REFRESH_EXPIRY_MS=${JWT_REFRESH_EXPIRY_MS}
     depends_on:
       mysql:
         condition: service_healthy
