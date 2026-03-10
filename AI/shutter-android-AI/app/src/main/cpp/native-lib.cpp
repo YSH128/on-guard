@@ -12,6 +12,7 @@
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 
 float get_ms(std::chrono::high_resolution_clock::time_point start) {
+float get_ms(std::chrono::high_resolution_clock::time_point start) {
     auto end = std::chrono::high_resolution_clock::now();
     return std::chrono::duration<float, std::milli>(end - start).count();
 }
@@ -74,6 +75,7 @@ public:
                 audioLoadTime = get_ms(start_audio);
                 isAudioLoaded = true;
                 LOGD("Audio model loaded. Time: %.2f ms", audioLoadTime);
+                LOGD("Audio model loaded. Time: %.2f ms", audioLoadTime);
             } catch (const c10::Error& e) {
                 LOGE("Error loading audio model");
                 isAudioLoaded = false;
@@ -88,6 +90,7 @@ public:
                 faceModule.eval();
                 faceLoadTime = get_ms(start_face);
                 isFaceLoaded = true;
+                LOGD("Face model loaded. Time: %.2f ms", faceLoadTime);
                 LOGD("Face model loaded. Time: %.2f ms", faceLoadTime);
             } catch (const c10::Error& e) {
                 LOGE("Error loading face model");
@@ -154,9 +157,12 @@ public:
         at::Tensor output = audioModule.forward(inputs).toTensor();
         float score = output.item<float>();
 
+
         float inferenceTime = get_ms(start_inference);
         return {score, audioLoadTime, inferenceTime};
     }
+};
+
 };
 
 static DeepfakeDetector detector;
@@ -168,8 +174,10 @@ Java_com_example_shutter_1android_1ai_MainActivity_loadModels(
         jstring audioModelPath,
         jstring faceModelPath) {
 
+
     const char* aPath = env->GetStringUTFChars(audioModelPath, nullptr);
     const char* fPath = env->GetStringUTFChars(faceModelPath, nullptr);
+
 
     bool loadSuccess = detector.loadModels(aPath, fPath);
 
@@ -189,6 +197,7 @@ Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeAudio(
         jobject /* this */,
         jfloatArray audioData) {
 
+
     jfloat* data = env->GetFloatArrayElements(audioData, nullptr);
     jsize length = env->GetArrayLength(audioData);
 
@@ -198,6 +207,7 @@ Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeAudio(
 
     jfloatArray resultMap = env->NewFloatArray(results.size());
     env->SetFloatArrayRegion(resultMap, 0, results.size(), results.data());
+
 
     return resultMap;
 }
@@ -259,8 +269,11 @@ Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeVisual(
         jobject /* this */,
         jstring videoPath,
         jint frameCount) {
+        jstring videoPath,
+        jint frameCount) {
 
     const char* vPath = env->GetStringUTFChars(videoPath, nullptr);
+    std::string videoPathStr(vPath);
     std::string videoPathStr(vPath);
     env->ReleaseStringUTFChars(videoPath, vPath);
 

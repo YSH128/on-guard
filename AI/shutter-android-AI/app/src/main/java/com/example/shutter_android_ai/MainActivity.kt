@@ -39,6 +39,7 @@ class MainActivity : AppCompatActivity() {
     private external fun loadModels(audioModelPath: String, faceModelPath: String): FloatArray
     private external fun detectDeepfakeAudio(audioData: FloatArray): FloatArray
     private external fun detectDeepfakeVisual(videoPath: String, frameCount: Int): FloatArray
+    private external fun detectDeepfakeVisual(videoPath: String, frameCount: Int): FloatArray
 
     private val deviceModel by lazy { DeviceStatusProvider.getDeviceModelName() }
 
@@ -65,6 +66,7 @@ class MainActivity : AppCompatActivity() {
 
         // OpenCV 설치 및 버전 확인
         if (OpenCVLoader.initDebug()) {
+            tvOpenCVStatus.text = "OpenCV 로드 성공 (v${org.opencv.core.Core.VERSION})"
             tvOpenCVStatus.text = "OpenCV 로드 성공 (v${org.opencv.core.Core.VERSION})"
         } else {
             tvOpenCVStatus.text = "OpenCV 로드 실패"
@@ -170,6 +172,7 @@ class MainActivity : AppCompatActivity() {
                 var faceFakeProb = 0.0f
                 var faceRealProb = 0.0f
                 var frameDetails = ""
+                var frameDetails = ""
 
                 if (type == "DEEPVOICE") {
                     val audioData = decodeAudioFromFile(filePath, 64000)
@@ -188,9 +191,24 @@ class MainActivity : AppCompatActivity() {
                     loadTime = results[2]
                     inferenceTime = results[3]
                     isSuccess = avgFake > -1.0f
+                    isSuccess = avgFake > -1.0f
                     if (isSuccess) {
                         isFake = results[0] > results[1]
                         status = if (isFake) "FAKE" else "REAL"
+                        faceFakeProb = avgFake
+                        faceRealProb = avgReal
+                        score = avgFake
+
+                        val sb = StringBuilder()
+                        val frameCount = (results.size - 4) / 2
+                        for (i in 0 until frameCount) {
+                            val fake = results[4 + i * 2]
+                            val real = results[4 + i * 2 + 1]
+                            if (fake >= 0f) {
+                                sb.append("Frame${i+1}: Fake ${String.format("%.1f%%", fake * 100)} / Real ${String.format("%.1f%%", real * 100)}\n")
+                            }
+                        }
+                        frameDetails = sb.toString()
                         faceFakeProb = avgFake
                         faceRealProb = avgReal
                         score = avgFake
@@ -237,6 +255,11 @@ class MainActivity : AppCompatActivity() {
                             "\n\n[프레임별 결과]\n$frameDetails"
                         else ""
                         
+
+                        val frameSection = if (type == "FACE" && frameDetails.isNotEmpty())
+                            "\n\n[프레임별 결과]\n$frameDetails"
+                        else ""
+                        
                         val resultText = """
                             $header
                             Load: ${String.format("%.2f", loadTime)} ms
@@ -248,6 +271,7 @@ class MainActivity : AppCompatActivity() {
                             CPU Time: $inferenceThreadCpuTime ms
                             Current: ${String.format("%.2f", batteryCurrentmA)} mA
                             Thermal Status: $thermalStatus
+                        """.trimIndent() + frameSection
                         """.trimIndent() + frameSection
                         
                         resultTextView.text = resultText
@@ -384,6 +408,7 @@ class MainActivity : AppCompatActivity() {
         val result = FloatArray(targetLength)
         val copyLength = minOf(floatList.size, targetLength)
         for (i in 0 until copyLength) result[i] = floatList[i]
+        for (i in 0 until copyLength) result[i] = floatList[i]
         return result
     }
 
@@ -392,8 +417,21 @@ class MainActivity : AppCompatActivity() {
         if (file.exists() && file.length() > 0) return file.absolutePath
         context.assets.open(assetName).use { input ->
             FileOutputStream(file).use { output -> input.copyTo(output) }
+        context.assets.open(assetName).use { input ->
+            FileOutputStream(file).use { output -> input.copyTo(output) }
         }
         return file.absolutePath
+    }
+
+    // 이 함수를 MainActivity 내부 맨 아래에 추가해 주세요.
+    private fun getOrCreateDeviceHash(): String {
+        val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        var deviceHash = prefs.getString("device_hash", null)
+        if (deviceHash == null) {
+            deviceHash = UUID.randomUUID().toString()
+            prefs.edit().putString("device_hash", deviceHash).apply()
+        }
+        return deviceHash
     }
 
     // 이 함수를 MainActivity 내부 맨 아래에 추가해 주세요.
