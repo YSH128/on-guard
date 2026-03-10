@@ -31,9 +31,9 @@ logging:
 # Swagger UI (운영에서 비활성화)
 springdoc:
   swagger-ui:
-    enabled: false
+    enabled: true
   api-docs:
-    enabled: false
+    enabled: true
 
 # Kakao OAuth
 kakao:
