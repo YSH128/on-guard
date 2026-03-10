@@ -4,13 +4,11 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
-import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
-import com.s14p21a404.shutter.data.capture.ScreenCaptureManager
 import com.s14p21a404.shutter.di.ServiceLocator
 import com.s14p21a404.shutter.domain.repository.DeepfakeDetectionRepository
 import com.s14p21a404.shutter.domain.repository.VideoCallRepository
@@ -28,6 +26,9 @@ import kotlinx.coroutines.launch
  *
  * 비즈니스 로직은 UseCase에 위임하고,
  * 이 Service는 생명주기 관리 + Foreground 알림만 담당한다.
+ *
+ * 화면 캡처(startCapture/stopCapture)는 Data 레이어(DeepfakeDetectionRepository)가
+ * 내부적으로 관리하므로, 이 Service에서는 MediaProjection만 전달한다.
  */
 class VideoCallDetectService : Service() {
 
@@ -38,10 +39,6 @@ class VideoCallDetectService : Service() {
     private lateinit var warningOverlayManager: WarningOverlayManager
     private lateinit var videoCallRepository: VideoCallRepository
     private lateinit var detectionRepository: DeepfakeDetectionRepository
-
-    // ── 화면 캡처 ──
-    private var mediaProjection: MediaProjection? = null
-    private var screenCaptureManager: ScreenCaptureManager? = null
 
     // ── 생명주기 ──
 
@@ -61,15 +58,11 @@ class VideoCallDetectService : Service() {
         // 영상통화 모니터링 시작
         videoCallRepository.startMonitoring()
 
-        // 영상통화 상태 관찰 → 감지 자동 시작/중단
+        // 영상통화 상태 관찰 → 캡처·감지 자동 시작/중단 (data layer 내부에서 처리)
         serviceScope.launch {
             monitorUseCase.observeAndControl().collect { isVideoCall ->
                 Log.d(TAG, "영상통화 상태: $isVideoCall")
-                if (isVideoCall) {
-                    startScreenCapture()
-                } else {
-                    screenCaptureManager?.stopCapture()
-                    screenCaptureManager = null
+                if (!isVideoCall) {
                     warningOverlayManager.dismissWarning()
                 }
             }
@@ -93,8 +86,15 @@ class VideoCallDetectService : Service() {
                 startAsForeground(includeMediaProjection = true)
 
                 val projectionManager = getSystemService(MediaProjectionManager::class.java)
-                mediaProjection = projectionManager.getMediaProjection(resultCode, projectionData)
+                val mediaProjection = projectionManager.getMediaProjection(resultCode, projectionData)
                 Log.d(TAG, "MediaProjection 초기화 완료")
+
+                // Data 레이어에 MediaProjection 전달 (캡처는 data layer 내부에서 관리)
+                if (mediaProjection != null) {
+                    detectionRepository.setMediaProjection(this, mediaProjection)
+                } else {
+                    Log.w(TAG, "MediaProjection 획득 실패")
+                }
             }
         }
         return START_STICKY
@@ -107,31 +107,11 @@ class VideoCallDetectService : Service() {
         serviceScope.cancel()
         detectionRepository.stopDetection()
         videoCallRepository.stopMonitoring()
-        screenCaptureManager?.stopCapture()
-        screenCaptureManager = null
-        mediaProjection?.stop()
-        mediaProjection = null
+        detectionRepository.releaseMediaProjection()
         warningOverlayManager.dismissWarning()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-
-    // ── 화면 캡처 ──
-
-    private fun startScreenCapture() {
-        val projection = mediaProjection
-        if (projection == null) {
-            Log.w(TAG, "MediaProjection 없음 — 화면 캡처 불가 (감지는 Stub으로 동작)")
-            return
-        }
-
-        screenCaptureManager = ScreenCaptureManager(
-            context = this,
-            mediaProjection = projection,
-            detectionRepository = detectionRepository
-        )
-        screenCaptureManager?.startCapture()
-    }
 
     // ── Foreground Service 설정 ──
 

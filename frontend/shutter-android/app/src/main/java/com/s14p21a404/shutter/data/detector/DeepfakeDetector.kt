@@ -24,5 +24,16 @@ interface DeepfakeDetector {
      * 감지 중단. 리소스 정리.
      */
     fun stopDetection()
+
+    /**
+     * 캡처된 프레임을 감지기로 공급.
+     * ScreenCaptureManager → Detector 직접 전달 경로.
+     *
+     * @param buffer    RGBA 프레임 byte[]
+     * @param width     프레임 너비 (px)
+     * @param height    프레임 높이 (px)
+     * @param rowStride Image.Plane의 rowStride
+     */
+    fun feedFrame(buffer: ByteArray, width: Int, height: Int, rowStride: Int) { /* no-op by default */ }
 }
 

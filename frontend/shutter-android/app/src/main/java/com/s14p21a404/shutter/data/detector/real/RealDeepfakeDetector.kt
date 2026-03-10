@@ -55,7 +55,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
      * @param height    프레임 높이 (px)
      * @param rowStride Image.Plane의 rowStride
      */
-    fun feedFrame(buffer: ByteArray, width: Int, height: Int, rowStride: Int) {
+    override fun feedFrame(buffer: ByteArray, width: Int, height: Int, rowStride: Int) {
         val callback = onResultCallback ?: return
 
         if (!nativeAvailable || bridge == null) {

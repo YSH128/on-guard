@@ -11,26 +11,26 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.SystemClock
 import android.util.Log
-import com.s14p21a404.shutter.domain.repository.DeepfakeDetectionRepository
+import com.s14p21a404.shutter.data.detector.DeepfakeDetector
 
 /**
  * 영상통화 화면 캡처 매니저
  *
  * MediaProjection + ImageReader를 사용하여 화면 프레임을 캡처하고,
- * RGBA byte[] (buffer)로 추출하여 DeepfakeDetectionRepository에 직접 전달한다.
+ * RGBA byte[] (buffer)로 추출하여 DeepfakeDetector에 직접 전달한다.
  *
  * Data 레이어 내부에서 캡처 → 감지 파이프라인이 직접 연결되므로
  * Presentation(Service)을 거치지 않는다.
  *
- * @param context              앱 Context (화면 해상도·DPI 획득용)
- * @param mediaProjection      Activity에서 사용자 동의 후 획득한 MediaProjection
- * @param detectionRepository  캡처된 프레임을 전달할 감지 Repository
- * @param sampleIntervalMs     프레임 샘플링 간격 ms (기본 2000 = 2초)
+ * @param context          앱 Context (화면 해상도·DPI 획득용)
+ * @param mediaProjection  Activity에서 사용자 동의 후 획득한 MediaProjection
+ * @param detector         캡처된 프레임을 전달할 감지기
+ * @param sampleIntervalMs 프레임 샘플링 간격 ms (기본 2000 = 2초)
  */
 class ScreenCaptureManager(
     private val context: Context,
     private val mediaProjection: MediaProjection,
-    private val detectionRepository: DeepfakeDetectionRepository,
+    private val detector: DeepfakeDetector,
     private val sampleIntervalMs: Long = 2000L
 ) {
     // 기기 실제 화면 해상도·DPI
@@ -121,8 +121,8 @@ class ScreenCaptureManager(
 
                 Log.d(TAG, "프레임 캡처: ${width}x${height}, stride=$rowStride, bytes=${bytes.size}")
 
-                // Data 레이어 내부에서 직접 감지 Repository로 전달
-                detectionRepository.feedFrame(bytes, width, height, rowStride)
+                // Data 레이어 내부에서 Detector로 직접 전달
+                detector.feedFrame(bytes, width, height, rowStride)
 
             } catch (e: Exception) {
                 Log.e(TAG, "프레임 처리 실패", e)
