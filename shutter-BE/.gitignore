@@ -46,3 +46,7 @@ out/
 
 ### AWS SSH Key ###
 *.pem
+
+### guide file ###
+ai_monitoring_context.md
+monitoring_project.md
