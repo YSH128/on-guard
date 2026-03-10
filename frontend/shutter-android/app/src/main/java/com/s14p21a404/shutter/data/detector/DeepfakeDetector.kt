@@ -9,7 +9,6 @@ import com.s14p21a404.shutter.domain.model.DeepfakeDetectionResult
  * Repository 구현체가 이 인터페이스를 통해 실제 감지를 수행한다.
  *
  * 구현체:
- * - AlwaysDeepfakeDetector: 항상 딥페이크 (테스트용)
  * - BroadcastTriggerDetector: ADB 명령으로 수동 트리거 (데모용)
  * - RealDeepfakeDetector: 실제 캡처 + JNI + C++ 추론
  */

@@ -16,7 +16,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
-import com.s14p21a404.shutter.service.VideoCallDetectService
+import com.s14p21a404.shutter.presentation.service.VideoCallDetectService
 import com.s14p21a404.shutter.ui.theme.ShutterandroidTheme
 
 class MainActivity : ComponentActivity() {

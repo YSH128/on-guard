@@ -10,7 +10,6 @@ import com.s14p21a404.shutter.domain.repository.DeepfakeDetectionRepository
 import com.s14p21a404.shutter.domain.repository.VideoCallRepository
 import com.s14p21a404.shutter.domain.usecase.DetectDeepfakeUseCase
 import com.s14p21a404.shutter.domain.usecase.MonitorVideoCallUseCase
-import com.s14p21a404.shutter.presentation.overlay.OverlayController
 import com.s14p21a404.shutter.presentation.overlay.WarningOverlayManager
 
 /**
@@ -46,10 +45,6 @@ class ServiceLocator private constructor(context: Context) {
 
     val warningOverlayManager = WarningOverlayManager(context)
 
-    val overlayController = OverlayController(
-        context = context,
-        overlayManager = warningOverlayManager
-    )
 
     companion object {
         @Volatile

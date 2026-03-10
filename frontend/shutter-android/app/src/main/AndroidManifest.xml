@@ -39,7 +39,7 @@
 
         <!-- 영상통화 감지 Foreground Service -->
         <service
-            android:name=".service.VideoCallDetectService"
+            android:name=".presentation.service.VideoCallDetectService"
             android:exported="false"
             android:foregroundServiceType="specialUse|mediaProjection">
             <property

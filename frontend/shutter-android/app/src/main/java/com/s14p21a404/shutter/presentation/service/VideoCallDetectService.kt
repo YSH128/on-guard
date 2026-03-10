@@ -1,4 +1,4 @@
-package com.s14p21a404.shutter.service
+package com.s14p21a404.shutter.presentation.service
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -16,7 +16,7 @@ import com.s14p21a404.shutter.domain.repository.DeepfakeDetectionRepository
 import com.s14p21a404.shutter.domain.repository.VideoCallRepository
 import com.s14p21a404.shutter.domain.usecase.DetectDeepfakeUseCase
 import com.s14p21a404.shutter.domain.usecase.MonitorVideoCallUseCase
-import com.s14p21a404.shutter.presentation.overlay.OverlayController
+import com.s14p21a404.shutter.presentation.overlay.WarningOverlayManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -35,7 +35,7 @@ class VideoCallDetectService : Service() {
 
     private lateinit var monitorUseCase: MonitorVideoCallUseCase
     private lateinit var detectUseCase: DetectDeepfakeUseCase
-    private lateinit var overlayController: OverlayController
+    private lateinit var warningOverlayManager: WarningOverlayManager
     private lateinit var videoCallRepository: VideoCallRepository
     private lateinit var detectionRepository: DeepfakeDetectionRepository
 
@@ -52,7 +52,7 @@ class VideoCallDetectService : Service() {
         val locator = ServiceLocator.getInstance(this)
         monitorUseCase = locator.monitorVideoCallUseCase
         detectUseCase = locator.detectDeepfakeUseCase
-        overlayController = locator.overlayController
+        warningOverlayManager = locator.warningOverlayManager
         videoCallRepository = locator.videoCallRepository
         detectionRepository = locator.detectionRepository
 
@@ -70,7 +70,7 @@ class VideoCallDetectService : Service() {
                 } else {
                     screenCaptureManager?.stopCapture()
                     screenCaptureManager = null
-                    overlayController.dismissWarning()
+                    warningOverlayManager.dismissWarning()
                 }
             }
         }
@@ -79,7 +79,7 @@ class VideoCallDetectService : Service() {
         serviceScope.launch {
             detectUseCase.observeResults().collect { result ->
                 Log.d(TAG, "📊 감지 결과: $result")
-                overlayController.onDetectionResult(result)
+                warningOverlayManager.onDetectionResult(result)
             }
         }
     }
@@ -111,7 +111,7 @@ class VideoCallDetectService : Service() {
         screenCaptureManager = null
         mediaProjection?.stop()
         mediaProjection = null
-        overlayController.dismissWarning()
+        warningOverlayManager.dismissWarning()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -128,10 +128,7 @@ class VideoCallDetectService : Service() {
         screenCaptureManager = ScreenCaptureManager(
             context = this,
             mediaProjection = projection,
-            onFrameCaptured = { buffer, width, height, rowStride, _ ->
-                Log.d(TAG, "프레임 캡처됨: ${width}x${height}, buffer=${buffer.size}bytes")
-                detectionRepository.feedFrame(buffer, width, height, rowStride)
-            }
+            detectionRepository = detectionRepository
         )
         screenCaptureManager?.startCapture()
     }
@@ -183,3 +180,4 @@ class VideoCallDetectService : Service() {
         const val EXTRA_PROJECTION_DATA = "extra_projection_data"
     }
 }
+

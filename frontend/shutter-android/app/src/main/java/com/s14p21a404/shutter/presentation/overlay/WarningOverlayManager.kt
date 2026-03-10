@@ -6,12 +6,14 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.provider.Settings
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.widget.*
+import com.s14p21a404.shutter.domain.model.DeepfakeDetectionResult
 import kotlin.math.roundToInt
 
 class WarningOverlayManager(private val context: Context) {
@@ -35,6 +37,29 @@ class WarningOverlayManager(private val context: Context) {
     // ─────────────────────────────────────────────
     // Public API
     // ─────────────────────────────────────────────
+
+    /**
+     * 감지 결과에 따라 오버레이를 표시하거나 숨긴다.
+     */
+    fun onDetectionResult(result: DeepfakeDetectionResult) {
+        if (result.detected) {
+            showWarning()
+        } else {
+            dismissWarning()
+        }
+    }
+
+    fun showWarning() {
+        if (!Settings.canDrawOverlays(context)) {
+            Log.w(TAG, "오버레이 권한 없음 — 경고 표시 불가")
+            return
+        }
+        show()
+    }
+
+    fun dismissWarning() {
+        dismiss()
+    }
 
     fun show() {
         if (overlayViews.isNotEmpty()) {
