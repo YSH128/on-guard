@@ -1,0 +1,18 @@
+FROM jenkins/jenkins:lts
+# root 권한으로 전환하여 패키지 설치
+USER root
+
+# Docker 관련 필수 패키지 설치
+RUN apt-get update && \
+    apt-get -y install apt-transport-https ca-certificates curl gnupg2 software-properties-common lsb-release
+
+# Docker GPG 키 및 레포지토리 추가
+RUN curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add - && \
+    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
+
+# Docker CLI 및 Docker Compose 플러그인 설치
+RUN apt-get update && \
+    apt-get -y install docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+# 다시 jenkins 유저로 전환
+USER jenkins
