@@ -1,4 +1,4 @@
-package com.s14p21a404.shutter.service.detector
+package com.s14p21a404.shutter.domain.model
 
 /**
  * 딥페이크 감지 결과
@@ -50,30 +50,5 @@ private fun FloatArray?.contentEqualsNullable(other: FloatArray?): Boolean {
     if (this === other) return true
     if (this == null || other == null) return false
     return this.contentEquals(other)
-}
-
-/**
- * 딥페이크 감지기 인터페이스
- *
- * Service는 이 인터페이스만 알면 된다.
- * 내부에서 뭘 하든 (Stub이든, 진짜 AI든) 바깥은 모른다.
- *
- * 구현체:
- * - AlwaysDeepfakeDetector: 항상 딥페이크 (테스트용)
- * - BroadcastTriggerDetector: ADB 명령으로 수동 트리거 (데모용)
- * - (향후) RealDeepfakeDetector: 실제 캡처 + JNI + C++ 추론
- */
-interface DeepfakeDetector {
-
-    /**
-     * 감지 시작.
-     * 결과가 나올 때마다 [onResult] 콜백이 호출된다.
-     */
-    fun startDetection(onResult: (DeepfakeDetectionResult) -> Unit)
-
-    /**
-     * 감지 중단. 리소스 정리.
-     */
-    fun stopDetection()
 }
 

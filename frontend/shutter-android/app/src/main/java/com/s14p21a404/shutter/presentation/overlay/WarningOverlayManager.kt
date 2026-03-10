@@ -1,4 +1,4 @@
-package com.s14p21a404.shutter.service
+package com.s14p21a404.shutter.presentation.overlay
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -84,17 +84,14 @@ class WarningOverlayManager(private val context: Context) {
 
         // ────────────────────────────────────
         // 3) 터치 차단 윈도우: hole 밖 영역 (투명, 터치만 차단)
-        //    hole 위쪽 가로 전체 스트립
-        //    hole 좌측 / 우측 스트립
-        //    hole 아래쪽 가로 전체 스트립
         // ────────────────────────────────────
-        val holeTop = holeCy - holeR        // 하단 윈도우 내 hole 상단 y
-        val holeBottom = holeCy + holeR     // 하단 윈도우 내 hole 하단 y
-        val holeLeft = holeCx - holeR       // hole 좌측 x
-        val holeRight = holeCx + holeR      // hole 우측 x
+        val holeTop = holeCy - holeR
+        val holeBottom = holeCy + holeR
+        val holeLeft = holeCx - holeR
+        val holeRight = holeCx + holeR
         val holeDiameter = holeR * 2
 
-        // 위쪽 strip (하단 윈도우 최상단 ~ hole 상단)
+        // 위쪽 strip
         if (holeTop > 0) {
             addOverlay(
                 view = transparentBlockView(),
@@ -102,11 +99,11 @@ class WarningOverlayManager(private val context: Context) {
                 height = holeTop,
                 gravity = Gravity.BOTTOM or Gravity.START,
                 touchable = true,
-                yOffset = bottomHeight - holeTop  // 하단 윈도우 최상단 위치
+                yOffset = bottomHeight - holeTop
             )
         }
 
-        // 좌측 strip (hole 좌측)
+        // 좌측 strip
         if (holeLeft > 0) {
             addOverlay(
                 view = transparentBlockView(),
@@ -118,7 +115,7 @@ class WarningOverlayManager(private val context: Context) {
             )
         }
 
-        // 우측 strip (hole 우측)
+        // 우측 strip
         val rightWidth = screenW - holeRight
         if (rightWidth > 0) {
             addOverlay(
@@ -131,7 +128,7 @@ class WarningOverlayManager(private val context: Context) {
             )
         }
 
-        // 아래쪽 strip (hole 하단 ~ 화면 하단)
+        // 아래쪽 strip
         val belowHeight = bottomHeight - holeBottom
         if (belowHeight > 0) {
             addOverlay(
@@ -183,11 +180,9 @@ class WarningOverlayManager(private val context: Context) {
         yOffset: Int = 0
     ) {
         val flags = if (touchable) {
-            // 터치를 받되, 포커스는 안 가져감
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
         } else {
-            // 터치 완전 통과 (시각 전용)
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
@@ -435,3 +430,4 @@ class WarningOverlayManager(private val context: Context) {
         private const val TAG = "WarningOverlay"
     }
 }
+

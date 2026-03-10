@@ -1,4 +1,4 @@
-package com.s14p21a404.shutter.service
+package com.s14p21a404.shutter.presentation.overlay
 
 import android.content.Context
 import android.graphics.*
@@ -89,3 +89,4 @@ class HoledOverlayView(
         canvas.drawCircle(holeCx, holeCy, holeRadius + fadeWidth, fadePaint)
     }
 }
+

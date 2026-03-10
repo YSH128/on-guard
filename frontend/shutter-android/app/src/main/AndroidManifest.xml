@@ -27,7 +27,7 @@
 
         <!-- 메인 액티비티 -->
         <activity
-            android:name=".MainActivity"
+            android:name=".presentation.main.MainActivity"
             android:exported="true"
             android:theme="@style/Theme.Shutterandroid">
             <intent-filter>

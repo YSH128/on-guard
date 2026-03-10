@@ -1,4 +1,4 @@
-package com.s14p21a404.shutter.service.capture
+package com.s14p21a404.shutter.data.capture
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -155,7 +155,6 @@ class ScreenCaptureManager(
             null,
             handler
         )
-
 
         Log.d(TAG, "화면 캡처 시작: ${captureWidth}x${captureHeight}, 간격=${sampleIntervalMs}ms")
     }

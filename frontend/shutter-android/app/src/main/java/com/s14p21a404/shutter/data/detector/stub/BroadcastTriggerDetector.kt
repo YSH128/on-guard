@@ -1,10 +1,12 @@
-package com.s14p21a404.shutter.service.detector
+package com.s14p21a404.shutter.data.detector.stub
 
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.util.Log
+import com.s14p21a404.shutter.data.detector.DeepfakeDetector
+import com.s14p21a404.shutter.domain.model.DeepfakeDetectionResult
 
 /**
  * ADB 명령으로 딥페이크 감지 결과를 수동 주입하는 Stub 구현체
