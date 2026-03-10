@@ -4,11 +4,11 @@ USER root
 
 # Docker 관련 필수 패키지 설치
 RUN apt-get update && \
-    apt-get -y install apt-transport-https ca-certificates curl gnupg2 software-properties-common lsb-release
+    apt-get -y install apt-transport-https ca-certificates curl gnupg2 lsb-release
 
-# Docker GPG 키 및 레포지토리 추가
-RUN curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add - && \
-    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
+# Docker GPG 키 및 레포지토리 추가 (Debian Trixie 호환 방식)
+RUN curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
 
 # Docker CLI 및 Docker Compose 플러그인 설치
 RUN apt-get update && \
