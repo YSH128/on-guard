@@ -11,8 +11,7 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 
-// 시간 측정을 위한 유틸리티 함수
-float get_ms(std::chrono::high_resolution_clock::time_point start){
+float get_ms(std::chrono::high_resolution_clock::time_point start) {
     auto end = std::chrono::high_resolution_clock::now();
     return std::chrono::duration<float, std::milli>(end - start).count();
 }
@@ -74,7 +73,7 @@ public:
                 audioModule.eval();
                 audioLoadTime = get_ms(start_audio);
                 isAudioLoaded = true;
-                LOGD("Audio model loaded successfully. Time: %.2f ms", audioLoadTime);
+                LOGD("Audio model loaded. Time: %.2f ms", audioLoadTime);
             } catch (const c10::Error& e) {
                 LOGE("Error loading audio model");
                 isAudioLoaded = false;
@@ -89,7 +88,7 @@ public:
                 faceModule.eval();
                 faceLoadTime = get_ms(start_face);
                 isFaceLoaded = true;
-                LOGD("Face model loaded successfully. Time: %.2f ms", faceLoadTime);
+                LOGD("Face model loaded. Time: %.2f ms", faceLoadTime);
             } catch (const c10::Error& e) {
                 LOGE("Error loading face model");
                 isFaceLoaded = false;
@@ -98,23 +97,6 @@ public:
         }
 
         return success;
-    }
-
-    std::vector<float> detectAudio(const float* audioData, int length) {
-        if (!isAudioLoaded) return {-1.0f, 0.0f, 0.0f};
-
-        auto start_inference = std::chrono::high_resolution_clock::now();
-        auto options = torch::TensorOptions().dtype(torch::kFloat32);
-        torch::Tensor input_tensor = torch::from_blob((void*)audioData, {1, length}, options);
-
-        std::vector<torch::jit::IValue> inputs;
-        inputs.push_back(input_tensor);
-
-        at::Tensor output = audioModule.forward(inputs).toTensor();
-        float score = output.item<float>();
-        
-        float inferenceTime = get_ms(start_inference);
-        return {score, audioLoadTime, inferenceTime};
     }
 
     // 새 모델 output: tuple(logits[1,2], cam[7,7])
@@ -128,17 +110,15 @@ public:
         InferResult result;
         if (!isFaceLoaded) return result;
 
-        auto start_inference = std::chrono::high_resolution_clock::now();
         auto options = torch::TensorOptions().dtype(torch::kFloat32);
-        torch::Tensor input_tensor = torch::from_blob((void*)imageData, {1, 224, 224, 3}, options);
+        torch::Tensor input_tensor = torch::from_blob(
+            (void*)imageData, {1, 224, 224, 3}, options).clone();
         input_tensor = input_tensor.permute({0, 3, 1, 2});
 
         float mean_vals[3] = {0.485f, 0.456f, 0.406f};
         float std_vals[3]  = {0.229f, 0.224f, 0.225f};
-
         auto mean = torch::from_blob(mean_vals, {1, 3, 1, 1}).clone();
         auto std  = torch::from_blob(std_vals,  {1, 3, 1, 1}).clone();
-
         input_tensor = (input_tensor - mean) / std;
 
         std::vector<torch::jit::IValue> inputs;
@@ -160,74 +140,66 @@ public:
         result.valid = true;
         return result;
     }
+
+    std::vector<float> detectAudio(const float* audioData, int length) {
+        if (!isAudioLoaded) return {-1.0f, 0.0f, 0.0f};
+
+        auto start_inference = std::chrono::high_resolution_clock::now();
+        auto options = torch::TensorOptions().dtype(torch::kFloat32);
+        torch::Tensor input_tensor = torch::from_blob((void*)audioData, {1, length}, options);
+
+        std::vector<torch::jit::IValue> inputs;
+        inputs.push_back(input_tensor);
+
+        at::Tensor output = audioModule.forward(inputs).toTensor();
+        float score = output.item<float>();
+
+        float inferenceTime = get_ms(start_inference);
+        return {score, audioLoadTime, inferenceTime};
+    }
 };
 
-// 동영상에서 중간 프레임 1장을 추출해 224x224x3 float 배열로 반환
-std::vector<float> extractFrameFromVideo(const std::string& videoPath) {
-    cv::VideoCapture cap(videoPath);
-    if (!cap.isOpened()) return {};
+static DeepfakeDetector detector;
 
-    int totalFrames = (int)cap.get(cv::CAP_PROP_FRAME_COUNT);
-    int midFrame = totalFrames / 2;
-    cap.set(cv::CAP_PROP_POS_FRAMES, midFrame);
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_example_shutter_1android_1ai_MainActivity_loadModels(
+        JNIEnv* env,
+        jobject /* this */,
+        jstring audioModelPath,
+        jstring faceModelPath) {
 
-    cv::Mat frame;
-    cap.read(frame);
-    if (frame.empty()) return {};
+    const char* aPath = env->GetStringUTFChars(audioModelPath, nullptr);
+    const char* fPath = env->GetStringUTFChars(faceModelPath, nullptr);
 
-    // 224x224로 리사이즈
-    cv::Mat resized;
-    cv::resize(frame, resized, cv::Size(224, 224));
+    bool loadSuccess = detector.loadModels(aPath, fPath);
 
-    // BGR → RGB
-    cv::Mat rgb;
-    cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
+    env->ReleaseStringUTFChars(audioModelPath, aPath);
+    env->ReleaseStringUTFChars(faceModelPath, fPath);
 
-    // float 변환 및 0~1 정규화
-    cv::Mat floatMat;
-    rgb.convertTo(floatMat, CV_32F, 1.0f / 255.0f);
+    float results[3] = { loadSuccess ? 1.0f : 0.0f, detector.audioLoadTime, detector.faceLoadTime };
+    jfloatArray resultMap = env->NewFloatArray(3);
+    env->SetFloatArrayRegion(resultMap, 0, 3, results);
 
-    // HWC 형태의 float 배열로 변환 (224 * 224 * 3)
-    std::vector<float> result;
-    result.assign((float*)floatMat.datastart, (float*)floatMat.dataend);
-
-    cap.release();
-    return result;
+    return resultMap;
 }
 
-// 동영상에서 numFrames개 균등 간격 프레임을 추출해 각각 224x224x3 float 배열로 반환
-std::vector<std::vector<float>> extractFramesFromVideo(const std::string& videoPath, int numFrames = 10) {
-    std::vector<std::vector<float>> frames;
-    cv::VideoCapture cap(videoPath);
-    if (!cap.isOpened()) return frames;
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeAudio(
+        JNIEnv* env,
+        jobject /* this */,
+        jfloatArray audioData) {
 
-    int totalFrames = (int)cap.get(cv::CAP_PROP_FRAME_COUNT);
-    if (totalFrames <= 0) { cap.release(); return frames; }
+    jfloat* data = env->GetFloatArrayElements(audioData, nullptr);
+    jsize length = env->GetArrayLength(audioData);
 
-    for (int i = 0; i < numFrames; i++) {
-        int frameIdx = (int)((float)i / numFrames * totalFrames);
-        cap.set(cv::CAP_PROP_POS_FRAMES, frameIdx);
+    std::vector<float> results = detector.detectAudio(data, length);
 
-        cv::Mat frame;
-        cap.read(frame);
-        if (frame.empty()) continue;
+    env->ReleaseFloatArrayElements(audioData, data, JNI_ABORT);
 
-        cv::Mat resized;
-        cv::resize(frame, resized, cv::Size(224, 224));
+    jfloatArray resultMap = env->NewFloatArray(results.size());
+    env->SetFloatArrayRegion(resultMap, 0, results.size(), results.data());
 
-        cv::Mat rgb;
-        cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
-
-        cv::Mat floatMat;
-        rgb.convertTo(floatMat, CV_32F, 1.0f / 255.0f);
-
-        std::vector<float> frameData;
-        frameData.assign((float*)floatMat.datastart, (float*)floatMat.dataend);
-        frames.push_back(frameData);
-    }
-
-    cap.release();
-    return frames;
+    return resultMap;
 }
 
 // CAM[7×7] → 연결 세그먼트 중 평균 score 최대인 박스 반환 (224×224 픽셀 기준)
@@ -281,86 +253,77 @@ static RoiBox extractRoiFromCAM(const float* camData, float threshold = 0.5f) {
     return best;
 }
 
-// Global instance to handle models
-static DeepfakeDetector detector;
-
-extern "C" JNIEXPORT jfloatArray JNICALL
-Java_com_example_shutter_1android_1ai_MainActivity_loadModels(
-        JNIEnv* env,
-        jobject /* this */,
-        jstring audioModelPath,
-        jstring faceModelPath) {
-            
-    const char* aPath = env->GetStringUTFChars(audioModelPath, nullptr);
-    const char* fPath = env->GetStringUTFChars(faceModelPath, nullptr);
-    
-    bool loadSuccess = detector.loadModels(aPath, fPath);
-
-    env->ReleaseStringUTFChars(audioModelPath, aPath);
-    env->ReleaseStringUTFChars(faceModelPath, fPath);
-
-    float results[3] = { loadSuccess ? 1.0f : 0.0f, detector.audioLoadTime, detector.faceLoadTime };
-    jfloatArray resultMap = env->NewFloatArray(3);
-    env->SetFloatArrayRegion(resultMap, 0, 3, results);
-
-    return resultMap;
-}
-
-extern "C" JNIEXPORT jfloatArray JNICALL
-Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeAudio(
-        JNIEnv* env,
-        jobject /* this */,
-        jfloatArray audioData) {
-    
-    jfloat* data = env->GetFloatArrayElements(audioData, nullptr);
-    jsize length = env->GetArrayLength(audioData);
-
-    std::vector<float> results = detector.detectAudio(data, length);
-
-    env->ReleaseFloatArrayElements(audioData, data, JNI_ABORT);
-
-    jfloatArray resultMap = env->NewFloatArray(results.size());
-    env->SetFloatArrayRegion(resultMap, 0, results.size(), results.data());
-    
-    return resultMap;
-}
-
-/**
- * Face Deepfake Detection
- * 동영상 경로를 받아 10프레임 추출 후 Face Deepfake Detection + CAM ROI 추출
- * 반환: [avgFakeProb, avgRealProb, LoadTime, InferTime,
- *        minx, miny, maxx, maxy, bestFrameIdx, cam[49]]  총 58개
- *   minx~maxy: 224×224 픽셀 기준 (-1이면 ROI 없음)
- *   cam[49]: 7×7 CAM row-major (시각화용)
- **/
 extern "C" JNIEXPORT jfloatArray JNICALL
 Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeVisual(
         JNIEnv* env,
         jobject /* this */,
-        jstring videoPath) {
+        jstring videoPath,
+        jint frameCount) {
 
     const char* vPath = env->GetStringUTFChars(videoPath, nullptr);
-    std::string vPathStr(vPath);
+    std::string videoPathStr(vPath);
     env->ReleaseStringUTFChars(videoPath, vPath);
 
-    auto inferStart = std::chrono::high_resolution_clock::now();
+    // 반환: [avgFake, avgReal, loadTime, inferTime,
+    //        frame0Fake, frame0Real, ..., frameN-1Fake, frameN-1Real,
+    //        minx, miny, maxx, maxy, bestFrameIdx, cam[49]]
+    // 총 4 + frameCount*2 + 54 개
+    int baseSize  = 4 + (int)frameCount * 2;
+    int resultSize = baseSize + 54;   // +5(roi) +49(cam)
+    std::vector<float> results(resultSize, -1.0f);
 
-    // 10프레임 균등 추출
-    auto frames = extractFramesFromVideo(vPathStr, 10);
-    if (frames.empty()) {
-        float results[9] = { -2.0f, -1.0f, 0.0f, 0.0f, -1, -1, -1, -1, -1 };
-        jfloatArray resultMap = env->NewFloatArray(9);
-        env->SetFloatArrayRegion(resultMap, 0, 9, results);
+    if (!detector.isFaceLoaded) {
+        results[0] = -1.0f;
+        jfloatArray resultMap = env->NewFloatArray(resultSize);
+        env->SetFloatArrayRegion(resultMap, 0, resultSize, results.data());
         return resultMap;
     }
 
+    cv::VideoCapture cap(videoPathStr);
+    if (!cap.isOpened()) {
+        results[0] = -2.0f;
+        jfloatArray resultMap = env->NewFloatArray(resultSize);
+        env->SetFloatArrayRegion(resultMap, 0, resultSize, results.data());
+        return resultMap;
+    }
+
+    int totalFrames = (int)cap.get(cv::CAP_PROP_FRAME_COUNT);
+    const int W = 224, H = 224, C = 3;
     float totalFake = 0.0f, totalReal = 0.0f;
-    int   validCount = 0;
+    int validCount = 0;
     std::vector<RoiBox> boxes;
 
-    for (int i = 0; i < (int)frames.size(); i++) {
-        auto fr = detector.inferWithCAM(frames[i].data());
+    results[2] = detector.faceLoadTime;
+
+    auto start_inference = std::chrono::high_resolution_clock::now();
+
+    // 균등 간격으로 frameCount개 프레임 추출 및 추론
+    for (int i = 0; i < (int)frameCount; i++) {
+        int frameIdx = (totalFrames > 0)
+            ? (int)((float)i / frameCount * totalFrames)
+            : i;
+        cap.set(cv::CAP_PROP_POS_FRAMES, frameIdx);
+
+        cv::Mat frame;
+        cap.read(frame);
+        if (frame.empty()) break;
+
+        cv::Mat resized;
+        cv::resize(frame, resized, cv::Size(W, H));
+        cv::Mat rgb;
+        cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
+        cv::Mat floatMat;
+        rgb.convertTo(floatMat, CV_32F, 1.0f / 255.0f);
+
+        std::vector<float> frameData;
+        frameData.assign((float*)floatMat.datastart, (float*)floatMat.dataend);
+
+        // 새 모델: inferWithCAM 사용 (tuple output)
+        auto fr = detector.inferWithCAM(frameData.data());
         if (!fr.valid) continue;
+
+        results[4 + i * 2]     = fr.fakeProb;
+        results[4 + i * 2 + 1] = fr.realProb;
 
         totalFake += fr.fakeProb;
         totalReal += fr.realProb;
@@ -373,40 +336,54 @@ Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeVisual(
         }
     }
 
-    float avgFake   = (validCount > 0) ? totalFake / validCount : -1.0f;
-    float avgReal   = (validCount > 0) ? totalReal / validCount : -1.0f;
-    float inferTime = get_ms(inferStart);
+    cap.release();
+    results[3] = get_ms(start_inference);
 
-    // NMS → 박스 1개
-    float minx = -1, miny = -1, maxx = -1, maxy = -1;
-    int   bestFrameIdx = 0;
-    float bestCam[49]  = {};
-
-    if (!boxes.empty()) {
-        RoiBox best = applyNMS(boxes, 0.5f);
-        minx = best.minx;  miny = best.miny;
-        maxx = best.maxx;  maxy = best.maxy;
-        bestFrameIdx = best.frameIdx;
-
-        // 시각화를 위해 bestFrame의 CAM 재획득
-        if (bestFrameIdx < (int)frames.size()) {
-            auto fr = detector.inferWithCAM(frames[bestFrameIdx].data());
-            if (fr.valid) std::copy(fr.cam, fr.cam + 49, bestCam);
-        }
-        LOGD("NMS result: box(%.1f,%.1f,%.1f,%.1f) score=%.3f frame=%d",
-             minx, miny, maxx, maxy, best.score, bestFrameIdx);
+    if (validCount == 0) {
+        results[0] = -2.0f;
+    } else {
+        results[0] = totalFake / validCount;
+        results[1] = totalReal / validCount;
     }
 
-    // 결과 배열: [9 기본값] + [cam 49개] = 58개
-    std::vector<float> results;
-    results.reserve(58);
-    for (float v : {avgFake, avgReal, detector.faceLoadTime, inferTime,
-                    minx, miny, maxx, maxy, (float)bestFrameIdx})
-        results.push_back(v);
-    results.insert(results.end(), bestCam, bestCam + 49);
+    // NMS → 박스 1개, CAM 데이터를 결과 배열 뒤에 append
+    float bestCam[49] = {};
+    if (!boxes.empty()) {
+        RoiBox best = applyNMS(boxes, 0.5f);
+        results[baseSize]     = best.minx;
+        results[baseSize + 1] = best.miny;
+        results[baseSize + 2] = best.maxx;
+        results[baseSize + 3] = best.maxy;
+        results[baseSize + 4] = (float)best.frameIdx;
+        LOGD("NMS result: box(%.1f,%.1f,%.1f,%.1f) score=%.3f frame=%d",
+             best.minx, best.miny, best.maxx, best.maxy, best.score, best.frameIdx);
 
-    jfloatArray resultMap = env->NewFloatArray(results.size());
-    env->SetFloatArrayRegion(resultMap, 0, results.size(), results.data());
+        // 시각화를 위해 bestFrame의 CAM 재획득
+        // (이미 추론한 결과에서 직접 가져오기 위해 cap을 다시 열어 재추론)
+        cv::VideoCapture cap2(videoPathStr);
+        if (cap2.isOpened() && best.frameIdx < (int)boxes.size()) {
+            int fi = (totalFrames > 0)
+                ? (int)((float)best.frameIdx / frameCount * totalFrames)
+                : best.frameIdx;
+            cap2.set(cv::CAP_PROP_POS_FRAMES, fi);
+            cv::Mat frame; cap2.read(frame);
+            if (!frame.empty()) {
+                cv::Mat resized, rgb, floatMat;
+                cv::resize(frame, resized, cv::Size(W, H));
+                cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
+                rgb.convertTo(floatMat, CV_32F, 1.0f / 255.0f);
+                std::vector<float> fd;
+                fd.assign((float*)floatMat.datastart, (float*)floatMat.dataend);
+                auto fr2 = detector.inferWithCAM(fd.data());
+                if (fr2.valid) std::copy(fr2.cam, fr2.cam + 49, bestCam);
+            }
+            cap2.release();
+        }
+        std::copy(bestCam, bestCam + 49, results.data() + baseSize + 5);
+    }
+
+    jfloatArray resultMap = env->NewFloatArray(resultSize);
+    env->SetFloatArrayRegion(resultMap, 0, resultSize, results.data());
     return resultMap;
 }
 
@@ -427,7 +404,11 @@ Java_com_example_shutter_1android_1ai_CamVisualizationActivity_renderCAMVisualiz
     env->ReleaseStringUTFChars(videoPath, vp);
     if (!cap.isOpened()) return nullptr;
 
-    cap.set(cv::CAP_PROP_POS_FRAMES, frameIdx);
+    int totalFrames = (int)cap.get(cv::CAP_PROP_FRAME_COUNT);
+    int fi = (totalFrames > 0)
+        ? (int)((float)frameIdx / 10 * totalFrames)
+        : frameIdx;
+    cap.set(cv::CAP_PROP_POS_FRAMES, fi);
     cv::Mat frame;
     cap.read(frame);
     cap.release();

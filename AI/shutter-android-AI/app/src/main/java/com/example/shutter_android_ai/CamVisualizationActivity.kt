@@ -30,17 +30,26 @@ class CamVisualizationActivity : AppCompatActivity() {
         val results   = MainActivity.lastResults
         val videoPath = MainActivity.lastVideoPath
 
-        if (results.size < 58 || videoPath.isEmpty()) {
+        // 반환 형식: [4 + frameCount*2 + 54] = 78개 (frameCount=10 기준)
+        // [0..3]: avgFake, avgReal, loadTime, inferTime
+        // [4..23]: frame별 fake/real (10프레임 × 2)
+        // [24..28]: minx, miny, maxx, maxy, bestFrameIdx
+        // [29..77]: cam[49]
+        val frameCount  = 10
+        val baseOffset  = 4 + frameCount * 2   // = 24
+        val minResultSize = baseOffset + 54    // = 78
+
+        if (results.size < minResultSize || videoPath.isEmpty()) {
             tvBboxInfo.text = "결과 없음: 먼저 페이스 감지를 실행하세요"
             return
         }
 
-        val minx         = results[4]
-        val miny         = results[5]
-        val maxx         = results[6]
-        val maxy         = results[7]
-        val bestFrameIdx = results[8].toInt()
-        val camData      = results.sliceArray(9..57)
+        val minx         = results[baseOffset]
+        val miny         = results[baseOffset + 1]
+        val maxx         = results[baseOffset + 2]
+        val maxy         = results[baseOffset + 3]
+        val bestFrameIdx = results[baseOffset + 4].toInt()
+        val camData      = results.sliceArray(baseOffset + 5 until baseOffset + 54)
 
         tvBboxInfo.text = "ROI: (%.1f, %.1f) ~ (%.1f, %.1f)  frame=%d".format(
             minx, miny, maxx, maxy, bestFrameIdx
