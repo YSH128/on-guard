@@ -1,0 +1,44 @@
+package com.s14p21a404.shutter.network
+
+import com.s14p21a404.shutter.BuildConfig
+import com.s14p21a404.shutter.auth.TokenManager
+import okhttp3.Interceptor
+import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+
+object RetrofitClient {
+
+    /** 인증이 필요한 API 요청에 Bearer 토큰을 자동으로 붙여주는 인터셉터 */
+    fun create(tokenManager: TokenManager): ApiService {
+        val authInterceptor = Interceptor { chain ->
+            val token = tokenManager.getAccessToken()
+            val request = if (token != null) {
+                chain.request().newBuilder()
+                    .addHeader("Authorization", "Bearer $token")
+                    .build()
+            } else {
+                chain.request()
+            }
+            chain.proceed(request)
+        }
+
+        val loggingInterceptor = HttpLoggingInterceptor().apply {
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY
+            else HttpLoggingInterceptor.Level.NONE
+        }
+
+        val okHttpClient = OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)
+            .addInterceptor(loggingInterceptor)
+            .build()
+
+        return Retrofit.Builder()
+            .baseUrl(BuildConfig.SERVER_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(ApiService::class.java)
+    }
+}

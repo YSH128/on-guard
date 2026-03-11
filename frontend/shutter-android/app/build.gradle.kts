@@ -1,6 +1,13 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+}
+
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) load(file.inputStream())
 }
 
 android {
@@ -19,6 +26,13 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        val kakaoKey = localProperties.getProperty("kakao.native.app.key", "")
+        resValue("string", "kakao_app_key", kakaoKey)
+        resValue("string", "kakao_oauth_scheme", "kakao$kakaoKey")
+
+        val serverBaseUrl = localProperties.getProperty("server.base.url", "https://your-server.com/")
+        buildConfigField("String", "SERVER_BASE_URL", "\"$serverBaseUrl\"")
     }
 
     buildTypes {
@@ -36,6 +50,8 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
+        resValues = true
     }
 }
 
@@ -50,6 +66,10 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.kakao.sdk.user)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.gson)
+    implementation(libs.okhttp.logging)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

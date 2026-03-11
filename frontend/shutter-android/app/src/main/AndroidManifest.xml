@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- 인터넷 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- 통화 상태 감지 -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
@@ -16,6 +19,7 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
+        android:name=".ShutterApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -24,6 +28,11 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Shutterandroid">
+
+        <!-- 카카오 네이티브 앱 키 -->
+        <meta-data
+            android:name="com.kakao.sdk.AppKey"
+            android:value="@string/kakao_app_key" />
 
         <!-- 메인 액티비티 -->
         <activity
@@ -36,6 +45,21 @@
             </intent-filter>
         </activity>
 
+
+        <!-- 카카오 OAuth 리다이렉트 처리 -->
+        <activity
+            android:name="com.kakao.sdk.auth.AuthCodeHandlerActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <!-- TODO: strings.xml의 kakao_oauth_scheme 값을 실제 앱 키로 교체하세요 -->
+                <data
+                    android:host="oauth"
+                    android:scheme="@string/kakao_oauth_scheme" />
+            </intent-filter>
+        </activity>
 
         <!-- 영상통화 감지 Foreground Service -->
         <service
