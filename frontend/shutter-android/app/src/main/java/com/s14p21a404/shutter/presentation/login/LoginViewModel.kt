@@ -97,6 +97,14 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * 로그아웃: 저장된 토큰을 삭제하고 로그인 화면으로 이동한다.
+     */
+    fun logout() {
+        tokenManager.clearTokens()
+        _isLoggedIn.value = false
+    }
+
     companion object {
         private const val TAG = "LoginViewModel"
     }

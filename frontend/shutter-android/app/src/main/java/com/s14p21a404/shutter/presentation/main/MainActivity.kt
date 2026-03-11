@@ -71,7 +71,8 @@ class MainActivity : ComponentActivity() {
                             uiState = uiState,
                             onRequestPermissions = { requestAllPermissions() },
                             onRequestOverlayPermission = { requestOverlayPermission() },
-                            onToggleService = { toggleService() }
+                            onToggleService = { toggleService() },
+                            onLogout = { loginViewModel.logout() }
                         )
                     }
                 }
