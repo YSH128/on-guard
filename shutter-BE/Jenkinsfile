@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         IMAGE_NAME  = "shutter-be"
-        DEPLOY_PATH = "/home/ubuntu/shutter"   // EC2 배포 경로
+        DEPLOY_PATH = "/home/ubuntu/shutter"
     }
 
     stages {
@@ -39,7 +39,8 @@ pipeline {
             steps {
                 script {
 
-                    def NGINX = 'shutter-be-nginx-1'  // 실제 nginx 컨테이너 이름
+                    def NGINX      = 'shutter-be-nginx-1'
+                    def NGINX_CONF = '/home/ubuntu/apps/S14P21A404/shutter-BE/nginx'
 
                     dir('shutter-BE') {
                         withCredentials([file(credentialsId: 'ENV_FILE', variable: 'SECRET_ENV')]) {
@@ -60,7 +61,7 @@ pipeline {
                                 fi
                             """
 
-                            // 현재 운영 컨테이너 확인 (인프라 기동 후 판단)
+                            // 현재 운영 컨테이너 확인
                             def current = sh(
                                 script: "docker ps --filter 'name=spring-blue' --filter 'status=running' --format '{{.Names}}'",
                                 returnStdout: true
@@ -81,7 +82,7 @@ pipeline {
                                 rm -f /tmp/clean_env
                             """
 
-                            // 2. 헬스체크 (실제 nginx 컨테이너 이름 사용)
+                            // 2. 헬스체크
                             sh """
                                 IS_HEALTHY=false
                                 for i in \$(seq 1 12); do
@@ -102,13 +103,9 @@ pipeline {
                             """
 
                             // 3. nginx upstream 전환
+                            // echo > 방식: 파일 교체 없이 내용만 덮어씀 → bind mount 문제 없음
                             sh """
-                                docker run --rm \
-                                    -v /home/ubuntu/apps/S14P21A404/shutter-BE/nginx:/nginx_conf \
-                                    alpine \
-                                    sed -i 's|set \\\$upstream spring-.*;|set \\\$upstream ${nextName};|g' /nginx_conf/nginx.conf
-
-                                sleep 2
+                                echo 'server ${nextName}:8080;' > ${NGINX_CONF}/upstream.conf
                                 docker exec ${NGINX} nginx -s reload
                             """
 

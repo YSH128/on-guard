@@ -50,3 +50,6 @@ out/
 ### guide file ###
 ai_monitoring_context.md
 monitoring_project.md
+
+### Nginx ###
+nginx/upstream.conf
