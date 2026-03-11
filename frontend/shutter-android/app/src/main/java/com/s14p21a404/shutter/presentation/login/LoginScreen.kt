@@ -13,7 +13,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun LoginScreen(onKakaoLogin: () -> Unit) {
+fun LoginScreen(
+    onKakaoLogin: () -> Unit,
+    loginError: String? = null,
+    onDismissError: () -> Unit = {}
+) {
+    if (loginError != null) {
+        AlertDialog(
+            onDismissRequest = onDismissError,
+            title = { Text(text = "로그인 실패") },
+            text = { Text(text = loginError) },
+            confirmButton = {
+                TextButton(onClick = onDismissError) {
+                    Text("확인")
+                }
+            }
+        )
+    }
+
     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
         Column(
             modifier = Modifier

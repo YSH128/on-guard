@@ -34,6 +34,9 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoggedIn = MutableStateFlow<Boolean?>(null)
     val isLoggedIn: StateFlow<Boolean?> = _isLoggedIn.asStateFlow()
 
+    private val _loginError = MutableStateFlow<String?>(null)
+    val loginError: StateFlow<String?> = _loginError.asStateFlow()
+
     init {
         checkLoginState()
     }
@@ -92,9 +95,17 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 .onFailure { e ->
                     Log.e(TAG, "서버 로그인 실패", e)
+                    _loginError.value = e.message ?: "서버 연결에 실패했습니다."
                     _isLoggedIn.value = false
                 }
         }
+    }
+
+    /**
+     * 에러 팝업 닫기
+     */
+    fun dismissLoginError() {
+        _loginError.value = null
     }
 
     /**

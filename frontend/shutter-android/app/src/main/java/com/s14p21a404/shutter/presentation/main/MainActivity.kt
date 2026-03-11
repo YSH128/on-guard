@@ -53,6 +53,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             ShutterandroidTheme {
                 val isLoggedIn by loginViewModel.isLoggedIn.collectAsState()
+                val loginError by loginViewModel.loginError.collectAsState()
 
                 when (isLoggedIn) {
                     null -> {
@@ -61,7 +62,9 @@ class MainActivity : ComponentActivity() {
                     false -> {
                         // 로그인 필요 → 로그인 화면
                         LoginScreen(
-                            onKakaoLogin = { loginViewModel.loginWithKakao(this@MainActivity) }
+                            onKakaoLogin = { loginViewModel.loginWithKakao(this@MainActivity) },
+                            loginError = loginError,
+                            onDismissError = { loginViewModel.dismissLoginError() }
                         )
                     }
                     true -> {
