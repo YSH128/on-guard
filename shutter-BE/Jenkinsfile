@@ -55,8 +55,10 @@ pipeline {
                         // 1. 새 버전 컨테이너 실행 (.env 파일을 Jenkins Secret File 금고에서 꺼내오기)
                         withCredentials([file(credentialsId: 'ENV_FILE', variable: 'SECRET_ENV')]) {
                             sh """
+                                # Windows 형식의 줄바꿈(\\r)을 제거한 임시 파일 생성
+                                tr -d '\\r' < \${SECRET_ENV} > /tmp/clean_env
                                 set -a
-                                . \${SECRET_ENV}
+                                . /tmp/clean_env
                                 set +a
                                 docker compose --profile ${next} up -d --build ${nextName}
                             """
