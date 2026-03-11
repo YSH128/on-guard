@@ -55,7 +55,10 @@ pipeline {
                         // 1. 새 버전 컨테이너 실행 (.env 파일을 Jenkins Secret File 금고에서 꺼내오기)
                         withCredentials([file(credentialsId: 'ENV_FILE', variable: 'SECRET_ENV')]) {
                             sh """
-                                docker compose --env-file \${SECRET_ENV} --profile ${next} up -d --build ${nextName}
+                                set -a
+                                source \${SECRET_ENV}
+                                set +a
+                                docker compose --profile ${next} up -d --build ${nextName}
                             """
                         }
 
