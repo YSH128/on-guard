@@ -24,8 +24,6 @@ pipeline {
             }
         }
 
-
-
         stage('Docker Build') {
             steps {
                 dir('shutter-BE') {
@@ -40,45 +38,85 @@ pipeline {
         stage('Deploy (Blue-Green)') {
             steps {
                 script {
-                    // 현재 운영 중인 컨테이너 확인 (blue or green)
-                    def current = sh(
-                        script: "docker inspect --format='{{.Name}}' spring-blue 2>/dev/null || echo 'none'",
-                        returnStdout: true
-                    ).trim()
 
-                    def next    = (current == '/spring-blue') ? 'green' : 'blue'
-                    def nextName = "spring-${next}"
-
-                    echo "현재: ${current} → 다음: ${nextName}"
+                    def NGINX = 'shutter-be-nginx-1'  // 실제 nginx 컨테이너 이름
 
                     dir('shutter-BE') {
-                        // 1. 새 버전 컨테이너 실행
-                        sh """
-                            docker compose --profile ${next} up -d --build ${nextName}
-                        """
+                        withCredentials([file(credentialsId: 'ENV_FILE', variable: 'SECRET_ENV')]) {
 
-                        // 2. 헬스체크 (최대 60초)
-                        sh """
-                            for i in \$(seq 1 12); do
-                                STATUS=\$(docker inspect --format='{{.State.Health.Status}}' ${nextName} 2>/dev/null || echo 'starting')
-                                echo "Health: \$STATUS (\$i/12)"
-                                if [ "\$STATUS" = "healthy" ]; then
-                                    echo "헬스체크 통과!"
-                                    break
+                            // 0. 인프라 컨테이너(mysql, redis, nginx) 없으면 먼저 기동
+                            sh """
+                                tr -d '\\r' < \${SECRET_ENV} > /tmp/clean_env
+                                set -a; . /tmp/clean_env; set +a
+                                export COMPOSE_IGNORE_ORPHANS=True
+
+                                if ! docker ps --filter 'name=shutter-be-mysql-1' --filter 'status=running' -q | grep -q .; then
+                                    echo "⚙️ 인프라 컨테이너 초기 기동 중..."
+                                    docker compose --profile prod up -d mysql redis nginx grafana
+                                    echo "MySQL 헬스체크 대기 중..."
+                                    sleep 30
+                                else
+                                    echo "✅ 인프라 컨테이너 이미 실행 중"
                                 fi
+                            """
+
+                            // 현재 운영 컨테이너 확인 (인프라 기동 후 판단)
+                            def current = sh(
+                                script: "docker ps --filter 'name=spring-blue' --filter 'status=running' --format '{{.Names}}'",
+                                returnStdout: true
+                            ).trim()
+
+                            def next     = (current == 'spring-blue') ? 'green' : 'blue'
+                            def nextName = "spring-${next}"
+                            def prevName = (next == 'blue') ? 'spring-green' : 'spring-blue'
+
+                            echo "현재: ${current ?: '없음'} → 다음: ${nextName}"
+
+                            // 1. 새 버전 컨테이너 실행
+                            sh """
+                                set -a; . /tmp/clean_env; set +a
+                                export SPRING_PROFILES_ACTIVE=prod
+                                export COMPOSE_IGNORE_ORPHANS=True
+                                docker compose --profile ${next} up -d --build ${nextName}
+                                rm -f /tmp/clean_env
+                            """
+
+                            // 2. 헬스체크 (실제 nginx 컨테이너 이름 사용)
+                            sh """
+                                IS_HEALTHY=false
+                                for i in \$(seq 1 12); do
+                                    if docker exec ${NGINX} nc -z ${nextName} 8080 2>/dev/null; then
+                                        echo "✅ 헬스체크 통과: ${nextName} 서버 기동 완료"
+                                        IS_HEALTHY=true
+                                        break
+                                    fi
+                                    echo "서버 기동 기다리는 중... (\$i/12)"
+                                    sleep 5
+                                done
+
+                                if [ "\$IS_HEALTHY" = "false" ]; then
+                                    echo "❌ 헬스체크 실패! 배포를 중지하고 롤백"
+                                    docker stop ${nextName} || true
+                                    exit 1
+                                fi
+                            """
+
+                            // 3. nginx upstream 전환
+                            sh """
+                                docker run --rm \
+                                    -v /home/ubuntu/apps/S14P21A404/shutter-BE/nginx:/nginx_conf \
+                                    alpine \
+                                    sed -i 's|server spring-.*:8080|server ${nextName}:8080|g' /nginx_conf/nginx.conf
+
+                                docker exec ${NGINX} nginx -s reload
+                            """
+
+                            // 4. 이전 버전 종료
+                            sh """
                                 sleep 5
-                            done
-                        """
-
-                        // 3. nginx upstream 전환
-                        sh """
-                            sed -i 's|server spring-.*:8080|server ${nextName}:8080|g' nginx/nginx.conf
-                            docker compose exec nginx nginx -s reload
-                        """
-
-                        // 4. 이전 버전 종료
-                        def prevName = (next == 'blue') ? 'spring-green' : 'spring-blue'
-                        sh "docker stop ${prevName} 2>/dev/null || true"
+                                docker stop ${prevName} 2>/dev/null || true
+                            """
+                        }
                     }
                 }
             }
