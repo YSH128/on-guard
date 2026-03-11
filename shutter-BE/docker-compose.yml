@@ -8,12 +8,10 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf # ← :ro 제거 (nginx -s reload 즉시 반영)
       - /etc/letsencrypt/live/j14a404.p.ssafy.io/fullchain.pem:/etc/nginx/ssl/fullchain.pem:ro
       - /etc/letsencrypt/live/j14a404.p.ssafy.io/privkey.pem:/etc/nginx/ssl/privkey.pem:ro
-      - certbot-webroot:/var/www/certbot:ro # Let's Encrypt 인증용
-    depends_on:
-      - spring-blue
+      - certbot-webroot:/var/www/certbot:ro
     networks:
       - shutter-network
     restart: unless-stopped
@@ -21,13 +19,13 @@ services:
   # ───── Spring App (Blue) - 현재 운영 중인 버전 ─────
   spring-blue:
     profiles:
-      - prod
+      - blue
     build:
       context: .
       dockerfile: Dockerfile
     container_name: spring-blue
     expose:
-      - "8080" # nginx에서만 접근 (외부 포트 미노출)
+      - "8080"
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - DB_HOST=${DB_HOST:-mysql}
@@ -51,11 +49,9 @@ services:
     restart: unless-stopped
 
   # ───── Spring App (Green) - 배포 대기 버전 ─────
-  # 배포 시: docker compose --profile prod up -d spring-green
-  # 전환 시: nginx.conf의 upstream을 spring-green으로 변경 후 nginx reload
   spring-green:
     profiles:
-      - green # 배포 시에만 활성화
+      - green
     build:
       context: .
       dockerfile: Dockerfile
@@ -87,7 +83,7 @@ services:
   mysql:
     image: "mysql:8.0"
     ports:
-      - "${EXTERNAL_DB_PORT:-3307}:3306" # 로컬 개발 시 직접 접근용
+      - "${EXTERNAL_DB_PORT:-3307}:3306"
     environment:
       - MYSQL_DATABASE=${DB_NAME}
       - MYSQL_PASSWORD=${DB_PASSWORD}
@@ -109,7 +105,7 @@ services:
   redis:
     image: "redis:alpine"
     ports:
-      - "6379:6379" # 로컬 개발 시 Redis Insight 접근용
+      - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
