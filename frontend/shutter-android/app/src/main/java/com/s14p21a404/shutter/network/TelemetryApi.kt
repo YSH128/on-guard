@@ -1,10 +1,14 @@
-package com.example.shutter_android_ai.network
+package com.s14p21a404.shutter.network
 
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.POST
+
+import java.util.Properties
+
+import com.s14p21a404.shutter.BuildConfig
 
 // 1. 데이터 클래스 (새로운 지표 모두 포함)
 data class TelemetryRequest(
@@ -35,11 +39,9 @@ interface TelemetryApi {
 
 // 3. Retrofit 싱글톤 객체
 object RetrofitClient {
-    private const val BASE_URL = "http://172.20.10.3:8080/" // 서버 실제 IP로 변경 필수
-
     val api: TelemetryApi by lazy {
         Retrofit.Builder()
-            .baseUrl(BASE_URL)
+            .baseUrl(BuildConfig.BASE_URL)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(TelemetryApi::class.java)

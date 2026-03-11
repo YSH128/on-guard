@@ -38,6 +38,17 @@ android {
         ndk {
             abiFilters.add("arm64-v8a")
         }
+        val properties = Properties()
+        val localPropertiesFile = project.rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            properties.load(localPropertiesFile.inputStream())
+        }
+        
+        // 프로퍼티에서 값을 가져오고, 없을 경우의 기본값 설정
+        val baseUrl = properties.getProperty("TELEMETRY_BASE_URL") ?: "\"http://localhost:8080/\""
+        
+        // BuildConfig.BASE_URL 생성
+        buildConfigField("String", "BASE_URL", baseUrl)
     }
 
     packaging {
@@ -70,6 +81,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true // BuildConfig 활성화
     }
 }
 
