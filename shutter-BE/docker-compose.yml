@@ -121,7 +121,7 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
-      - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s/grafana/ # ← 경로 방식 설정
+      - GF_SERVER_ROOT_URL=https://j14a404.p.ssafy.io/grafana/ # ← 서브도메인 명시적 지정으로 리다이렉트 에러 해결
       - GF_SERVER_SERVE_FROM_SUB_PATH=true # ← 서브경로 활성화
       - DB_NAME=${DB_NAME}
       - DB_USERNAME=${DB_USERNAME}
