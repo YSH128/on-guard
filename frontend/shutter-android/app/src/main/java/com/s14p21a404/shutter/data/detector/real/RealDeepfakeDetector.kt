@@ -36,7 +36,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
         nativeAvailable = NativeDeepfakeBridge.loadLibrary()
         if (nativeAvailable) {
-            bridge = NativeDeepfakeBridge()
+            bridge = NativeDeepfakeBridge(context)
             dummyResultTextView = TextView(context)
             Log.d(TAG, "RealDeepfakeDetector 시작 — NDK 라이브러리 로드 성공")
         } else {
