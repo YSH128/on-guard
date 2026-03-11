@@ -4,6 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.graphics.Bitmap
 import android.media.projection.MediaProjectionManager
 import android.os.IBinder
 import android.util.Log
@@ -72,7 +73,10 @@ class VideoCallDetectService : Service() {
         serviceScope.launch {
             detectUseCase.observeResults().collect { result ->
                 Log.d(TAG, "📊 감지 결과: $result")
-                warningOverlayManager.onDetectionResult(result)
+                val roiBitmap = if (result.detected && result.hasRoi) {
+                    cropRoiBitmap(result)
+                } else null
+                warningOverlayManager.onDetectionResult(result, roiBitmap)
             }
         }
     }
@@ -112,6 +116,30 @@ class VideoCallDetectService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    // ── ROI 크롭 ──
+
+    /**
+     * 최신 캡처 프레임에서 ROI 영역을 잘라낸 Bitmap을 반환한다.
+     * ROI 좌표는 0.0~1.0 상대좌표이므로 실제 픽셀 좌표로 변환한다.
+     */
+    private fun cropRoiBitmap(result: com.s14p21a404.shutter.domain.model.DeepfakeDetectionResult): Bitmap? {
+        val source = detectionRepository.getLatestBitmap() ?: return null
+        return try {
+            val w = source.width
+            val h = source.height
+            val left   = (result.roiMinX * w).toInt().coerceIn(0, w)
+            val top    = (result.roiMinY * h).toInt().coerceIn(0, h)
+            val right  = (result.roiMaxX * w).toInt().coerceIn(0, w)
+            val bottom = (result.roiMaxY * h).toInt().coerceIn(0, h)
+            val cropW  = (right - left).coerceAtLeast(1)
+            val cropH  = (bottom - top).coerceAtLeast(1)
+            Bitmap.createBitmap(source, left, top, cropW, cropH)
+        } catch (e: Exception) {
+            Log.e(TAG, "ROI 크롭 실패", e)
+            null
+        }
+    }
 
     // ── Foreground Service 설정 ──
 
