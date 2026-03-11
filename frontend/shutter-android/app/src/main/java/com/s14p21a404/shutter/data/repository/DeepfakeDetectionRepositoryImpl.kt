@@ -1,6 +1,7 @@
 package com.s14p21a404.shutter.data.repository
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.media.projection.MediaProjection
 import android.util.Log
 import com.s14p21a404.shutter.data.capture.ScreenCaptureManager
@@ -74,6 +75,8 @@ class DeepfakeDetectionRepositoryImpl(
         this.mediaProjection = mediaProjection
         Log.d(TAG, "MediaProjection 설정 완료")
     }
+
+    override fun getLatestBitmap(): Bitmap? = screenCaptureManager?.latestBitmap
 
     override fun releaseMediaProjection() {
         screenCaptureManager?.stopCapture()

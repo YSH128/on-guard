@@ -28,8 +28,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // 인증 없이 허용
                         .requestMatchers(
-                                "/api/auth/**",
-                                "/api/telemetry/**",
+                                "/api/v1/auth/**",
+                                "/api/v1/telemetry/**",
                                 "/actuator/**",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**"

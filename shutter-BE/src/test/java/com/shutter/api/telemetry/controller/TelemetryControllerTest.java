@@ -42,7 +42,7 @@ class TelemetryControllerTest {
     void receive_validRequest_returns200() throws Exception {
         given(telemetryService.saveTelemetry(any())).willReturn(1);
 
-        mockMvc.perform(post("/api/telemetry")
+        mockMvc.perform(post("/api/v1/telemetry")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(validBody())))
                 .andExpect(status().isOk())
@@ -55,7 +55,7 @@ class TelemetryControllerTest {
         Map<String, Object> body = validBody();
         body.remove("timestamp");
 
-        mockMvc.perform(post("/api/telemetry")
+        mockMvc.perform(post("/api/v1/telemetry")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(body)))
                 .andExpect(status().isBadRequest());
@@ -79,7 +79,7 @@ class TelemetryControllerTest {
         Map<String, Object> body = validBody();
         body.remove("inference_success");
 
-        mockMvc.perform(post("/api/telemetry")
+        mockMvc.perform(post("/api/v1/telemetry")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(body)))
                 .andExpect(status().isBadRequest());
@@ -91,7 +91,7 @@ class TelemetryControllerTest {
         Map<String, Object> body = validBody();
         body.put("failure_type", "CRASH");
 
-        mockMvc.perform(post("/api/telemetry")
+        mockMvc.perform(post("/api/v1/telemetry")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(body)))
                 .andExpect(status().isBadRequest());
