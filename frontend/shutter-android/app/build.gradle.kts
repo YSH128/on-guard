@@ -1,3 +1,4 @@
+import java.util.Properties
 import de.undercouch.gradle.tasks.download.Download
 
 plugins {
@@ -118,26 +119,6 @@ dependencies {
 
 
 val nativeLibsDir = layout.buildDirectory.dir("native_libs").get().asFile
-
-nativeAarDeps.resolvedConfiguration.resolvedArtifacts.forEach { artifact ->
-    val aar = artifact.file
-    when {
-        aar.name.contains("pytorch_android") && !aar.name.contains("lite") -> {
-            copy {
-                from(zipTree(aar))
-                into(nativeLibsDir.resolve("pytorch"))
-                duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-            }
-        }
-        aar.name.contains("opencv") -> {
-            copy {
-                from(zipTree(aar))
-                into(nativeLibsDir.resolve("opencv"))
-                duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-            }
-        }
-    }
-}
 
 val opencvSdkZip = nativeLibsDir.resolve("opencv-sdk.zip")
 val opencvHeaderFile = nativeLibsDir.resolve("opencv/jni/include/opencv2/opencv.hpp")
