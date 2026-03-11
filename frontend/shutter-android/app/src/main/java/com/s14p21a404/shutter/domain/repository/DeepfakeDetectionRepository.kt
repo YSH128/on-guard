@@ -1,6 +1,7 @@
 package com.s14p21a404.shutter.domain.repository
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.media.projection.MediaProjection
 import com.s14p21a404.shutter.domain.model.DeepfakeDetectionResult
 import kotlinx.coroutines.flow.Flow
@@ -33,4 +34,10 @@ interface DeepfakeDetectionRepository {
      * MediaProjection 해제. Service 종료 시 호출.
      */
     fun releaseMediaProjection()
+
+    /**
+     * 최신 캡처 프레임(Bitmap)을 반환한다.
+     * ROI 크롭 오버레이에 사용.
+     */
+    fun getLatestBitmap(): Bitmap?
 }
