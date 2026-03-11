@@ -24,8 +24,6 @@ pipeline {
             }
         }
 
-
-
         stage('Docker Build') {
             steps {
                 dir('shutter-BE') {
@@ -40,38 +38,54 @@ pipeline {
         stage('Deploy (Blue-Green)') {
             steps {
                 script {
-                    def current = sh(
-                        script: "docker ps --filter 'name=spring-blue' --filter 'status=running' --format '{{.Names}}'",
-                        returnStdout: true
-                    ).trim()
 
-                    def next     = (current == 'spring-blue') ? 'green' : 'blue'
-                    def nextName = "spring-${next}"
-                    def prevName = (next == 'blue') ? 'spring-green' : 'spring-blue'
-
-                    echo "현재: ${current ?: '없음'} → 다음: ${nextName}"
+                    def NGINX = 'shutter-be-nginx-1'  // 실제 nginx 컨테이너 이름
 
                     dir('shutter-BE') {
-                        // ✅ withCredentials 블록 하나로 모든 compose 관련 작업을 감쌈
                         withCredentials([file(credentialsId: 'ENV_FILE', variable: 'SECRET_ENV')]) {
 
-                            // 1. 새 버전 컨테이너 실행 (환경변수 주입, prod 강제, DB 재시작 방어)
+                            // 0. 인프라 컨테이너(mysql, redis, nginx) 없으면 먼저 기동
                             sh """
                                 tr -d '\\r' < \${SECRET_ENV} > /tmp/clean_env
                                 set -a; . /tmp/clean_env; set +a
-                                
+                                export COMPOSE_IGNORE_ORPHANS=True
+
+                                if ! docker ps --filter 'name=shutter-be-mysql-1' --filter 'status=running' -q | grep -q .; then
+                                    echo "⚙️ 인프라 컨테이너 초기 기동 중..."
+                                    docker compose --profile prod up -d mysql redis nginx grafana
+                                    echo "MySQL 헬스체크 대기 중..."
+                                    sleep 30
+                                else
+                                    echo "✅ 인프라 컨테이너 이미 실행 중"
+                                fi
+                            """
+
+                            // 현재 운영 컨테이너 확인 (인프라 기동 후 판단)
+                            def current = sh(
+                                script: "docker ps --filter 'name=spring-blue' --filter 'status=running' --format '{{.Names}}'",
+                                returnStdout: true
+                            ).trim()
+
+                            def next     = (current == 'spring-blue') ? 'green' : 'blue'
+                            def nextName = "spring-${next}"
+                            def prevName = (next == 'blue') ? 'spring-green' : 'spring-blue'
+
+                            echo "현재: ${current ?: '없음'} → 다음: ${nextName}"
+
+                            // 1. 새 버전 컨테이너 실행
+                            sh """
+                                set -a; . /tmp/clean_env; set +a
                                 export SPRING_PROFILES_ACTIVE=prod
                                 export COMPOSE_IGNORE_ORPHANS=True
-                                
-                                docker compose --profile ${next} up -d --no-deps --build ${nextName}
+                                docker compose --profile ${next} up -d --build ${nextName}
                                 rm -f /tmp/clean_env
                             """
 
-                            // 2. 헬스체크: docker exec 로 직접 접근 (compose 파싱 불필요 → 환경변수 경고 없음)
+                            // 2. 헬스체크 (실제 nginx 컨테이너 이름 사용)
                             sh """
                                 IS_HEALTHY=false
                                 for i in \$(seq 1 12); do
-                                    if docker exec nginx nc -z ${nextName} 8080 2>/dev/null; then
+                                    if docker exec ${NGINX} nc -z ${nextName} 8080 2>/dev/null; then
                                         echo "✅ 헬스체크 통과: ${nextName} 서버 기동 완료"
                                         IS_HEALTHY=true
                                         break
@@ -94,7 +108,7 @@ pipeline {
                                     alpine \
                                     sed -i 's|server spring-.*:8080|server ${nextName}:8080|g' /nginx_conf/nginx.conf
 
-                                docker exec nginx nginx -s reload
+                                docker exec ${NGINX} nginx -s reload
                             """
 
                             // 4. 이전 버전 종료
