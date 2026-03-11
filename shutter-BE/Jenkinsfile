@@ -52,11 +52,12 @@ pipeline {
                     echo "현재: ${current} → 다음: ${nextName}"
 
                     dir('shutter-BE') {
-                        // 1. 새 버전 컨테이너 실행 (.env 파일 경로 지정 혹은 호스트 환경변수 활용)
-                        // 주의: Jenkins Container 내부에서 host의 docker compose를 실행하므로, .env 파일 위치를 명시
-                        sh """
-                            docker compose --env-file /home/ubuntu/apps/S14P21A404/shutter-BE/.env --profile ${next} up -d --build ${nextName}
-                        """
+                        // 1. 새 버전 컨테이너 실행 (.env 파일을 Jenkins Secret File 금고에서 꺼내오기)
+                        withCredentials([file(credentialsId: 'ENV_FILE', variable: 'SECRET_ENV')]) {
+                            sh """
+                                docker compose --env-file \${SECRET_ENV} --profile ${next} up -d --build ${nextName}
+                            """
+                        }
 
                         // 2. 헬스체크 (최대 60초)
                         // 컨테이너 포트 8080이 정상적으로 열렸는지 Nginx를 이용해 핑 테스트
