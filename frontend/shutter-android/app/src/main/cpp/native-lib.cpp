@@ -81,7 +81,7 @@ public:
 static DeepfakeDetector detector;
 
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_com_example_shutter_1android_1ai_MainActivity_loadModels(
+Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_loadModels(
         JNIEnv* env,
         jobject /* this */,
         jstring audioModelPath,
@@ -103,7 +103,7 @@ Java_com_example_shutter_1android_1ai_MainActivity_loadModels(
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeAudio(
+Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeepfakeAudio(
         JNIEnv* env,
         jobject /* this */,
         jfloatArray audioData) {
@@ -122,18 +122,16 @@ Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeAudio(
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeVisual(
+Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeepfakeVisual(
         JNIEnv* env,
         jobject /* this */,
-        jstring videoPath,
-        jint frameCount) {
+        jbyteArray buffer,
+        jint width,
+        jint height,
+        jint stride) {
 
-    const char* vPath = env->GetStringUTFChars(videoPath, nullptr);
-    std::string videoPathStr(vPath);
-    env->ReleaseStringUTFChars(videoPath, vPath);
-
-    // 반환: [avgFake, avgReal, loadTime, inferTime, frame0Fake, frame0Real, ...]
-    int resultSize = 4 + (int)frameCount * 2;
+    // Return: [avgFake, avgReal, loadTime, inferTime, frame0Fake, frame0Real, roiL, roiT, roiR, roiB]
+    int resultSize = 10;
     jfloatArray resultMap = env->NewFloatArray(resultSize);
     std::vector<float> results(resultSize, -1.0f);
 
@@ -143,73 +141,66 @@ Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeVisual(
         return resultMap;
     }
 
-    cv::VideoCapture cap(videoPathStr);
-    if (!cap.isOpened()) {
+    results[2] = detector.faceLoadTime;
+    auto start_inference = std::chrono::high_resolution_clock::now();
+
+    jbyte* data = env->GetByteArrayElements(buffer, nullptr);
+    
+    // Create OpenCV Mat from raw RGBA buffer
+    cv::Mat frame(height, width, CV_8UC4, (void*)data, stride);
+
+    if (frame.empty()) {
         results[0] = -2.0f;
+        env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
         env->SetFloatArrayRegion(resultMap, 0, resultSize, results.data());
         return resultMap;
     }
 
     const int W = 224, H = 224, C = 3;
-    float totalFake = 0.0f, totalReal = 0.0f;
-    int validCount = 0;
 
-    results[2] = detector.faceLoadTime;
+    cv::Mat resized;
+    cv::resize(frame, resized, cv::Size(W, H));
+    
+    cv::Mat rgb;
+    cv::cvtColor(resized, rgb, cv::COLOR_RGBA2RGB); 
+    
+    cv::Mat floatMat;
+    rgb.convertTo(floatMat, CV_32F, 1.0f / 255.0f);
 
-    auto start_inference = std::chrono::high_resolution_clock::now();
+    std::vector<float> frameData;
+    frameData.assign((float*)floatMat.datastart, (float*)floatMat.dataend);
 
-    for (int i = 0; i < (int)frameCount; i++) {
-        cv::Mat frame;
-        cap.read(frame);
-        if (frame.empty()) break;
+    auto options = torch::TensorOptions().dtype(torch::kFloat32);
+    torch::Tensor input_tensor = torch::from_blob(
+        frameData.data(), {1, W, H, C}, options).clone();
+    input_tensor = input_tensor.permute({0, 3, 1, 2});
 
-        cv::Mat resized;
-        cv::resize(frame, resized, cv::Size(W, H));
-        cv::Mat rgb;
-        cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
-        cv::Mat floatMat;
-        rgb.convertTo(floatMat, CV_32F, 1.0f / 255.0f);
+    float mean_vals[3] = {0.485f, 0.456f, 0.406f};
+    float std_vals[3]  = {0.229f, 0.224f, 0.225f};
+    auto mean = torch::from_blob(mean_vals, {1, 3, 1, 1}).clone();
+    auto std  = torch::from_blob(std_vals,  {1, 3, 1, 1}).clone();
+    input_tensor = (input_tensor - mean) / std;
 
-        std::vector<float> frameData;
-        frameData.assign((float*)floatMat.datastart, (float*)floatMat.dataend);
+    std::vector<torch::jit::IValue> inputs;
+    inputs.push_back(input_tensor);
+    at::Tensor output = detector.faceModule.forward(inputs).toTensor();
+    at::Tensor prob = torch::softmax(output, 1);
 
-        auto options = torch::TensorOptions().dtype(torch::kFloat32);
-        torch::Tensor input_tensor = torch::from_blob(
-            frameData.data(), {1, W, H, C}, options).clone();
-        input_tensor = input_tensor.permute({0, 3, 1, 2});
+    float fake = prob[0][1].item<float>();
+    float real = prob[0][0].item<float>();
 
-        float mean_vals[3] = {0.485f, 0.456f, 0.406f};
-        float std_vals[3]  = {0.229f, 0.224f, 0.225f};
-        auto mean = torch::from_blob(mean_vals, {1, 3, 1, 1}).clone();
-        auto std  = torch::from_blob(std_vals,  {1, 3, 1, 1}).clone();
-        input_tensor = (input_tensor - mean) / std;
-
-        std::vector<torch::jit::IValue> inputs;
-        inputs.push_back(input_tensor);
-        at::Tensor output = detector.faceModule.forward(inputs).toTensor();
-        at::Tensor prob = torch::softmax(output, 1);
-
-        float fake = prob[0][1].item<float>();
-        float real = prob[0][0].item<float>();
-
-        results[4 + i * 2]     = fake;
-        results[4 + i * 2 + 1] = real;
-
-        totalFake += fake;
-        totalReal += real;
-        validCount++;
-    }
-
-    cap.release();
     results[3] = get_ms(start_inference);
+    results[0] = fake; // avgFake
+    results[1] = real; // avgReal
+    results[4] = fake; // frame0Fake
+    results[5] = real; // frame0Real
+    results[6] = 0.3f; // Dummy ROI left
+    results[7] = 0.22f; // Dummy ROI top
+    results[8] = 0.45f; // Dummy ROI right
+    results[9] = 0.567f; // Dummy ROI bottom
 
-    if (validCount == 0) {
-        results[0] = -2.0f;
-    } else {
-        results[0] = totalFake / validCount;
-        results[1] = totalReal / validCount;
-    }
-
+    env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
     env->SetFloatArrayRegion(resultMap, 0, resultSize, results.data());
+    
     return resultMap;
 }
