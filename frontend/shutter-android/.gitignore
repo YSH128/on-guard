@@ -328,3 +328,6 @@ mydocs/
 
 # Andorid Studio
 .idea/
+
+# md
+frontend_guide.md
