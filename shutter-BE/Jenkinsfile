@@ -56,7 +56,7 @@ pipeline {
                         withCredentials([file(credentialsId: 'ENV_FILE', variable: 'SECRET_ENV')]) {
                             sh """
                                 set -a
-                                source \${SECRET_ENV}
+                                . \${SECRET_ENV}
                                 set +a
                                 docker compose --profile ${next} up -d --build ${nextName}
                             """
