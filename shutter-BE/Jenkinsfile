@@ -106,7 +106,7 @@ pipeline {
                                 docker run --rm \
                                     -v /home/ubuntu/apps/S14P21A404/shutter-BE/nginx:/nginx_conf \
                                     alpine \
-                                    sed -i 's|server spring-.*:8080|server ${nextName}:8080|g' /nginx_conf/nginx.conf
+                                    sed -i 's|set \\\$upstream spring-.*;|set \\\$upstream ${nextName};|g' /nginx_conf/nginx.conf
 
                                 docker exec ${NGINX} nginx -s reload
                             """
