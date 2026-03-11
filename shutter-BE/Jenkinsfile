@@ -40,13 +40,13 @@ pipeline {
         stage('Deploy (Blue-Green)') {
             steps {
                 script {
-                    // 현재 운영 중인 컨테이너 확인 (blue or green)
+                    // 현재 운영 중인 컨테이너 확인 (blue or green). 실행 중(Up)인 컨테이너 기준
                     def current = sh(
-                        script: "docker inspect --format='{{.Name}}' spring-blue 2>/dev/null || echo 'none'",
+                        script: "docker ps --filter 'name=spring-blue' --filter 'status=running' --format '{{.Names}}'",
                         returnStdout: true
                     ).trim()
 
-                    def next    = (current == '/spring-blue') ? 'green' : 'blue'
+                    def next    = (current == 'spring-blue') ? 'green' : 'blue'
                     def nextName = "spring-${next}"
 
                     echo "현재: ${current} → 다음: ${nextName}"
@@ -58,27 +58,39 @@ pipeline {
                         """
 
                         // 2. 헬스체크 (최대 60초)
+                        // 컨테이너 포트 8080이 정상적으로 열렸는지 Nginx를 이용해 핑 테스트
                         sh """
+                            IS_HEALTHY=false
                             for i in \$(seq 1 12); do
-                                STATUS=\$(docker inspect --format='{{.State.Health.Status}}' ${nextName} 2>/dev/null || echo 'starting')
-                                echo "Health: \$STATUS (\$i/12)"
-                                if [ "\$STATUS" = "healthy" ]; then
-                                    echo "헬스체크 통과!"
+                                if docker compose exec nginx nc -z ${nextName} 8080; then
+                                    echo "✅ 헬스체크 통과: ${nextName} 서버 기동 완료"
+                                    IS_HEALTHY=true
                                     break
                                 fi
+                                echo "서버 기동 기다리는 중... (\$i/12)"
                                 sleep 5
                             done
+                            
+                            if [ "\$IS_HEALTHY" = "false" ]; then
+                                echo "❌ 헬스체크 실패! 배포를 중지하고 롤백"
+                                docker stop ${nextName} || true
+                                exit 1
+                            fi
                         """
 
-                        // 3. nginx upstream 전환
+                        // 3. nginx upstream 전환 
+                        // Jenkins 워크스페이스가 아닌, 실제 EC2 호스트 서버의 nginx.conf 파일을 직접 수정
                         sh """
-                            sed -i 's|server spring-.*:8080|server ${nextName}:8080|g' nginx/nginx.conf
+                            docker run --rm -v /home/ubuntu/apps/S14P21A404/shutter-BE/nginx:/nginx_conf alpine sed -i 's|server spring-.*:8080|server ${nextName}:8080|g' /nginx_conf/nginx.conf
                             docker compose exec nginx nginx -s reload
                         """
 
-                        // 4. 이전 버전 종료
+                        // 4. 이전 버전 종료 (안전하게 5초 대기 후 종료)
                         def prevName = (next == 'blue') ? 'spring-green' : 'spring-blue'
-                        sh "docker stop ${prevName} 2>/dev/null || true"
+                        sh """
+                            sleep 5
+                            docker stop ${prevName} 2>/dev/null || true
+                        """
                     }
                 }
             }
