@@ -40,10 +40,13 @@ class WarningOverlayManager(private val context: Context) {
 
     /**
      * 감지 결과에 따라 오버레이를 표시하거나 숨긴다.
+     * @param result     딥페이크 감지 결과
+     * @param roiBitmap  ROI 영역을 crop한 Bitmap (탐지 근거 이미지)
      */
-    fun onDetectionResult(result: DeepfakeDetectionResult) {
+    fun onDetectionResult(result: DeepfakeDetectionResult, roiBitmap: Bitmap? = null) {
         if (result.detected) {
             showWarning()
+            updateFacePreview(roiBitmap)
         } else {
             dismissWarning()
         }
@@ -398,10 +401,20 @@ class WarningOverlayManager(private val context: Context) {
         ).apply { bottomMargin = dpToPx(20) })
 
         // preview container
+        val previewSize = dpToPx(180)
+        val previewRadius = dpToPx(12).toFloat()
+
         val previewBox = FrameLayout(context).apply {
             background = GradientDrawable().apply {
-                setColor(Color.parseColor("#AAAAAA"))
+                setColor(Color.parseColor("#33AAAAAA"))
+                cornerRadius = previewRadius
                 setStroke(dpToPx(1), Color.parseColor("#26FFFFFF"))
+            }
+            clipToOutline = true
+            outlineProvider = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: android.graphics.Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, previewRadius)
+                }
             }
         }
 
@@ -411,10 +424,11 @@ class WarningOverlayManager(private val context: Context) {
         }
 
         previewBox.addView(facePreviewImageView, FrameLayout.LayoutParams(
-            dpToPx(72), dpToPx(72), Gravity.CENTER
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
         ))
         parent.addView(previewBox, LinearLayout.LayoutParams(
-            dpToPx(180), dpToPx(180)
+            previewSize, previewSize
         ).apply {
             gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = dpToPx(24)
         })
