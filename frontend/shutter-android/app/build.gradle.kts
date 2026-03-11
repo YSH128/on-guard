@@ -1,4 +1,3 @@
-import java.util.Properties
 import de.undercouch.gradle.tasks.download.Download
 
 plugins {
@@ -39,16 +38,19 @@ android {
         ndk {
             abiFilters.add("arm64-v8a")
         }
-        val properties = Properties()
+
         val localPropertiesFile = project.rootProject.file("local.properties")
+        var baseUrl = "\"http://localhost:8080/\"" 
+
         if (localPropertiesFile.exists()) {
-            properties.load(localPropertiesFile.inputStream())
+            localPropertiesFile.readLines().forEach { line ->
+                val trimmedLine = line.trim()
+                if (trimmedLine.startsWith("TELEMETRY_BASE_URL=")) {
+                    baseUrl = trimmedLine.substringAfter("=").trim()
+                }
+            }
         }
         
-        // 프로퍼티에서 값을 가져오고, 없을 경우의 기본값 설정
-        val baseUrl = properties.getProperty("TELEMETRY_BASE_URL") ?: "\"http://localhost:8080/\""
-        
-        // BuildConfig.BASE_URL 생성
         buildConfigField("String", "BASE_URL", baseUrl)
     }
 
