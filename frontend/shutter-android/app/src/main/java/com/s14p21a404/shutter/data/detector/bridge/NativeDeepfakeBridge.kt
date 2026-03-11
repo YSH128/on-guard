@@ -20,32 +20,30 @@ import kotlin.concurrent.thread
  * NDK 담당자와 합의한 JNI 함수 시그니처:
  *   request_deepfake_detection(type: String, buffer: ByteArray, resultTextView: TextView)
  *
- * - type: 감지 유형 ("FACE" / "DEEPVOICE")
+ * - type: 감지 유형 ("FACE")
  * - buffer: RGBA 프레임 byte[] (ScreenCaptureManager에서 캡처한 그대로)
  * - resultTextView: 결과를 표시할 TextView (현재 더미 — 향후 NDK 쪽에서 활용 예정)
  */
 class NativeDeepfakeBridge(private val context: Context) {
 
-    private external fun loadModels(audioModelPath: String, faceModelPath: String): FloatArray
+    private external fun loadModels(faceModelPath: String): FloatArray
     private external fun detectDeepfakeVisual(buffer: ByteArray, width: Int, height: Int, stride: Int): FloatArray
 
     init {
         thread {
             try {
-                val audioPath = getAssetFilePath(context, "voice_deepfake_model.pt")
                 val facePath = getAssetFilePath(context, "face_deepfake_model.pt")
                 
                 Log.d("NativeDeepfakeBridge", "모델 로드 시작...")
                 val startCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
-                val results = loadModels(audioPath, facePath)
+                val results = loadModels(facePath)
                 val endCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
                 val loadThreadCpuTime = endCpuTimeMs - startCpuTimeMs
                 
                 val success = results[0] > 0.0f
                 if (success) {
-                    val audioLoadTime = results[1]
-                    val faceLoadTime = results[2]
-                    Log.d("NativeDeepfakeBridge", "모델 로드 성공! 오디오: ${audioLoadTime}ms, 페이스: ${faceLoadTime}ms, CPU: ${loadThreadCpuTime}ms")
+                    val faceLoadTime = results[1]
+                    Log.d("NativeDeepfakeBridge", "모델 로드 성공! 페이스: ${faceLoadTime}ms, CPU: ${loadThreadCpuTime}ms")
                 } else {
                     Log.e("NativeDeepfakeBridge", "모델 로드 실패!")
                 }
@@ -67,7 +65,7 @@ class NativeDeepfakeBridge(private val context: Context) {
     /**
      * NDK AI 추론 요청
      *
-     * @param type           감지 유형 ("FACE" = 영상 딥페이크, "DEEPVOICE" = 음성 딥페이크)
+     * @param type           감지 유형 ("FACE" = 영상 딥페이크)
      * @param buffer         RGBA 프레임 byte[] (캡처된 프레임 버퍼 그대로)
      * @param resultTextView 결과 표시용 TextView (현재 더미)
      */
@@ -76,7 +74,7 @@ class NativeDeepfakeBridge(private val context: Context) {
         buffer: ByteArray,
         resultTextView: TextView
     ) {
-        if (type == "DEEPVOICE") return
+        if (type != "FACE") return
         
         val typeName = "페이스"
         
