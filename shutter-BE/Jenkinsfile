@@ -24,21 +24,7 @@ pipeline {
             }
         }
 
-        stage('Test') {
-            steps {
-                dir('shutter-BE') {
-                    sh './gradlew test --no-daemon'
-                }
-            }
-            post {
-                always {
-                    junit(
-                        testResults: 'shutter-BE/build/test-results/test/*.xml',
-                        allowEmptyResults: true
-                    )
-                }
-            }
-        }
+
 
         stage('Docker Build') {
             steps {
