@@ -1,4 +1,4 @@
-package com.example.shutter_android_ai.telemetry
+package com.s14p21a404.shutter.telemetry
 
 import android.content.Context
 import android.content.Intent
