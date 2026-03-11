@@ -29,7 +29,7 @@ public class SecurityConfig {
                         // 인증 없이 허용
                         .requestMatchers(
                                 "/api/auth/**",
-                                "/api/telemetry/**",
+                                "/api/v1/telemetry/**",
                                 "/actuator/**",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**"

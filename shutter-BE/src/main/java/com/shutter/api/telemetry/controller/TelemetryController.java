@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/telemetry")
+@RequestMapping("/api/v1/telemetry")
 @RequiredArgsConstructor
 public class TelemetryController {
 
