@@ -12,7 +12,7 @@ import com.s14p21a404.shutter.domain.model.DeepfakeDetectionResult
  *
  * ┌──────────────────────────────────────────────────────────┐
  * │  이 클래스의 역할 (앱/Kotlin 담당)                         │
- * │  1. ScreenCaptureManager에서 캡처된 프레임(byte[])을 받아  │
+ * │  1. RepositoryImpl에서 디스패치된 프레임(byte[])을 받아     │
  * │  2. NativeDeepfakeBridge.request_deepfake_detection() 호출│
  * │  3. resultTextView에 NDK가 써주는 결과를 읽어 파싱          │
  * │  4. 결과를 onResult 콜백으로 전달                          │
@@ -45,7 +45,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
     }
 
     /**
-     * ScreenCaptureManager에서 캡처된 프레임을 받아 JNI로 직접 전달한다.
+     * RepositoryImpl에서 디스패치된 프레임을 받아 JNI로 전달한다.
      *
      * 1. request_deepfake_detection("FACE", buffer, dummyTextView) 호출
      * 2. dummyTextView.text를 읽어 결과 파싱
@@ -55,11 +55,11 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
      * @param height    프레임 높이 (px)
      * @param rowStride Image.Plane의 rowStride
      */
-    override fun feedFrame(buffer: ByteArray, width: Int, height: Int, rowStride: Int) {
+    override fun processFrame(buffer: ByteArray, width: Int, height: Int, rowStride: Int) {
         val callback = onResultCallback ?: return
 
         if (!nativeAvailable || bridge == null) {
-            Log.d(TAG, "✅ feedFrame 도달 (${width}x${height}, ${buffer.size}bytes) — NDK SO 미로드로 JNI 호출 대기 중")
+            Log.d(TAG, "✅ processFrame 도달 (${width}x${height}, ${buffer.size}bytes) — NDK SO 미로드로 JNI 호출 대기 중")
             return
         }
 

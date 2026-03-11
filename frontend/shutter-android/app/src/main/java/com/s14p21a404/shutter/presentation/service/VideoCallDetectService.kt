@@ -27,8 +27,8 @@ import kotlinx.coroutines.launch
  * 비즈니스 로직은 UseCase에 위임하고,
  * 이 Service는 생명주기 관리 + Foreground 알림만 담당한다.
  *
- * 화면 캡처(startCapture/stopCapture)는 Data 레이어(DeepfakeDetectionRepository)가
- * 내부적으로 관리하므로, 이 Service에서는 MediaProjection만 전달한다.
+ * 화면 캡처는 Data 레이어(DeepfakeDetectionRepository)의
+ * startDetection/stopDetection 내부에서 자동 관리되므로, 이 Service에서는 MediaProjection만 전달한다.
  */
 class VideoCallDetectService : Service() {
 

@@ -9,7 +9,8 @@ import kotlinx.coroutines.flow.onEach
  * 영상통화 모니터링 UseCase
  *
  * 영상통화 상태를 관찰하여,
- * 영상통화 시작 시 화면 캡처 + 딥페이크 감지를 시작하고, 종료 시 중단한다.
+ * 영상통화 시작 시 딥페이크 감지를 시작하고, 종료 시 중단한다.
+ * 화면 캡처는 startDetection/stopDetection 내부에서 자동 관리된다.
  */
 class MonitorVideoCallUseCase(
     private val videoCallRepo: VideoCallRepository,
@@ -23,9 +24,7 @@ class MonitorVideoCallUseCase(
         .onEach { isVideoCall ->
             if (isVideoCall) {
                 detectionRepo.startDetection()
-                detectionRepo.startCapture()
             } else {
-                detectionRepo.stopCapture()
                 detectionRepo.stopDetection()
             }
         }
