@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 public class TelemetryRequest {
 
     @NotBlank
-    @Pattern(regexp = "FACE|DEEPVOICE", message = "model_type must be FACE or DEEPVOICE")
+    @Pattern(regexp = "FACE|LIP|OCR", message = "model_type must be FACE, LIP, or OCR")
     private String modelType;
 
     @NotBlank
