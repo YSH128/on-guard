@@ -88,52 +88,51 @@ def transformation_from_points(points1, points2):
                                        c2.T - (s2 / s1) * R * c1.T)),
                          np.matrix([0., 0., 1.])])
 
-def load_video(file):
+def extract_frames(file):
+    """영상에서 프레임 추출"""
     p = tempfile.mkdtemp()
-    # 비디오 분해 (1080p -> 처리를 위해 720p 정도로 낮춰서 추출하면 인식률이 더 좋아질 수 있음)
     cmd = f'ffmpeg -y -i "{file}" -r 25 -vf "scale=-1:720" "{p}/%d.jpg"'
     os.system(cmd)
-    
-    files = os.listdir(p)
-    files = sorted(files, key=lambda x: int(os.path.splitext(x)[0]))
-        
-    array = [cv2.imread(os.path.join(p, file)) for file in files]
-    array = list(filter(lambda im: im is not None, array))
-    
-    # device='cuda'가 인식 안될 경우를 대비해 설정 확인
-    fa = face_alignment.FaceAlignment(face_alignment.LandmarksType.TWO_D, flip_input=False, device='cuda')
-    
-    video = []
-    front256 = get_position(256)
-    
-    print(f"인식 시작: 총 {len(array)} 프레임 분석 중...")
+    files = sorted(os.listdir(p), key=lambda x: int(os.path.splitext(x)[0]))
+    array = [cv2.imread(os.path.join(p, f)) for f in files]
+    return list(filter(lambda im: im is not None, array)), p
 
+
+def align_lip_region(scene, fa, front256):
+    """단일 프레임에서 입술 영역 추출"""
+    preds = fa.get_landmarks(scene)
+    if preds is None:
+        return None
+    shape = np.array(preds[0])[17:]
+    M = transformation_from_points(np.matrix(shape), np.matrix(front256))
+    img = cv2.warpAffine(scene, M[:2], (256, 256))
+    (x, y) = front256[-20:].mean(0).astype(np.int32)
+    w = 160 // 2
+    img = img[y-w//2:y+w//2, x-w:x+w, ...]
+    return cv2.resize(img, (128, 64))
+
+
+def load_video(file):
+    """영상 로드 및 전처리"""
+    array, p = extract_frames(file)
+    fa = face_alignment.FaceAlignment(face_alignment.LandmarksType.TWO_D, flip_input=False, device='cuda')
+    front256 = get_position(256)
+
+    print(f"인식 시작: 총 {len(array)} 프레임 분석 중...")
+    video = []
     for i, scene in enumerate(array):
-        # 랜드마크 추출 시도
-        preds = fa.get_landmarks(scene)
-        
-        if preds is not None:
-            shape = np.array(preds[0])
-            shape = shape[17:] # 눈썹 아래 부분부터 사용
-            M = transformation_from_points(np.matrix(shape), np.matrix(front256))
-           
-            img = cv2.warpAffine(scene, M[:2], (256, 256))
-            (x, y) = front256[-20:].mean(0).astype(np.int32)
-            w = 160//2
-            img = img[y-w//2:y+w//2, x-w:x+w, ...]
-            img = cv2.resize(img, (128, 64))
+        img = align_lip_region(scene, fa, front256)
+        if img is not None:
             video.append(img)
         else:
             print(f"Frame {i}: 얼굴 인식 실패")
 
     if len(video) == 0:
         shutil.rmtree(p)
-        raise Exception("영상 전 구간에서 얼굴을 찾을 수 없습니다. 정면이 명확한 영상을 사용해 주세요.")
+        raise Exception("영상 전 구간에서 얼굴을 찾을 수 없습니다.")
 
     video = np.stack(video, axis=0).astype(np.float32)
-    video = torch.FloatTensor(video.transpose(3, 0, 1, 2)) / 255.0
-
-    return video, p
+    return torch.FloatTensor(video.transpose(3, 0, 1, 2)) / 255.0, p
 
 def ctc_decode(y):
     y = y.argmax(-1)
