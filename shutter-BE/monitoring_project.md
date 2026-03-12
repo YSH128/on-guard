@@ -131,19 +131,27 @@ Content-Type: application/json
 
 Body
 
-| 변수명 | 타입 | 필수 여부 | 설명 |
-| --- | --- | --- | --- |
-| model_type | String | Y | 모델 유형 (FACE / DEEPVOICE) |
-| model_version | String | Y | 모델 버전 |
-| inference_success | Boolean | Y | 추론 성공 여부 |
-| failure_type | String | N | 추론 실패 원인 |
-| inference_latency_ms | Integer | Y | 추론 수행 시간 (ms) |
-| risk_score | Double | N | 딥페이크 위험도 점수 (0~1) |
-| timestamp | String | Y | 추론 발생 시각 (ISO 8601) |
-| device_hash | String | Y | 기기 식별 해시 |
-| session_id | String | Y | 통화 세션 식별자 |
-| device_temperature | Float | N | 디바이스 온도 |
+- **Body**
 
+| 변수명 | 타입 | Null | Key | Description |
+| --- | --- | --- | --- | --- |
+| id | int | NO | PRI | Telemetry 데이터 고유 식별자 |
+| user_id | int | YES | MUL | 사용자 식별자 (로그인 사용자일 경우 사용) |
+| model_type | varchar(20) | NO | MUL | 모델 유형 (FACE / LIP / OCR) |
+| model_version | varchar(100) | NO | MUL | AI 모델 버전 |
+| inference_success | tinyint(1) | NO | MUL | 추론 성공 여부 (true / false) |
+| failure_type | varchar(50) | YES |  | 추론 실패 원인 (ex: FACE_NOT_DETECTED, MODEL_LOAD_FAIL 등) |
+| inference_latency_ms | bigint | NO |  | 모델 추론 수행 시간 (ms) |
+| model_load_latency_ms | int | YES |  | 모델 로드 시간 (ms) |
+| risk_score | double | YES |  | 딥페이크 위험도 점수 (0 ~ 1) |
+| timestamp | timestamp | NO | MUL | 추론 발생 시각 |
+| device_hash | varchar(255) | NO |  | 디바이스 식별 해시값 |
+| session_id | varchar(255) | NO |  | 영상통화 세션 식별자 |
+| device_temperature | float | YES |  | 추론 시점 디바이스 온도 (°C) |
+| app_pss_memory | int | NO |  | 앱 PSS 메모리 사용량 (KB) |
+| thermal_throttling_status | int | NO |  | 열 제한 상태 (0: 정상, 1: 발생) |
+| thread_cpu_time | bigint | NO |  | 추론 스레드 CPU 사용 시간 (ms) |
+| battery_current_now | float | NO |  | 현재 배터리 전류 (mA) |
 ---
 
 failure_type ENUM
