@@ -84,20 +84,29 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * 카카오 토큰을 서버로 전달해 JWT를 발급받고 저장한다.
+     * 카카오 user ID를 먼저 조회한 뒤, 서버로 카카오 토큰 + user ID를 전달해 JWT를 발급받는다.
      */
     private fun loginToServer(kakaoAccessToken: String, kakaoRefreshToken: String) {
-        viewModelScope.launch {
-            loginUseCase(kakaoAccessToken, kakaoRefreshToken)
-                .onSuccess {
-                    Log.d(TAG, "서버 JWT 발급 완료")
-                    _isLoggedIn.value = true
-                }
-                .onFailure { e ->
-                    Log.e(TAG, "서버 로그인 실패", e)
-                    _loginError.value = e.message ?: "서버 연결에 실패했습니다."
-                    _isLoggedIn.value = false
-                }
+        UserApiClient.instance.me { user, error ->
+            if (error != null || user?.id == null) {
+                Log.e(TAG, "카카오 user ID 조회 실패", error)
+                _loginError.value = "카카오 사용자 정보를 가져올 수 없습니다."
+                _isLoggedIn.value = false
+                return@me
+            }
+            val kakaoUserId = user.id!!
+            viewModelScope.launch {
+                loginUseCase(kakaoAccessToken, kakaoRefreshToken, kakaoUserId)
+                    .onSuccess {
+                        Log.d(TAG, "서버 JWT 발급 완료 (kakaoUserId=$kakaoUserId)")
+                        _isLoggedIn.value = true
+                    }
+                    .onFailure { e ->
+                        Log.e(TAG, "서버 로그인 실패", e)
+                        _loginError.value = e.message ?: "서버 연결에 실패했습니다."
+                        _isLoggedIn.value = false
+                    }
+            }
         }
     }
 

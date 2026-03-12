@@ -6,7 +6,7 @@ import retrofit2.http.POST
 
 // 1. 데이터 클래스 (새로운 지표 모두 포함)
 data class TelemetryRequest(
-    val user_id : Int,
+    val user_id: Long,
     val model_type: String,
     val model_version: String,
     val inference_success: Boolean,

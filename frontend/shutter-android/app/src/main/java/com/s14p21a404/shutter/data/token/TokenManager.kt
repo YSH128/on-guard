@@ -5,6 +5,7 @@ import android.content.Context
 private const val PREFS_NAME = "shutter_auth"
 private const val KEY_ACCESS_TOKEN = "access_token"
 private const val KEY_REFRESH_TOKEN = "refresh_token"
+private const val KEY_USER_ID = "user_id"
 
 class TokenManager(context: Context) {
 
@@ -27,10 +28,17 @@ class TokenManager(context: Context) {
 
     fun hasToken(): Boolean = getAccessToken() != null
 
+    fun saveUserId(userId: Long) {
+        prefs.edit().putLong(KEY_USER_ID, userId).apply()
+    }
+
+    fun getUserId(): Long = prefs.getLong(KEY_USER_ID, -1L)
+
     fun clearTokens() {
         prefs.edit()
             .remove(KEY_ACCESS_TOKEN)
             .remove(KEY_REFRESH_TOKEN)
+            .remove(KEY_USER_ID)
             .apply()
     }
 }
