@@ -2,6 +2,7 @@
 .gradle
 gradle/caches
 gradle/daemon
+gradle/kotlin-profile
 /local.properties
 /.idea/caches
 /.idea/libraries
