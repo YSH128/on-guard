@@ -23,14 +23,23 @@ public class User {
     private Integer id;
 
     @Column(name = "kakao_id", nullable = false, unique = true)
-    private String kakaoId;
+    private Long kakaoId;
 
-    @Column(name = "created_at")
+    @Column(name = "name", nullable = false, length = 50)
+    private String name;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role", nullable = false, length = 10)
+    private Role role;
+
+    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
     @Builder
-    public User(String kakaoId) {
+    public User(Long kakaoId, String name, Role role) {
         this.kakaoId = kakaoId;
+        this.name = name;
+        this.role = role;
         this.createdAt = LocalDateTime.now();
     }
 }

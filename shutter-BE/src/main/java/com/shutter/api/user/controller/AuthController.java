@@ -30,10 +30,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<LoginResponse>> kakaoLogin(
             @Valid @RequestBody KakaoLoginRequest request
     ) {
-        LoginResponse response = authService.login(
-                request.kakaoAccessToken(),
-                request.kakaoRefreshToken()
-        );
+        LoginResponse response = authService.login(request);
         return ResponseEntity.ok(ApiResponse.of("로그인 성공", response));
     }
 

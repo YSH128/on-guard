@@ -1,0 +1,37 @@
+services:
+  # ───── MySQL (Local Development) ─────
+  mysql:
+    image: "mysql:8.0"
+    container_name: shutter-local-mysql
+    ports:
+      - "3307:3306" # 호스트의 3307 포트를 컨테이너의 3306에 매핑 (application-local.yaml 기준)
+    environment:
+      # 팀원들이 환경변수 파일(.env 등)에 값을 설정해서 사용해야 합니다.
+      - MYSQL_DATABASE=${DB_NAME}
+      - MYSQL_USER=${DB_USERNAME}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - local_mysql_data:/var/lib/mysql
+      - ./mysql-init.sql:/docker-entrypoint-initdb.d/init.sql # 초기화 SQL이 있다면 사용
+    restart: unless-stopped
+
+  # ───── Redis (Local Development) ─────
+  redis:
+    image: "redis:alpine"
+    container_name: shutter-local-redis
+    ports:
+      - "6379:6379" # 호스트의 6379 포트를 컨테이너의 6379에 매핑
+    volumes:
+      - local_redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  # 로컬 개발용 볼륨을 따로 파서 운영용/다른 설정과 충돌하지 않도록 합니다.
+  local_mysql_data:
+  local_redis_data:
