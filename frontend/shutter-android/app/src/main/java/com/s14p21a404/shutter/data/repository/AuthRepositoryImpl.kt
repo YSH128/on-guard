@@ -14,14 +14,12 @@ class AuthRepositoryImpl(
     override suspend fun loginWithKakao(
         kakaoAccessToken: String,
         kakaoRefreshToken: String,
-        kakaoUserId: Long,
     ): Result<Unit> = runCatching {
         val response = apiService.loginWithKakao(
-            KakaoLoginRequest(kakaoAccessToken, kakaoRefreshToken, kakaoUserId)
+            KakaoLoginRequest(kakaoAccessToken, kakaoRefreshToken)
         )
         check(response.success) { response.message }
         tokenManager.saveTokens(response.data.accessToken, response.data.refreshToken)
-        tokenManager.saveUserId(kakaoUserId)
     }
 
     override suspend fun refreshToken(): Result<Unit> = runCatching {

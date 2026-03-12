@@ -9,7 +9,6 @@ import retrofit2.http.POST
 data class KakaoLoginRequest(
     @SerializedName("kakao_access_token") val kakaoAccessToken: String,
     @SerializedName("kakao_refresh_token") val kakaoRefreshToken: String,
-    @SerializedName("kakao_user_id") val kakaoUserId: Long,
 )
 
 data class KakaoLoginResponse(
