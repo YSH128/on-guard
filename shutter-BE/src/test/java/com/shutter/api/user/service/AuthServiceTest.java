@@ -7,7 +7,9 @@ import com.shutter.api.global.exception.BusinessException;
 import com.shutter.api.global.exception.ErrorCode;
 import com.shutter.api.global.jwt.JwtProvider;
 import com.shutter.api.global.jwt.JwtRefreshTokenService;
+import com.shutter.api.user.domain.Role;
 import com.shutter.api.user.domain.User;
+import com.shutter.api.user.dto.request.KakaoLoginRequest;
 import com.shutter.api.user.dto.response.LoginResponse;
 import com.shutter.api.user.repository.UserRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -17,6 +19,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.lang.reflect.Field;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,16 +35,21 @@ class AuthServiceTest {
     @InjectMocks
     private AuthService authService;
 
-    @Mock private KakaoApiClient kakaoApiClient;
-    @Mock private KakaoTokenService kakaoTokenService;
-    @Mock private UserRepository userRepository;
-    @Mock private JwtProvider jwtProvider;
-    @Mock private JwtRefreshTokenService jwtRefreshTokenService;
+    @Mock
+    private KakaoApiClient kakaoApiClient;
+    @Mock
+    private KakaoTokenService kakaoTokenService;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private JwtProvider jwtProvider;
+    @Mock
+    private JwtRefreshTokenService jwtRefreshTokenService;
 
-    private static final String KAKAO_ACCESS_TOKEN  = "kakao-access-token";
+    private static final String KAKAO_ACCESS_TOKEN = "kakao-access-token";
     private static final String KAKAO_REFRESH_TOKEN = "kakao-refresh-token";
-    private static final Long   KAKAO_ID            = 12345L;
-    private static final Long   USER_ID             = 1L;
+    private static final Long KAKAO_ID = 12345L;
+    private static final Long USER_ID = 1L;
 
     // ───────────────────── login() ─────────────────────
 
@@ -59,7 +67,7 @@ class AuthServiceTest {
         given(jwtProvider.generateRefreshToken(USER_ID)).willReturn("refresh-token");
 
         // when
-        LoginResponse response = authService.login(new com.shutter.api.user.dto.request.KakaoLoginRequest(KAKAO_ACCESS_TOKEN, KAKAO_REFRESH_TOKEN, com.shutter.api.user.domain.Role.WARD));
+        LoginResponse response = authService.login(new KakaoLoginRequest(KAKAO_ACCESS_TOKEN, KAKAO_REFRESH_TOKEN));
 
         // then
         assertThat(response.accessToken()).isEqualTo("access-token");
@@ -82,7 +90,7 @@ class AuthServiceTest {
         given(jwtProvider.generateRefreshToken(USER_ID)).willReturn("refresh-token");
 
         // when
-        LoginResponse response = authService.login(new com.shutter.api.user.dto.request.KakaoLoginRequest(KAKAO_ACCESS_TOKEN, KAKAO_REFRESH_TOKEN, com.shutter.api.user.domain.Role.WARD));
+        LoginResponse response = authService.login(new KakaoLoginRequest(KAKAO_ACCESS_TOKEN, KAKAO_REFRESH_TOKEN));
 
         // then
         assertThat(response.accessToken()).isEqualTo("access-token");
@@ -142,9 +150,8 @@ class AuthServiceTest {
 
     private KakaoUserInfoResponse mockKakaoUserInfo(Long kakaoId) {
         KakaoUserInfoResponse response = new KakaoUserInfoResponse();
-        // KakaoUserInfoResponse는 @JsonIgnoreProperties 사용 중이므로 리플렉션으로 설정
         try {
-            var field = KakaoUserInfoResponse.class.getDeclaredField("kakaoId");
+            Field field = KakaoUserInfoResponse.class.getDeclaredField("kakaoId");
             field.setAccessible(true);
             field.set(response, kakaoId);
         } catch (Exception e) {
@@ -157,10 +164,10 @@ class AuthServiceTest {
         User user = User.builder()
                 .kakaoId(kakaoId)
                 .name("test-name")
-                .role(com.shutter.api.user.domain.Role.WARD)
                 .build();
+        user.assignRole(Role.WARD);
         try {
-            var field = User.class.getDeclaredField("id");
+            Field field = User.class.getDeclaredField("id");
             field.setAccessible(true);
             field.set(user, userId.intValue());
         } catch (Exception e) {

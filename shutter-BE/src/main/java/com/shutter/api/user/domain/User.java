@@ -29,17 +29,21 @@ public class User {
     private String name;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "role", nullable = false, length = 10)
+    @Column(name = "role", length = 10)
     private Role role;
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
     @Builder
-    public User(Long kakaoId, String name, Role role) {
+    public User(Long kakaoId, String name) {
         this.kakaoId = kakaoId;
         this.name = name;
-        this.role = role;
+        this.role = null;
         this.createdAt = LocalDateTime.now();
+    }
+
+    public void assignRole(Role role) {
+        this.role = role;
     }
 }
