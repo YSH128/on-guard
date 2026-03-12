@@ -45,13 +45,10 @@ public class AuthService {
         User user = userRepository.findByKakaoId(kakaoId)
                 .orElseGet(() -> {
                     log.info("New user registered. kakaoId={}", kakaoId);
-                    
-                    // role 값이 명시되지 않았을 경우 기본값 할당(혹은 에러처리)을 위해 Null 체크를 권장.
-                    // 현재는 request의 role을 그대로 사용.
+
                     return userRepository.save(User.builder()
                             .kakaoId(kakaoId)
                             .name(userInfo.getNickname() != null ? userInfo.getNickname() : "Unknown")
-                            .role(request.role())
                             .build());
                 });
 

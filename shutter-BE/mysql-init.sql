@@ -6,7 +6,7 @@ CREATE TABLE users (
                        id INT AUTO_INCREMENT PRIMARY KEY,
                        kakao_id BIGINT NOT NULL UNIQUE,       -- 카카오 회원번호 (숫자형)
                        name VARCHAR(50) NOT NULL,             -- 지도에서 표시될 이름
-                       role VARCHAR(10) NOT NULL,             -- 'guardian' or 'ward'
+                       role VARCHAR(10),             -- 'guardian' or 'ward'
                        created_at TIMESTAMP
 );
 
