@@ -17,7 +17,8 @@ fun MainScreen(
     uiState: MainUiState,
     onRequestPermissions: () -> Unit,
     onRequestOverlayPermission: () -> Unit,
-    onToggleService: () -> Unit
+    onToggleService: () -> Unit,
+    onLogout: () -> Unit
 ) {
     Scaffold(
         modifier = Modifier.fillMaxSize()
@@ -164,6 +165,25 @@ fun MainScreen(
                         fontWeight = FontWeight.Bold
                     )
                 }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // 로그아웃 버튼
+            OutlinedButton(
+                onClick = onLogout,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            ) {
+                Text(
+                    text = "로그아웃",
+                    fontSize = 15.sp
+                )
             }
         }
     }
