@@ -1,6 +1,6 @@
 package com.s14p21a404.shutter.network
 
-import com.s14p21a404.shutter.auth.TokenManager
+import com.s14p21a404.shutter.data.token.TokenManager
 import kotlinx.coroutines.runBlocking
 import okhttp3.Authenticator
 import okhttp3.Request

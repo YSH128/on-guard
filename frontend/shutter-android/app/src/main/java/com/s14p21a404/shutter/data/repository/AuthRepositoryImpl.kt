@@ -1,19 +1,17 @@
-package com.s14p21a404.shutter.auth
+package com.s14p21a404.shutter.data.repository
 
+import com.s14p21a404.shutter.data.token.TokenManager
+import com.s14p21a404.shutter.domain.repository.AuthRepository
 import com.s14p21a404.shutter.network.ApiService
 import com.s14p21a404.shutter.network.KakaoLoginRequest
 import com.s14p21a404.shutter.network.RefreshRequest
 
-class AuthRepository(
+class AuthRepositoryImpl(
     private val apiService: ApiService,
     private val tokenManager: TokenManager,
-) {
+) : AuthRepository {
 
-    /**
-     * 카카오 토큰으로 서버 JWT를 발급받아 저장한다.
-     * @return 성공 여부
-     */
-    suspend fun loginWithKakao(
+    override suspend fun loginWithKakao(
         kakaoAccessToken: String,
         kakaoRefreshToken: String,
     ): Result<Unit> = runCatching {
@@ -24,12 +22,7 @@ class AuthRepository(
         tokenManager.saveTokens(response.data.accessToken, response.data.refreshToken)
     }
 
-    /**
-     * Refresh Token으로 새 Access Token을 발급받아 저장한다.
-     * Refresh Token이 없거나 서버가 INVALID_REFRESH_TOKEN을 반환하면 토큰을 삭제한다.
-     * @return 성공 여부
-     */
-    suspend fun refreshToken(): Result<Unit> = runCatching {
+    override suspend fun refreshToken(): Result<Unit> = runCatching {
         val refreshToken = tokenManager.getRefreshToken()
             ?: error("INVALID_REFRESH_TOKEN")
 
@@ -41,4 +34,12 @@ class AuthRepository(
             tokenManager.clearTokens()
         }
     }
+
+    override fun hasToken(): Boolean = tokenManager.hasToken()
+
+    override fun getAccessToken(): String? = tokenManager.getAccessToken()
+
+    override fun getRefreshToken(): String? = tokenManager.getRefreshToken()
+
+    override fun logout() = tokenManager.clearTokens()
 }

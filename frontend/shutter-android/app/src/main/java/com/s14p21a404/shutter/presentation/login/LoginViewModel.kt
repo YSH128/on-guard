@@ -9,9 +9,10 @@ import com.kakao.sdk.auth.model.OAuthToken
 import com.kakao.sdk.common.model.ClientError
 import com.kakao.sdk.common.model.ClientErrorCause
 import com.kakao.sdk.user.UserApiClient
-import com.s14p21a404.shutter.auth.AuthRepository
-import com.s14p21a404.shutter.auth.TokenManager
-import com.s14p21a404.shutter.network.RetrofitClient
+import com.s14p21a404.shutter.di.ServiceLocator
+import com.s14p21a404.shutter.domain.usecase.GetAccessTokenUseCase
+import com.s14p21a404.shutter.domain.usecase.LoginUseCase
+import com.s14p21a404.shutter.domain.usecase.LogoutUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,11 +26,10 @@ import kotlinx.coroutines.launch
  */
 class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val tokenManager = TokenManager(application)
-    private val authRepository = AuthRepository(
-        apiService = RetrofitClient.create(tokenManager),
-        tokenManager = tokenManager,
-    )
+    private val serviceLocator = ServiceLocator.getInstance(application)
+    private val loginUseCase: LoginUseCase = serviceLocator.loginUseCase
+    private val logoutUseCase: LogoutUseCase = serviceLocator.logoutUseCase
+    private val getAccessTokenUseCase: GetAccessTokenUseCase = serviceLocator.getAccessTokenUseCase
 
     private val _isLoggedIn = MutableStateFlow<Boolean?>(null)
     val isLoggedIn: StateFlow<Boolean?> = _isLoggedIn.asStateFlow()
@@ -45,7 +45,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
      * 로컬에 저장된 JWT Access Token이 있으면 바로 로그인 상태로 진입한다.
      */
     private fun checkLoginState() {
-        _isLoggedIn.value = tokenManager.hasToken()
+        _isLoggedIn.value = getAccessTokenUseCase()
     }
 
     /**
@@ -88,7 +88,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
      */
     private fun loginToServer(kakaoAccessToken: String, kakaoRefreshToken: String) {
         viewModelScope.launch {
-            authRepository.loginWithKakao(kakaoAccessToken, kakaoRefreshToken)
+            loginUseCase(kakaoAccessToken, kakaoRefreshToken)
                 .onSuccess {
                     Log.d(TAG, "서버 JWT 발급 완료")
                     _isLoggedIn.value = true
@@ -112,7 +112,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
      * 로그아웃: 저장된 토큰을 삭제하고 로그인 화면으로 이동한다.
      */
     fun logout() {
-        tokenManager.clearTokens()
+        logoutUseCase()
         _isLoggedIn.value = false
     }
 

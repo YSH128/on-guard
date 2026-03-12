@@ -1,7 +1,7 @@
 package com.s14p21a404.shutter.network
 
 import com.s14p21a404.shutter.BuildConfig
-import com.s14p21a404.shutter.auth.TokenManager
+import com.s14p21a404.shutter.data.token.TokenManager
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor

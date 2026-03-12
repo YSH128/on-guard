@@ -1,4 +1,4 @@
-package com.s14p21a404.shutter.auth
+package com.s14p21a404.shutter.data.token
 
 import android.content.Context
 
