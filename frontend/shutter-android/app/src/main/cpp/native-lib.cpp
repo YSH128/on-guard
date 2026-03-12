@@ -17,30 +17,12 @@ float get_ms(std::chrono::high_resolution_clock::time_point start) {
 
 class DeepfakeDetector {
 public:
-    torch::jit::script::Module audioModule;
     torch::jit::script::Module faceModule;
-    bool isAudioLoaded = false;
     bool isFaceLoaded = false;
-    float audioLoadTime = 0.0f;
     float faceLoadTime = 0.0f;
 
-    bool loadModels(const std::string& audioPath, const std::string& facePath) {
+    bool loadModels(const std::string& facePath) {
         bool success = true;
-
-        if (!isAudioLoaded) {
-            try {
-                auto start_audio = std::chrono::high_resolution_clock::now();
-                audioModule = torch::jit::load(audioPath);
-                audioModule.eval();
-                audioLoadTime = get_ms(start_audio);
-                isAudioLoaded = true;
-                LOGD("Audio model loaded. Time: %.2f ms", audioLoadTime);
-            } catch (const c10::Error& e) {
-                LOGE("Error loading audio model");
-                isAudioLoaded = false;
-                success = false;
-            }
-        }
 
         if (!isFaceLoaded) {
             try {
@@ -59,23 +41,6 @@ public:
 
         return success;
     }
-
-    std::vector<float> detectAudio(const float* audioData, int length) {
-        if (!isAudioLoaded) return {-1.0f, 0.0f, 0.0f};
-
-        auto start_inference = std::chrono::high_resolution_clock::now();
-        auto options = torch::TensorOptions().dtype(torch::kFloat32);
-        torch::Tensor input_tensor = torch::from_blob((void*)audioData, {1, length}, options);
-
-        std::vector<torch::jit::IValue> inputs;
-        inputs.push_back(input_tensor);
-
-        at::Tensor output = audioModule.forward(inputs).toTensor();
-        float score = output.item<float>();
-
-        float inferenceTime = get_ms(start_inference);
-        return {score, audioLoadTime, inferenceTime};
-    }
 };
 
 static DeepfakeDetector detector;
@@ -84,39 +49,17 @@ extern "C" JNIEXPORT jfloatArray JNICALL
 Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_loadModels(
         JNIEnv* env,
         jobject /* this */,
-        jstring audioModelPath,
         jstring faceModelPath) {
 
-    const char* aPath = env->GetStringUTFChars(audioModelPath, nullptr);
     const char* fPath = env->GetStringUTFChars(faceModelPath, nullptr);
 
-    bool loadSuccess = detector.loadModels(aPath, fPath);
+    bool loadSuccess = detector.loadModels(fPath);
 
-    env->ReleaseStringUTFChars(audioModelPath, aPath);
     env->ReleaseStringUTFChars(faceModelPath, fPath);
 
-    float results[3] = { loadSuccess ? 1.0f : 0.0f, detector.audioLoadTime, detector.faceLoadTime };
-    jfloatArray resultMap = env->NewFloatArray(3);
-    env->SetFloatArrayRegion(resultMap, 0, 3, results);
-
-    return resultMap;
-}
-
-extern "C" JNIEXPORT jfloatArray JNICALL
-Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeepfakeAudio(
-        JNIEnv* env,
-        jobject /* this */,
-        jfloatArray audioData) {
-
-    jfloat* data = env->GetFloatArrayElements(audioData, nullptr);
-    jsize length = env->GetArrayLength(audioData);
-
-    std::vector<float> results = detector.detectAudio(data, length);
-
-    env->ReleaseFloatArrayElements(audioData, data, JNI_ABORT);
-
-    jfloatArray resultMap = env->NewFloatArray(results.size());
-    env->SetFloatArrayRegion(resultMap, 0, results.size(), results.data());
+    float results[2] = { loadSuccess ? 1.0f : 0.0f, detector.faceLoadTime };
+    jfloatArray resultMap = env->NewFloatArray(2);
+    env->SetFloatArrayRegion(resultMap, 0, 2, results);
 
     return resultMap;
 }

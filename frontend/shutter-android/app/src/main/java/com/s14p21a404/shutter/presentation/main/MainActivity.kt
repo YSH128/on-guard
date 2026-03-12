@@ -16,11 +16,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import com.s14p21a404.shutter.presentation.login.LoginScreen
+import com.s14p21a404.shutter.presentation.login.LoginViewModel
 import com.s14p21a404.shutter.presentation.service.VideoCallDetectService
 import com.s14p21a404.shutter.ui.theme.ShutterandroidTheme
 
 class MainActivity : ComponentActivity() {
 
+    private val loginViewModel: LoginViewModel by viewModels()
     private val viewModel: MainViewModel by viewModels()
 
     // 런타임 권한 요청 런처
@@ -49,13 +52,33 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             ShutterandroidTheme {
-                val uiState by viewModel.uiState.collectAsState()
-                MainScreen(
-                    uiState = uiState,
-                    onRequestPermissions = { requestAllPermissions() },
-                    onRequestOverlayPermission = { requestOverlayPermission() },
-                    onToggleService = { toggleService() }
-                )
+                val isLoggedIn by loginViewModel.isLoggedIn.collectAsState()
+                val loginError by loginViewModel.loginError.collectAsState()
+
+                when (isLoggedIn) {
+                    null -> {
+                        // 로그인 상태 확인 중 — 빈 화면 유지 (스플래시 대체)
+                    }
+                    false -> {
+                        // 로그인 필요 → 로그인 화면
+                        LoginScreen(
+                            onKakaoLogin = { loginViewModel.loginWithKakao(this@MainActivity) },
+                            loginError = loginError,
+                            onDismissError = { loginViewModel.dismissLoginError() }
+                        )
+                    }
+                    true -> {
+                        // 로그인 완료 → 메인 화면
+                        val uiState by viewModel.uiState.collectAsState()
+                        MainScreen(
+                            uiState = uiState,
+                            onRequestPermissions = { requestAllPermissions() },
+                            onRequestOverlayPermission = { requestOverlayPermission() },
+                            onToggleService = { toggleService() },
+                            onLogout = { loginViewModel.logout() }
+                        )
+                    }
+                }
             }
         }
     }
@@ -133,4 +156,3 @@ class MainActivity : ComponentActivity() {
         private const val TAG = "MainActivity"
     }
 }
-

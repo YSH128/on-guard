@@ -1,3 +1,5 @@
+import java.util.Properties
+
 import de.undercouch.gradle.tasks.download.Download
 
 plugins {
@@ -9,6 +11,11 @@ plugins {
 val nativeAarDeps by configurations.creating {
     isCanBeResolved = true
     isCanBeConsumed = false
+}
+
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) load(file.inputStream())
 }
 
 android {
@@ -29,6 +36,13 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+        val kakaoKey = localProperties.getProperty("kakao.native.app.key", "")
+        resValue("string", "kakao_app_key", kakaoKey)
+        resValue("string", "kakao_oauth_scheme", "kakao$kakaoKey")
+
+        val serverBaseUrl = localProperties.getProperty("server.base.url", "https://your-server.com/")
+        buildConfigField("String", "SERVER_BASE_URL", "\"$serverBaseUrl\"")
+
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"
@@ -40,7 +54,7 @@ android {
         }
 
         val localPropertiesFile = project.rootProject.file("local.properties")
-        var baseUrl = "\"http://localhost:8080/\"" 
+        var baseUrl = "\"http://localhost:8080/\""
 
         if (localPropertiesFile.exists()) {
             localPropertiesFile.readLines().forEach { line ->
@@ -50,7 +64,7 @@ android {
                 }
             }
         }
-        
+
         buildConfigField("String", "BASE_URL", baseUrl)
     }
 
@@ -84,6 +98,7 @@ android {
     }
     buildFeatures {
         compose = true
+        resValues = true
         buildConfig = true // BuildConfig 활성화
     }
 }
@@ -99,6 +114,10 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.kakao.sdk.user)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.gson)
+    implementation(libs.okhttp.logging)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -106,7 +125,7 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-    
+
     val pytorch = "org.pytorch:pytorch_android:2.1.0"
     val opencv = "com.quickbirdstudios:opencv:4.5.3.0"
     implementation(pytorch)
