@@ -10,6 +10,14 @@ import retrofit2.converter.gson.GsonConverterFactory
 
 object RetrofitClient {
 
+    val telemetryApi: TelemetryApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.BASE_URL)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(TelemetryApi::class.java)
+    }
+
     /** 인증이 필요한 API 요청에 Bearer 토큰을 자동으로 붙여주는 인터셉터 */
     fun create(tokenManager: TokenManager): ApiService {
         // 토큰 갱신 전용 클라이언트 — Authenticator 없이 단순 호출만 수행 (무한루프 방지)
