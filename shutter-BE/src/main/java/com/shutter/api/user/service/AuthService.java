@@ -8,6 +8,7 @@ import com.shutter.api.global.exception.ErrorCode;
 import com.shutter.api.global.jwt.JwtProvider;
 import com.shutter.api.global.jwt.JwtRefreshTokenService;
 import com.shutter.api.user.domain.User;
+import com.shutter.api.user.dto.request.KakaoLoginRequest;
 import com.shutter.api.user.dto.response.LoginResponse;
 import com.shutter.api.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -35,24 +36,29 @@ public class AuthService {
      * 4. 자체 JWT 발급 + Refresh Token Redis 저장
      */
     @Transactional
-    public LoginResponse login(String kakaoAccessToken, String kakaoRefreshToken) {
+    public LoginResponse login(KakaoLoginRequest request) {
         // 1. 카카오 유저 정보 조회 (토큰 유효성 검증 포함)
-        KakaoUserInfoResponse userInfo = kakaoApiClient.getUserInfo(kakaoAccessToken);
-        String kakaoId = String.valueOf(userInfo.getKakaoId());
+        KakaoUserInfoResponse userInfo = kakaoApiClient.getUserInfo(request.kakaoAccessToken());
+        Long kakaoId = userInfo.getKakaoId();
 
         // 2. 신규 유저 자동 가입 / 기존 유저 조회
         User user = userRepository.findByKakaoId(kakaoId)
                 .orElseGet(() -> {
                     log.info("New user registered. kakaoId={}", kakaoId);
+                    
+                    // role 값이 명시되지 않았을 경우 기본값 할당(혹은 에러처리)을 위해 Null 체크를 권장.
+                    // 현재는 request의 role을 그대로 사용.
                     return userRepository.save(User.builder()
                             .kakaoId(kakaoId)
+                            .name(userInfo.getNickname() != null ? userInfo.getNickname() : "Unknown")
+                            .role(request.role())
                             .build());
                 });
 
         Long userId = user.getId().longValue();
 
         // 3. 카카오 토큰 Redis 저장 (알림 메시지 전송용)
-        kakaoTokenService.saveTokens(userId, kakaoAccessToken, kakaoRefreshToken);
+        kakaoTokenService.saveTokens(userId, request.kakaoAccessToken(), request.kakaoRefreshToken());
 
         // 4. 자체 JWT 발급 + Refresh Token Redis 저장
         String accessToken  = jwtProvider.generateAccessToken(userId);

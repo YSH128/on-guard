@@ -51,15 +51,15 @@ class AuthServiceTest {
         // given
         KakaoUserInfoResponse userInfo = mockKakaoUserInfo(KAKAO_ID);
         given(kakaoApiClient.getUserInfo(KAKAO_ACCESS_TOKEN)).willReturn(userInfo);
-        given(userRepository.findByKakaoId(String.valueOf(KAKAO_ID))).willReturn(Optional.empty());
+        given(userRepository.findByKakaoId(KAKAO_ID)).willReturn(Optional.empty());
 
-        User savedUser = mockUser(USER_ID, String.valueOf(KAKAO_ID));
+        User savedUser = mockUser(USER_ID, KAKAO_ID);
         given(userRepository.save(any(User.class))).willReturn(savedUser);
         given(jwtProvider.generateAccessToken(USER_ID)).willReturn("access-token");
         given(jwtProvider.generateRefreshToken(USER_ID)).willReturn("refresh-token");
 
         // when
-        LoginResponse response = authService.login(KAKAO_ACCESS_TOKEN, KAKAO_REFRESH_TOKEN);
+        LoginResponse response = authService.login(new com.shutter.api.user.dto.request.KakaoLoginRequest(KAKAO_ACCESS_TOKEN, KAKAO_REFRESH_TOKEN, com.shutter.api.user.domain.Role.WARD));
 
         // then
         assertThat(response.accessToken()).isEqualTo("access-token");
@@ -76,13 +76,13 @@ class AuthServiceTest {
         KakaoUserInfoResponse userInfo = mockKakaoUserInfo(KAKAO_ID);
         given(kakaoApiClient.getUserInfo(KAKAO_ACCESS_TOKEN)).willReturn(userInfo);
 
-        User existingUser = mockUser(USER_ID, String.valueOf(KAKAO_ID));
-        given(userRepository.findByKakaoId(String.valueOf(KAKAO_ID))).willReturn(Optional.of(existingUser));
+        User existingUser = mockUser(USER_ID, KAKAO_ID);
+        given(userRepository.findByKakaoId(KAKAO_ID)).willReturn(Optional.of(existingUser));
         given(jwtProvider.generateAccessToken(USER_ID)).willReturn("access-token");
         given(jwtProvider.generateRefreshToken(USER_ID)).willReturn("refresh-token");
 
         // when
-        LoginResponse response = authService.login(KAKAO_ACCESS_TOKEN, KAKAO_REFRESH_TOKEN);
+        LoginResponse response = authService.login(new com.shutter.api.user.dto.request.KakaoLoginRequest(KAKAO_ACCESS_TOKEN, KAKAO_REFRESH_TOKEN, com.shutter.api.user.domain.Role.WARD));
 
         // then
         assertThat(response.accessToken()).isEqualTo("access-token");
@@ -153,8 +153,12 @@ class AuthServiceTest {
         return response;
     }
 
-    private User mockUser(Long userId, String kakaoId) {
-        User user = User.builder().kakaoId(kakaoId).build();
+    private User mockUser(Long userId, Long kakaoId) {
+        User user = User.builder()
+                .kakaoId(kakaoId)
+                .name("test-name")
+                .role(com.shutter.api.user.domain.Role.WARD)
+                .build();
         try {
             var field = User.class.getDeclaredField("id");
             field.setAccessible(true);
