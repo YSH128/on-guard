@@ -3,6 +3,8 @@
 gradle/caches
 gradle/daemon
 gradle/kotlin-profile
+gradle/wrapper/dists
+gradle/native
 /local.properties
 /.idea/caches
 /.idea/libraries
