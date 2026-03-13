@@ -41,5 +41,9 @@ class AuthRepositoryImpl(
 
     override fun getRefreshToken(): String? = tokenManager.getRefreshToken()
 
+    override fun saveUserId(userId: Long) = tokenManager.saveUserId(userId)
+
+    override fun getUserId(): Long = tokenManager.getUserId()
+
     override fun logout() = tokenManager.clearTokens()
 }

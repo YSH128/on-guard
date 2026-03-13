@@ -12,8 +12,10 @@ import com.s14p21a404.shutter.domain.repository.DeepfakeDetectionRepository
 import com.s14p21a404.shutter.domain.repository.VideoCallRepository
 import com.s14p21a404.shutter.domain.usecase.DetectDeepfakeUseCase
 import com.s14p21a404.shutter.domain.usecase.GetAccessTokenUseCase
+import com.s14p21a404.shutter.domain.usecase.GetUserIdUseCase
 import com.s14p21a404.shutter.domain.usecase.LoginUseCase
 import com.s14p21a404.shutter.domain.usecase.LogoutUseCase
+import com.s14p21a404.shutter.domain.usecase.SaveUserIdUseCase
 import com.s14p21a404.shutter.domain.usecase.MonitorVideoCallUseCase
 import com.s14p21a404.shutter.network.RetrofitClient
 import com.s14p21a404.shutter.presentation.overlay.WarningOverlayManager
@@ -48,6 +50,8 @@ class ServiceLocator private constructor(context: Context) {
     val loginUseCase = LoginUseCase(authRepository)
     val logoutUseCase = LogoutUseCase(authRepository)
     val getAccessTokenUseCase = GetAccessTokenUseCase(authRepository)
+    val saveUserIdUseCase = SaveUserIdUseCase(authRepository)
+    val getUserIdUseCase = GetUserIdUseCase(authRepository)
 
     val monitorVideoCallUseCase = MonitorVideoCallUseCase(
         videoCallRepo = videoCallRepository,

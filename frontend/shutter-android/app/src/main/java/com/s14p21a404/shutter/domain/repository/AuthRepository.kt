@@ -6,5 +6,7 @@ interface AuthRepository {
     fun hasToken(): Boolean
     fun getAccessToken(): String?
     fun getRefreshToken(): String?
+    fun saveUserId(userId: Long)
+    fun getUserId(): Long
     fun logout()
 }
