@@ -19,11 +19,11 @@ data class KakaoLoginRequest(
  * 신규 회원: isNewUser=true  → kakaoId 만 존재
  */
 data class KakaoLoginData(
-    @SerializedName("isNewUser") val isNewUser: Boolean,
-    @SerializedName("userId") val userId: Long? = null,
-    @SerializedName("accessToken") val accessToken: String? = null,
-    @SerializedName("refreshToken") val refreshToken: String? = null,
-    @SerializedName("kakaoId") val kakaoId: Long? = null,
+    @SerializedName("is_new_user") val isNewUser: Boolean,
+    @SerializedName("user_id") val userId: Long? = null,
+    @SerializedName("access_token") val accessToken: String? = null,
+    @SerializedName("refresh_token") val refreshToken: String? = null,
+    @SerializedName("kakao_id") val kakaoId: Long? = null,
 )
 
 data class KakaoLoginResponse(
@@ -41,10 +41,10 @@ data class RegisterRequest(
 )
 
 data class RegisterData(
-    @SerializedName("isNewUser") val isNewUser: Boolean,
-    @SerializedName("userId") val userId: Long,
-    @SerializedName("accessToken") val accessToken: String,
-    @SerializedName("refreshToken") val refreshToken: String,
+    @SerializedName("is_new_user") val isNewUser: Boolean,
+    @SerializedName("user_id") val userId: Long,
+    @SerializedName("access_token") val accessToken: String,
+    @SerializedName("refresh_token") val refreshToken: String,
 )
 
 data class RegisterResponse(
