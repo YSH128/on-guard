@@ -6,13 +6,13 @@ import retrofit2.http.POST
 
 // 1. 데이터 클래스 (새로운 지표 모두 포함)
 data class TelemetryRequest(
-    val user_id: Long,
+    val user_id: Int,
     val model_type: String,
     val model_version: String,
     val inference_success: Boolean,
     val failure_type: String? = null,
     val inference_latency_ms: Long,
-    val risk_score: Float, 
+    val risk_score: Double, 
     val timestamp: String,
     val device_hash: String,        // SharedPreferences에 저장된 UUID
     // val device_model: String,       // DeviceStatusProvider.getDeviceModelName()
@@ -22,11 +22,11 @@ data class TelemetryRequest(
     val thermal_throttling_status: Int,
     val thread_cpu_time: Long,
     val battery_current_now: Float,
-    val model_load_latency_ms: Long
+    val model_load_latency_ms: Int
 )
 
 // 2. API 인터페이스
 interface TelemetryApi {
-    @POST("telemetry")
+    @POST("/api/v1/telemetry")
     suspend fun sendTelemetry(@Body request: TelemetryRequest): Response<Unit>
 }
