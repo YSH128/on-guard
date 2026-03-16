@@ -83,6 +83,7 @@ services:
   # ───── MySQL ─────
   mysql:
     image: "mysql:8.0"
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci # ← 한국어 인코딩 설정
     expose:
       - "3306" # ← 외부 포트 제거, 내부망에서만 접근
     environment:
