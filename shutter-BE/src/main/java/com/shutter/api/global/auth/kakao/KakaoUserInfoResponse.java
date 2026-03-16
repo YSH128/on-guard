@@ -24,6 +24,9 @@ public class KakaoUserInfoResponse {
         @JsonProperty("profile")
         private Profile profile;
 
+        @JsonProperty("name")
+        private String name;
+
         @Getter
         @JsonIgnoreProperties(ignoreUnknown = true)
         public static class Profile {
@@ -33,6 +36,13 @@ public class KakaoUserInfoResponse {
             @JsonProperty("profile_image_url")
             private String profileImageUrl;
         }
+    }
+
+    public String getName() {
+        if (kakaoAccount != null) {
+            return kakaoAccount.getName();
+        }
+        return null;
     }
 
     public String getNickname() {

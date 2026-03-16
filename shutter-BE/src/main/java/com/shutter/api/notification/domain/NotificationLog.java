@@ -17,7 +17,7 @@ public class NotificationLog {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer id;
+    private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ward_id", nullable = false)
@@ -26,6 +26,9 @@ public class NotificationLog {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "guardian_id", nullable = false)
     private User guardian;
+
+    @Column(name = "caller", length = 50)
+    private String caller;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
@@ -38,9 +41,10 @@ public class NotificationLog {
     private LocalDateTime sentAt;
 
     @Builder
-    public NotificationLog(User ward, User guardian, NotificationStatus status, String failReason, LocalDateTime sentAt) {
+    public NotificationLog(User ward, User guardian, String caller, NotificationStatus status, String failReason, LocalDateTime sentAt) {
         this.ward = ward;
         this.guardian = guardian;
+        this.caller = caller;
         this.status = status;
         this.failReason = failReason;
         this.sentAt = sentAt;

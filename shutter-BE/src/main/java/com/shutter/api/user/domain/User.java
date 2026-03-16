@@ -20,7 +20,7 @@ public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer id;
+    private Long id;
 
     @Column(name = "kakao_id", nullable = false, unique = true)
     private Long kakaoId;
@@ -32,18 +32,26 @@ public class User {
     @Column(name = "role", length = 10)
     private Role role;
 
+    @Column(name = "device_uuid", nullable = false, length = 36)
+    private String deviceUuid;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
     @Builder
-    public User(Long kakaoId, String name) {
+    public User(Long kakaoId, String name, String deviceUuid) {
         this.kakaoId = kakaoId;
         this.name = name;
+        this.deviceUuid = deviceUuid;
         this.role = null;
         this.createdAt = LocalDateTime.now();
     }
 
     public void assignRole(Role role) {
         this.role = role;
+    }
+
+    public void updateDeviceUuid(String deviceUuid) {
+        this.deviceUuid = deviceUuid;
     }
 }

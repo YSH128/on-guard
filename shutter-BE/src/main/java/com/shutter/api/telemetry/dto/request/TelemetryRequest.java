@@ -42,7 +42,7 @@ public class TelemetryRequest {
 
     private Float deviceTemperature;
 
-    private Integer userId;
+    private Long userId;
 
     @NotNull
     private Integer appPssMemory;
