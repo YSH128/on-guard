@@ -27,6 +27,9 @@ public class NotificationLog {
     @JoinColumn(name = "guardian_id", nullable = false)
     private User guardian;
 
+    @Column(name = "caller", length = 50)
+    private String caller;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private NotificationStatus status;
@@ -38,9 +41,10 @@ public class NotificationLog {
     private LocalDateTime sentAt;
 
     @Builder
-    public NotificationLog(User ward, User guardian, NotificationStatus status, String failReason, LocalDateTime sentAt) {
+    public NotificationLog(User ward, User guardian, String caller, NotificationStatus status, String failReason, LocalDateTime sentAt) {
         this.ward = ward;
         this.guardian = guardian;
+        this.caller = caller;
         this.status = status;
         this.failReason = failReason;
         this.sentAt = sentAt;

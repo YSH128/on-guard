@@ -7,6 +7,7 @@ CREATE TABLE users (
                        kakao_id BIGINT NOT NULL UNIQUE,       -- 카카오 회원번호 (숫자형)
                        name VARCHAR(50) NOT NULL,             -- 지도에서 표시될 이름
                        role VARCHAR(10),             -- 'guardian' or 'ward'
+                       device_uuid VARCHAR(36) NOT NULL,    -- 기기 고유 ID
                        created_at TIMESTAMP
 );
 
@@ -52,6 +53,7 @@ CREATE TABLE notification_logs (
                                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
                                    ward_id BIGINT NOT NULL,                   -- 피싱이 감지된 피보호자 (user_id → ward_id로 명확화)
                                    guardian_id BIGINT NOT NULL,              -- 알림을 받는 보호자
+                                   caller VARCHAR(50),                      -- 발신자 정보
                                    status VARCHAR(20) NOT NULL,           -- SUCCESS, FAIL
                                    fail_reason VARCHAR(500),
                                    sent_at TIMESTAMP,

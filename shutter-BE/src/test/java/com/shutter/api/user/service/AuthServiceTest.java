@@ -7,14 +7,15 @@ import com.shutter.api.global.exception.BusinessException;
 import com.shutter.api.global.exception.ErrorCode;
 import com.shutter.api.global.jwt.JwtProvider;
 import com.shutter.api.global.jwt.JwtRefreshTokenService;
-import com.shutter.api.user.domain.Role;
 import com.shutter.api.user.domain.User;
 import com.shutter.api.user.dto.request.KakaoLoginRequest;
+import com.shutter.api.user.dto.request.RegisterRequest;
 import com.shutter.api.user.dto.response.LoginResponse;
 import com.shutter.api.user.repository.UserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -48,131 +49,146 @@ class AuthServiceTest {
 
     private static final String KAKAO_ACCESS_TOKEN = "kakao-access-token";
     private static final String KAKAO_REFRESH_TOKEN = "kakao-refresh-token";
+    private static final String DEVICE_UUID = "device-uuid-1234";
     private static final Long KAKAO_ID = 12345L;
     private static final Long USER_ID = 1L;
+    private static final String USER_NAME = "test-user";
 
     // ───────────────────── login() ─────────────────────
 
     @Test
-    @DisplayName("신규 유저 - 카카오 로그인 시 users 테이블에 저장되고 JWT가 발급된다")
-    void login_newUser_savesAndReturnsJwt() {
+    @DisplayName("신규 유저 - 로그인 시 isNewUser 플래그와 카카오 ID를 반환한다")
+    void login_newUser_returnsIsNewUserFlag() {
         // given
+        KakaoLoginRequest request = mockKakaoLoginRequest();
         KakaoUserInfoResponse userInfo = mockKakaoUserInfo(KAKAO_ID);
         given(kakaoApiClient.getUserInfo(KAKAO_ACCESS_TOKEN)).willReturn(userInfo);
         given(userRepository.findByKakaoId(KAKAO_ID)).willReturn(Optional.empty());
 
-        User savedUser = mockUser(USER_ID, KAKAO_ID);
-        given(userRepository.save(any(User.class))).willReturn(savedUser);
-        given(jwtProvider.generateAccessToken(USER_ID)).willReturn("access-token");
-        given(jwtProvider.generateRefreshToken(USER_ID)).willReturn("refresh-token");
-
         // when
-        LoginResponse response = authService.login(new KakaoLoginRequest(KAKAO_ACCESS_TOKEN, KAKAO_REFRESH_TOKEN));
+        LoginResponse response = authService.login(request);
 
         // then
-        assertThat(response.accessToken()).isEqualTo("access-token");
-        assertThat(response.refreshToken()).isEqualTo("refresh-token");
-        then(userRepository).should(times(1)).save(any(User.class));
-        then(kakaoTokenService).should(times(1)).saveTokens(USER_ID, KAKAO_ACCESS_TOKEN, KAKAO_REFRESH_TOKEN);
-        then(jwtRefreshTokenService).should(times(1)).save(USER_ID, "refresh-token");
+        assertThat(response.getIsNewUser()).isTrue();
+        assertThat(response.getKakaoId()).isEqualTo(KAKAO_ID);
+        assertThat(response.getUserId()).isNull();
+        assertThat(response.getAccessToken()).isNull();
+        then(userRepository).should(times(0)).save(any(User.class));
+        then(kakaoTokenService).should(times(1)).saveTokens(KAKAO_ID, KAKAO_ACCESS_TOKEN, KAKAO_REFRESH_TOKEN);
     }
 
     @Test
-    @DisplayName("기존 유저 - 재로그인 시 users 테이블에 저장하지 않고 JWT가 발급된다")
-    void login_existingUser_doesNotSaveAndReturnsJwt() {
+    @DisplayName("기존 유저 - 로그인 시 JWT를 발급하고 deviceUuid를 업데이트한다")
+    void login_existingUser_returnsJwtAndUpdatesUuid() {
         // given
+        KakaoLoginRequest request = mockKakaoLoginRequest();
         KakaoUserInfoResponse userInfo = mockKakaoUserInfo(KAKAO_ID);
         given(kakaoApiClient.getUserInfo(KAKAO_ACCESS_TOKEN)).willReturn(userInfo);
 
-        User existingUser = mockUser(USER_ID, KAKAO_ID);
+        User existingUser = mockUser(USER_ID, KAKAO_ID, "old-uuid");
         given(userRepository.findByKakaoId(KAKAO_ID)).willReturn(Optional.of(existingUser));
         given(jwtProvider.generateAccessToken(USER_ID)).willReturn("access-token");
         given(jwtProvider.generateRefreshToken(USER_ID)).willReturn("refresh-token");
 
         // when
-        LoginResponse response = authService.login(new KakaoLoginRequest(KAKAO_ACCESS_TOKEN, KAKAO_REFRESH_TOKEN));
+        LoginResponse response = authService.login(request);
 
         // then
-        assertThat(response.accessToken()).isEqualTo("access-token");
-        then(userRepository).should(times(0)).save(any(User.class));  // INSERT 없음
+        assertThat(response.getIsNewUser()).isFalse();
+        assertThat(response.getAccessToken()).isEqualTo("access-token");
+        assertThat(response.getUserId()).isEqualTo(USER_ID);
+        then(userRepository).should(times(0)).save(any(User.class));
+        assertThat(existingUser.getDeviceUuid()).isEqualTo(DEVICE_UUID); // verify uuid update
     }
 
-    // ───────────────────── refresh() ─────────────────────
+    // ───────────────────── register() ─────────────────────
 
     @Test
-    @DisplayName("유효한 Refresh Token으로 새 Access Token이 발급된다")
-    void refresh_validToken_returnsNewAccessToken() {
+    @DisplayName("신규 유저 - 회원가입 시 유저를 생성하고 JWT를 발급한다")
+    void register_newUser_createsUserAndReturnsJwt() {
         // given
-        String refreshToken = "valid-refresh-token";
-        given(jwtProvider.validateToken(refreshToken)).willReturn(true);
-        given(jwtProvider.getUserId(refreshToken)).willReturn(USER_ID);
-        given(jwtRefreshTokenService.find(USER_ID)).willReturn(Optional.of(refreshToken));
-        given(jwtProvider.generateAccessToken(USER_ID)).willReturn("new-access-token");
+        RegisterRequest request = mockRegisterRequest();
+        given(userRepository.findByKakaoId(KAKAO_ID)).willReturn(Optional.empty());
+        given(jwtProvider.generateAccessToken(any(Long.class))).willReturn("access-token");
+        given(jwtProvider.generateRefreshToken(any(Long.class))).willReturn("refresh-token");
+
+        // mock kakao token migration
+        given(kakaoTokenService.getAccessToken(KAKAO_ID)).willReturn(Optional.of(KAKAO_ACCESS_TOKEN));
+        given(kakaoTokenService.getRefreshToken(KAKAO_ID)).willReturn(Optional.of(KAKAO_REFRESH_TOKEN));
 
         // when
-        String newAccessToken = authService.refresh(refreshToken);
+        authService.register(request);
 
         // then
-        assertThat(newAccessToken).isEqualTo("new-access-token");
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        then(userRepository).should(times(1)).save(userCaptor.capture());
+        User savedUser = userCaptor.getValue();
+        assertThat(savedUser.getKakaoId()).isEqualTo(KAKAO_ID);
+        assertThat(savedUser.getName()).isEqualTo(USER_NAME);
+        assertThat(savedUser.getDeviceUuid()).isEqualTo(DEVICE_UUID);
+
+        then(kakaoTokenService).should(times(1)).saveTokens(any(Long.class), any(), any());
+        then(kakaoTokenService).should(times(1)).deleteTokens(KAKAO_ID);
+        then(jwtRefreshTokenService).should(times(1)).save(any(Long.class), any());
     }
 
     @Test
-    @DisplayName("만료된 Refresh Token이면 INVALID_REFRESH_TOKEN 예외가 발생한다")
-    void refresh_invalidToken_throwsException() {
+    @DisplayName("회원가입 - 이미 존재하는 유저일 경우 예외를 발생시킨다")
+    void register_existingUser_throwsException() {
         // given
-        String expiredToken = "expired-refresh-token";
-        given(jwtProvider.validateToken(expiredToken)).willReturn(false);
+        RegisterRequest request = mockRegisterRequest();
+        given(userRepository.findByKakaoId(KAKAO_ID)).willReturn(Optional.of(mockUser(USER_ID, KAKAO_ID, DEVICE_UUID)));
 
         // when & then
-        assertThatThrownBy(() -> authService.refresh(expiredToken))
+        assertThatThrownBy(() -> authService.register(request))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
-                        .isEqualTo(ErrorCode.INVALID_REFRESH_TOKEN));
+                        .isEqualTo(ErrorCode.USER_ALREADY_EXISTS));
     }
 
-    @Test
-    @DisplayName("Redis에 없는 Refresh Token이면 INVALID_REFRESH_TOKEN 예외가 발생한다")
-    void refresh_tokenNotInRedis_throwsException() {
-        // given
-        String refreshToken = "not-in-redis-token";
-        given(jwtProvider.validateToken(refreshToken)).willReturn(true);
-        given(jwtProvider.getUserId(refreshToken)).willReturn(USER_ID);
-        given(jwtRefreshTokenService.find(USER_ID)).willReturn(Optional.empty());
-
-        // when & then
-        assertThatThrownBy(() -> authService.refresh(refreshToken))
-                .isInstanceOf(BusinessException.class)
-                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
-                        .isEqualTo(ErrorCode.INVALID_REFRESH_TOKEN));
-    }
 
     // ───────────────────── helpers ─────────────────────
 
+    private KakaoLoginRequest mockKakaoLoginRequest() {
+        KakaoLoginRequest request = new KakaoLoginRequest();
+        setField(request, "kakaoAccessToken", KAKAO_ACCESS_TOKEN);
+        setField(request, "kakaoRefreshToken", KAKAO_REFRESH_TOKEN);
+        setField(request, "deviceUuid", DEVICE_UUID);
+        return request;
+    }
+
+    private RegisterRequest mockRegisterRequest() {
+        RegisterRequest request = new RegisterRequest();
+        setField(request, "kakaoId", KAKAO_ID);
+        setField(request, "name", USER_NAME);
+        setField(request, "deviceUuid", DEVICE_UUID);
+        return request;
+    }
+
     private KakaoUserInfoResponse mockKakaoUserInfo(Long kakaoId) {
         KakaoUserInfoResponse response = new KakaoUserInfoResponse();
-        try {
-            Field field = KakaoUserInfoResponse.class.getDeclaredField("kakaoId");
-            field.setAccessible(true);
-            field.set(response, kakaoId);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        setField(response, "kakaoId", kakaoId);
         return response;
     }
 
-    private User mockUser(Long userId, Long kakaoId) {
+    private User mockUser(Long userId, Long kakaoId, String deviceUuid) {
         User user = User.builder()
                 .kakaoId(kakaoId)
                 .name("test-name")
+                .deviceUuid(deviceUuid)
                 .build();
-        user.assignRole(Role.WARD);
-        try {
-            Field field = User.class.getDeclaredField("id");
-            field.setAccessible(true);
-            field.set(user, userId.intValue());
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        setField(user, "id", userId);
         return user;
     }
+
+    private void setField(Object target, String fieldName, Object value) {
+        try {
+            Field field = target.getClass().getDeclaredField(fieldName);
+            field.setAccessible(true);
+            field.set(target, value);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to set field: " + fieldName, e);
+        }
+    }
 }
+
