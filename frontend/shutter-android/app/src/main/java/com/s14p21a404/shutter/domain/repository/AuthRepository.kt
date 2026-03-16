@@ -1,7 +1,10 @@
 package com.s14p21a404.shutter.domain.repository
 
+import com.s14p21a404.shutter.domain.model.KakaoLoginResult
+
 interface AuthRepository {
-    suspend fun loginWithKakao(kakaoAccessToken: String, kakaoRefreshToken: String): Result<Unit>
+    suspend fun loginWithKakao(kakaoAccessToken: String, kakaoRefreshToken: String): Result<KakaoLoginResult>
+    suspend fun register(kakaoId: Long, name: String): Result<Unit>
     suspend fun refreshToken(): Result<Unit>
     fun hasToken(): Boolean
     fun getAccessToken(): String?
