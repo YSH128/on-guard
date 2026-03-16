@@ -11,7 +11,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.s14p21a404.shutter.presentation.navigation.AppScaffold
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun MainScreen(
     uiState: MainUiState,
@@ -19,6 +21,30 @@ fun MainScreen(
     onRequestOverlayPermission: () -> Unit,
     onToggleService: () -> Unit,
     onLogout: () -> Unit
+) {
+    // 모든 권한이 충족되면 → AppScaffold (하단 네비게이션 + 홈/위치/설정 페이지)
+    if (uiState.allPermissionsGranted && uiState.overlayPermissionGranted) {
+        AppScaffold(onLogout = onLogout)
+    } else {
+        // 권한 미충족 → 기존 권한 요청 UI
+        PermissionRequestScreen(
+            uiState = uiState,
+            onRequestPermissions = onRequestPermissions,
+            onRequestOverlayPermission = onRequestOverlayPermission,
+            onLogout = onLogout
+        )
+    }
+}
+
+/**
+ * 권한 요청 화면 — 필요한 권한을 안내하고 요청 버튼을 보여준다.
+ */
+@Composable
+private fun PermissionRequestScreen(
+    uiState: MainUiState,
+    onRequestPermissions: () -> Unit,
+    onRequestOverlayPermission: () -> Unit,
+    onLogout: () -> Unit,
 ) {
     Scaffold(
         modifier = Modifier.fillMaxSize()
@@ -48,43 +74,6 @@ fun MainScreen(
             )
 
             Spacer(modifier = Modifier.height(48.dp))
-
-            // 상태 카드
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (uiState.isServiceRunning)
-                        Color(0xFFE8F5E9)
-                    else
-                        MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = if (uiState.isServiceRunning) "🟢 보호 활성화" else "⚪ 보호 비활성화",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = if (uiState.isServiceRunning)
-                            "영상통화를 실시간으로 모니터링 중입니다."
-                        else
-                            "서비스를 시작하여 보호를 활성화하세요.",
-                        fontSize = 14.sp,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
 
             // 권한 미충족 시 권한 요청 버튼
             if (!uiState.allPermissionsGranted) {
@@ -144,28 +133,6 @@ fun MainScreen(
                 )
             }
 
-            // 모든 권한 충족 시 서비스 토글 버튼
-            if (uiState.allPermissionsGranted && uiState.overlayPermissionGranted) {
-                Button(
-                    onClick = onToggleService,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (uiState.isServiceRunning)
-                            MaterialTheme.colorScheme.error
-                        else
-                            MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Text(
-                        text = if (uiState.isServiceRunning) "보호 중지" else "보호 시작",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
