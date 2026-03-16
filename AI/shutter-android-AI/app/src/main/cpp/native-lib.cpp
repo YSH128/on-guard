@@ -118,6 +118,7 @@ public:
     float faceLoadTime = 0.0f;
 
     bool loadModels(const std::string& facePath) {
+
         if (!isFaceLoaded) {
             try {
                 auto start_face = std::chrono::high_resolution_clock::now();
@@ -194,7 +195,7 @@ public:
 static DeepfakeDetector detector;
 
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_com_example_shutter_1android_1ai_MainActivity_loadModels(
+Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_loadModels(
         JNIEnv* env,
         jobject /* this */,
         jstring faceModelPath) {
@@ -211,11 +212,13 @@ Java_com_example_shutter_1android_1ai_MainActivity_loadModels(
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeVisual(
+Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeepfakeVisual(
         JNIEnv* env,
-        jobject,
+        jobject /* this */,
         jbyteArray buffer,
-        jint width, jint height, jint stride) {
+        jint width, 
+        jint height, 
+        jint stride) {
 
     // cam size를 모르는 상태에서 일단 실패 케이스 처리용 최소 배열 준비
     auto makeErrorResult = [&](float code) -> jfloatArray {
@@ -243,7 +246,10 @@ Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeVisual(
     std::vector<float> frameData(
         (float*)floatMat.datastart, (float*)floatMat.dataend);
 
+    auto start_inference = std::chrono::high_resolution_clock::now();
     auto fr = detector.infer(frameData.data());
+    float inferTime = get_ms(start_inference);
+
     env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
 
     if (!fr.valid) return makeErrorResult(-3.0f);
@@ -257,7 +263,7 @@ Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeVisual(
     results[0] = fr.fakeProb;
     results[1] = fr.realProb;
     results[2] = detector.faceLoadTime;
-    results[3] = 0.0f; // inferTime은 infer() 밖에서 측정 불가 → 필요시 infer()에 타이머 추가
+    results[3] = inferTime;  // inferTime은 infer() 밖에서 측정 불가 → 필요시 infer()에 타이머 추가
 
     std::copy(fr.cam.begin(), fr.cam.end(), results.data() + 4);
 
