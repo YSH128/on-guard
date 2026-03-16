@@ -5,6 +5,8 @@ import android.graphics.Canvas as AndroidCanvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -46,10 +48,14 @@ import com.kakao.vectormap.LatLng
 import com.kakao.vectormap.MapLifeCycleCallback
 import com.kakao.vectormap.MapView
 import com.kakao.vectormap.camera.CameraUpdateFactory
+import com.kakao.vectormap.label.Label
 import com.kakao.vectormap.label.LabelOptions
 import com.kakao.vectormap.label.LabelStyle
 import com.kakao.vectormap.label.LabelStyles
 import com.s14p21a404.shutter.R
+
+private const val PULSE_FRAME_COUNT = 40
+private const val PULSE_INTERVAL_MS = 40L
 
 // ── 보호자 데이터 모델 (샘플) ──
 
@@ -273,8 +279,14 @@ private fun KakaoMapWithMarker(
         createShieldMarkerBitmap(context, density.density)
     }
 
+    // 범위 파장 프레임 Bitmap 배열 생성 (크기+투명도 변화)
+    val pulseFrames = remember(context) {
+        createPulseFrames(density.density, PULSE_FRAME_COUNT)
+    }
+
     val mapView = remember { MapView(context) }
     var mapStarted by remember { mutableStateOf(false) }
+    val animHandler = remember { Handler(Looper.getMainLooper()) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -292,6 +304,7 @@ private fun KakaoMapWithMarker(
 
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+            animHandler.removeCallbacksAndMessages(null)
             if (mapStarted) mapView.finish()
         }
     }
@@ -324,6 +337,41 @@ private fun KakaoMapWithMarker(
                                         // ── 좌표 고정 마커(Label) 추가 ──
                                         val labelLayer = kakaoMap.labelManager?.layer
                                         labelLayer?.zOrder = 10001
+
+                                        // 범위 파장 프레임 스타일 등록
+                                        val pulseStyles = pulseFrames.map { frame ->
+                                            kakaoMap.labelManager?.addLabelStyles(
+                                                LabelStyles.from(
+                                                    LabelStyle.from(frame)
+                                                        .setAnchorPoint(0.5f, 0.5f)
+                                                )
+                                            )
+                                        }
+
+                                        var pulseLabel: Label? = null
+                                        if (pulseStyles.firstOrNull() != null) {
+                                            pulseLabel = labelLayer?.addLabel(
+                                                LabelOptions.from("pulse", targetLatLng)
+                                                    .setStyles(pulseStyles.first()!!)
+                                                    .setRank(1L)
+                                            )
+                                        }
+
+                                        // 파장 애니메이션 시작
+                                        var frameIndex = 0
+                                        val animRunnable = object : Runnable {
+                                            override fun run() {
+                                                frameIndex = (frameIndex + 1) % PULSE_FRAME_COUNT
+                                                val nextStyle = pulseStyles.getOrNull(frameIndex)
+                                                if (nextStyle != null && pulseLabel != null) {
+                                                    pulseLabel.changeStyles(nextStyle)
+                                                }
+                                                animHandler.postDelayed(this, PULSE_INTERVAL_MS)
+                                            }
+                                        }
+                                        animHandler.postDelayed(animRunnable, PULSE_INTERVAL_MS)
+
+                                        // 방패 마커 (최상위)
                                         val style = kakaoMap.labelManager
                                             ?.addLabelStyles(
                                                 LabelStyles.from(
@@ -354,6 +402,38 @@ private fun KakaoMapWithMarker(
         },
         modifier = Modifier.fillMaxSize()
     )
+}
+
+/**
+ * 파장 펄스 애니메이션 프레임 배열 생성
+ * 원이 작은 상태에서 커지면서 투명해지다 사라지고 반복
+ */
+private fun createPulseFrames(density: Float, frameCount: Int): List<Bitmap> {
+    val maxSize = (160 * density).toInt()
+    val minScale = 0.3f
+    val maxScale = 1.0f
+    val startAlpha = 0x99  // ~60%
+
+    return (0 until frameCount).map { i ->
+        val t = i.toFloat() / frameCount  // 0..1 진행도
+
+        val scale = minScale + (maxScale - minScale) * t
+        val alpha = (startAlpha * (1f - t)).toInt().coerceIn(0, 255)
+
+        val size = (maxSize * scale).toInt().coerceAtLeast(1)
+        val bitmap = Bitmap.createBitmap(maxSize, maxSize, Bitmap.Config.ARGB_8888)
+        val canvas = AndroidCanvas(bitmap)
+        val cx = maxSize / 2f
+        val cy = maxSize / 2f
+
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = (alpha shl 24) or 0xB5DFFF
+            style = Paint.Style.FILL
+        }
+        canvas.drawCircle(cx, cy, size * 0.5f, paint)
+
+        bitmap
+    }
 }
 
 /**
