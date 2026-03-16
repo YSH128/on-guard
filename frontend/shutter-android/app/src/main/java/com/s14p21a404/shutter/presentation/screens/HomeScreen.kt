@@ -1,7 +1,11 @@
 package com.s14p21a404.shutter.presentation.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,6 +17,10 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -93,6 +101,12 @@ private val TextSecondary = Color(0xFF6B7280)
 private val TimelineLine = Color(0xFFE5E5E5)
 private val DotActive = Color(0xFF3D527E)
 private val DotInactive = Color(0xFFCED5E1)
+private val ChipSelectedBg = Color(0xFF3D527E)
+private val ChipSelectedText = Color.White
+private val ChipUnselectedBg = Color.White
+private val ChipUnselectedText = Color(0xFF9CA3AF)
+
+private val filterNames = listOf("전체", "정민수", "김철수", "이영희")
 
 /**
  * 홈 화면 — 참고 프로젝트 디자인 1:1 구현
@@ -230,6 +244,8 @@ private fun HeaderSection(
 
 @Composable
 private fun TimelineSection() {
+    var selectedFilter by remember { mutableStateOf("전체") }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -242,12 +258,57 @@ private fun TimelineSection() {
             color = TextPrimary
         )
 
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 필터 칩 가로 스크롤
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(filterNames) { name ->
+                FilterChip(
+                    text = name,
+                    selected = selectedFilter == name,
+                    onClick = { selectedFilter = name }
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
 
-        sampleTimeline.forEachIndexed { index, item ->
-            TimelineRow(item = item, isLast = index == sampleTimeline.lastIndex)
+        // 필터링된 타임라인
+        val filtered = if (selectedFilter == "전체") {
+            sampleTimeline
+        } else {
+            sampleTimeline.filter { it.personLabel?.contains(selectedFilter) == true }
+        }
+
+        filtered.forEachIndexed { index, item ->
+            TimelineRow(item = item, isLast = index == filtered.lastIndex)
         }
     }
+}
+
+@Composable
+private fun FilterChip(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Text(
+        text = text,
+        fontSize = 14.sp,
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+        color = if (selected) ChipSelectedText else ChipUnselectedText,
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(if (selected) ChipSelectedBg else ChipUnselectedBg)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    )
 }
 
 @Composable
