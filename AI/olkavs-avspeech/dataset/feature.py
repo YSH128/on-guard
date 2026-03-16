@@ -4,11 +4,13 @@ import numpy as np
 from torch import Tensor, FloatTensor
 import torchaudio
 
-if platform.system() == 'Windows':
-    torchaudio.set_audio_backend("soundfile")
-elif platform.system() == 'Linux':
-    torchaudio.set_audio_backend("sox_io")
-
+try:
+    if platform.system() == 'Windows':
+        torchaudio.set_audio_backend("soundfile")
+    elif platform.system() == 'Linux':
+        torchaudio.set_audio_backend("sox_io")
+except AttributeError:
+    pass
 
 class Spectrogram(object):
     """

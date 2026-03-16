@@ -11,11 +11,13 @@ import torch
 from torch import Tensor
 
 import platform
-if platform.system() == 'Windows':
-    torchaudio.set_audio_backend("soundfile")
-elif platform.system() == 'Linux':
-    torchaudio.set_audio_backend("sox_io")
-
+try:
+    if platform.system() == 'Windows':
+        torchaudio.set_audio_backend("soundfile")
+    elif platform.system() == 'Linux':
+        torchaudio.set_audio_backend("sox_io")
+except AttributeError:
+    pass
 import sys
 INT_INF = sys.maxsize # 2^63 - 1
 
