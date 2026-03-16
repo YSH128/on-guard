@@ -72,6 +72,9 @@ class NativeDeepfakeBridge(private val context: Context) {
     fun request_deepfake_detection(
         type: String,
         buffer: ByteArray,
+        width: Int,
+        height: Int,
+        stride: Int,
         resultTextView: TextView
     ) {
         if (type != "FACE") return
@@ -80,12 +83,6 @@ class NativeDeepfakeBridge(private val context: Context) {
         
         try {
             val startCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
-            
-            // 단일 프레임 바이트 배열 전송 가정을 위해 기기 해상도 추론
-            val metrics = context.resources.displayMetrics
-            val height = metrics.heightPixels
-            val width = metrics.widthPixels
-            val stride = if (height > 0) buffer.size / height else width * 4
             
             // 추론 요청
             val results = detectDeepfakeVisual(buffer, width, height, stride)

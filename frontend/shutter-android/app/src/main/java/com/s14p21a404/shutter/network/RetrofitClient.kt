@@ -10,9 +10,33 @@ import retrofit2.converter.gson.GsonConverterFactory
 
 object RetrofitClient {
 
-    val telemetryApi: TelemetryApi by lazy {
-        Retrofit.Builder()
-            .baseUrl(BuildConfig.BASE_URL)
+    /** 인증이 필요한 텔레메트리 요청을 위한 클라이언트 생성기 */
+    fun createTelemetryApi(tokenManager: TokenManager): TelemetryApi {
+        val authInterceptor = Interceptor { chain ->
+            val token = tokenManager.getAccessToken()
+            val request = if (token != null) {
+                chain.request().newBuilder()
+                    .addHeader("Authorization", "Bearer $token")
+                    .build()
+            } else {
+                chain.request()
+            }
+            chain.proceed(request)
+        }
+
+        val loggingInterceptor = HttpLoggingInterceptor().apply {
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY
+            else HttpLoggingInterceptor.Level.NONE
+        }
+
+        val okHttpClient = OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)
+            .addInterceptor(loggingInterceptor)
+            .build()
+            
+        return Retrofit.Builder()
+            .baseUrl(BuildConfig.SERVER_BASE_URL)
+            .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(TelemetryApi::class.java)

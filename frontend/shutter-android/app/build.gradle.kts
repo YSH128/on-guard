@@ -52,20 +52,6 @@ android {
         ndk {
             abiFilters.add("arm64-v8a")
         }
-
-        val localPropertiesFile = project.rootProject.file("local.properties")
-        var baseUrl = "\"http://localhost:8080/\""
-
-        if (localPropertiesFile.exists()) {
-            localPropertiesFile.readLines().forEach { line ->
-                val trimmedLine = line.trim()
-                if (trimmedLine.startsWith("TELEMETRY_BASE_URL=")) {
-                    baseUrl = trimmedLine.substringAfter("=").trim()
-                }
-            }
-        }
-
-        buildConfigField("String", "BASE_URL", baseUrl)
     }
 
     packaging {
