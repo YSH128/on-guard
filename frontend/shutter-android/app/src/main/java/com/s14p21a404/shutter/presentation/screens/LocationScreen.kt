@@ -1,6 +1,13 @@
 package com.s14p21a404.shutter.presentation.screens
 
+import android.graphics.Bitmap
+import android.graphics.Canvas as AndroidCanvas
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Shader
+import android.util.Log
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,7 +15,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,29 +22,46 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.res.painterResource
-import com.s14p21a404.shutter.R
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.DrawableCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.kakao.vectormap.KakaoMap
+import com.kakao.vectormap.KakaoMapReadyCallback
+import com.kakao.vectormap.LatLng
+import com.kakao.vectormap.MapLifeCycleCallback
+import com.kakao.vectormap.MapView
+import com.kakao.vectormap.camera.CameraUpdateFactory
+import com.kakao.vectormap.label.LabelOptions
+import com.kakao.vectormap.label.LabelStyle
+import com.kakao.vectormap.label.LabelStyles
+import com.s14p21a404.shutter.R
 
 // ── 보호자 데이터 모델 (샘플) ──
 
 private data class Guardian(
     val id: String,
     val name: String,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
 )
 
 private val sampleGuardians = listOf(
-    Guardian(id = "1", name = "김철수"),
+    Guardian(id = "1", name = "김철수", latitude = 36.3553, longitude = 127.2985),  // 대전 SSAFY 근처
     Guardian(id = "2", name = "정민수"),
     Guardian(id = "3", name = "김영희"),
 )
@@ -50,22 +73,17 @@ private val guardiansWithLocation = setOf("1")
 
 private val BgColor = Color(0xFFF2F5F9)
 private val TitleColor = Color(0xFF4A6091)
-private val SelectedBorderColor = Color(0xFF5B7FD6)
+private val SelectedBorderColor = Color(0xFF597BCE)
 private val UnselectedAvatarBg = Color(0xFFD6DCE8)
 private val SelectedAvatarBg = Color(0xFFF2F5F9)
-private val SelectedIconColor = Color(0xFF5B7FD6)
 private val UnselectedIconColor = Color(0xFF9CA3AF)
 private val SelectedNameColor = Color(0xFF1A1A1A)
 private val UnselectedNameColor = Color(0xFF6B7280)
-private val ShieldGradientStart = Color(0xFF5B7FD6)
-private val ShieldGradientEnd = Color(0xFF4A6091)
-private val RadiusCircleColor = Color(0xFF5B7FD6)
-private val PointerDotColor = Color(0xFF5B7FD6)
 private val EmptyIconColor = Color(0xFFC4C4C4)
 private val EmptyTextColor = Color(0xFF9CA3AF)
 
 /**
- * 위치 확인 화면 — 참고 프로젝트 디자인 1:1 구현
+ * 위치 확인 화면 — Kakao Map 연동
  */
 @Composable
 fun LocationScreen() {
@@ -73,8 +91,12 @@ fun LocationScreen() {
         mutableStateOf(sampleGuardians.firstOrNull()?.id)
     }
 
+    val selectedGuardian = sampleGuardians.find { it.id == selectedGuardianId }
+
     val hasActiveLocation = selectedGuardianId != null &&
-            selectedGuardianId in guardiansWithLocation
+            selectedGuardianId in guardiansWithLocation &&
+            selectedGuardian?.latitude != null &&
+            selectedGuardian?.longitude != null
 
     Column(
         modifier = Modifier
@@ -98,8 +120,11 @@ fun LocationScreen() {
                 .background(BgColor),
             contentAlignment = Alignment.Center
         ) {
-            if (hasActiveLocation) {
-                MapWithShieldMarker()
+            if (hasActiveLocation && selectedGuardian != null) {
+                KakaoMapWithMarker(
+                    latitude = selectedGuardian.latitude!!,
+                    longitude = selectedGuardian.longitude!!
+                )
             } else {
                 EmptyLocationState()
             }
@@ -228,95 +253,179 @@ private fun GuardianAvatar(
 }
 
 // ════════════════════════════════════════════════════════════
-// 지도 뷰 — 방패 마커 + 반경 원
+// Kakao Map + 방패 마커 오버레이
 // ════════════════════════════════════════════════════════════
 
 @Composable
-private fun MapWithShieldMarker() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        // 파란 반경 원
-        Box(
-            modifier = Modifier
-                .size(160.dp)
-                .offset(y = 8.dp)
-                .clip(CircleShape)
-                .background(RadiusCircleColor.copy(alpha = 0.15f))
-        )
+private fun KakaoMapWithMarker(
+    latitude: Double,
+    longitude: Double,
+) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val density = LocalDensity.current
+    val targetLatLng = remember(latitude, longitude) {
+        LatLng.from(latitude, longitude)
+    }
 
-        // 방패 마커 + 포인터 도트
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.offset(y = (-16).dp)
-        ) {
-            // 방패 아이콘 (Canvas로 그리기)
-            Box(
-                modifier = Modifier.size(80.dp, 96.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    drawShieldMarker(this)
+    // 방패 마커 Bitmap 미리 생성
+    val markerBitmap = remember(context) {
+        createShieldMarkerBitmap(context, density.density)
+    }
+
+    val mapView = remember { MapView(context) }
+    var mapStarted by remember { mutableStateOf(false) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    if (mapStarted) mapView.resume()
                 }
-                // 방패 내 사용자 아이콘 (흰색)
-                Image(
-                    painter = painterResource(id = R.drawable.ic_ep_user),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .offset(y = (-6).dp),
-                    colorFilter = ColorFilter.tint(Color.White)
-                )
+                Lifecycle.Event.ON_PAUSE -> {
+                    if (mapStarted) mapView.pause()
+                }
+                else -> {}
             }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
 
-            // 포인터 도트
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .offset(y = (-4).dp)
-                    .clip(CircleShape)
-                    .background(PointerDotColor)
-            )
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            if (mapStarted) mapView.finish()
         }
     }
+
+    AndroidView(
+        factory = {
+            mapView.apply {
+                addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
+                    override fun onViewAttachedToWindow(v: android.view.View) {
+                        if (!mapStarted) {
+                            mapStarted = true
+                            start(
+                                object : MapLifeCycleCallback() {
+                                    override fun onMapDestroy() {
+                                        Log.d("KakaoMap", "지도 파괴됨")
+                                    }
+                                    override fun onMapError(error: Exception?) {
+                                        Log.e("KakaoMap", "지도 에러: ${error?.message}", error)
+                                    }
+                                },
+                                object : KakaoMapReadyCallback() {
+                                    override fun onMapReady(kakaoMap: KakaoMap) {
+                                        Log.d("KakaoMap", "지도 준비 완료")
+
+                                        // 카메라 이동
+                                        kakaoMap.moveCamera(
+                                            CameraUpdateFactory.newCenterPosition(targetLatLng, 16)
+                                        )
+
+                                        // ── 좌표 고정 마커(Label) 추가 ──
+                                        val labelLayer = kakaoMap.labelManager?.layer
+                                        labelLayer?.zOrder = 10001
+                                        val style = kakaoMap.labelManager
+                                            ?.addLabelStyles(
+                                                LabelStyles.from(
+                                                    LabelStyle.from(markerBitmap)
+                                                        .setAnchorPoint(0.5f, 1.0f)
+                                                )
+                                            )
+
+                                        if (style != null) {
+                                            labelLayer?.addLabel(
+                                                LabelOptions.from(targetLatLng)
+                                                    .setStyles(style)
+                                                    .setRank(Long.MAX_VALUE)
+                                            )
+                                        }
+                                    }
+                                }
+                            )
+                            resume()
+                        }
+                    }
+
+                    override fun onViewDetachedFromWindow(v: android.view.View) {
+                        Log.d("KakaoMap", "MapView detached")
+                    }
+                })
+            }
+        },
+        modifier = Modifier.fillMaxSize()
+    )
 }
 
 /**
- * 방패 모양을 Canvas로 그리기
+ * 방패 모양 마커 Bitmap 생성 (Android Canvas 기반)
+ * LabelLayer에 좌표 고정으로 사용
  */
-private fun drawShieldMarker(drawScope: DrawScope) {
-    with(drawScope) {
-        val w = size.width
-        val h = size.height
+private fun createShieldMarkerBitmap(context: android.content.Context, density: Float): Bitmap {
+    val w = (64 * density).toInt()
+    val h = (96 * density).toInt()    // 방패 + 간격 + 도트 포함 높이
+    val shieldH = (76 * density)
+    val dotOuterRadius = (8 * density)
+    val dotInnerRadius = (2.5f * density)
+    val dotStrokeWidth = (5f * density)
 
-        // 방패 외곽 경로
-        val shieldPath = Path().apply {
-            moveTo(w * 0.5f, 0f)                    // 상단 중앙
-            lineTo(w, h * 0.167f)                    // 우상단
-            lineTo(w, h * 0.5f)                      // 우측 중앙
-            cubicTo(w, h * 0.75f, w * 0.75f, h * 0.917f, w * 0.5f, h)  // 우하단 곡선
-            cubicTo(w * 0.25f, h * 0.917f, 0f, h * 0.75f, 0f, h * 0.5f) // 좌하단 곡선
-            lineTo(0f, h * 0.167f)                   // 좌상단
-            close()
-        }
+    val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val canvas = AndroidCanvas(bitmap)
 
-        // 방패 그라데이션 채우기
-        drawPath(
-            path = shieldPath,
-            brush = Brush.verticalGradient(
-                colors = listOf(ShieldGradientStart, ShieldGradientEnd)
-            ),
-            style = Fill
-        )
-
-        // 방패 안의 흰색 원
-        drawCircle(
-            color = Color.White,
-            radius = w * 0.275f,
-            center = Offset(w * 0.5f, h * 0.417f)
+    // ── 방패 그리기 ──
+    val shieldPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = LinearGradient(
+            0f, 0f, 0f, shieldH,
+            0xFF5B7FD6.toInt(), 0xFF4A6091.toInt(),
+            Shader.TileMode.CLAMP
         )
     }
+
+    val shieldPath = android.graphics.Path().apply {
+        moveTo(w * 0.5f, 0f)
+        lineTo(w.toFloat(), shieldH * 0.167f)
+        lineTo(w.toFloat(), shieldH * 0.5f)
+        cubicTo(w.toFloat(), shieldH * 0.75f, w * 0.75f, shieldH * 0.917f, w * 0.5f, shieldH)
+        cubicTo(w * 0.25f, shieldH * 0.917f, 0f, shieldH * 0.75f, 0f, shieldH * 0.5f)
+        lineTo(0f, shieldH * 0.167f)
+        close()
+    }
+    canvas.drawPath(shieldPath, shieldPaint)
+
+    // ── 방패 안 흰색 원 ──
+    val circlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFFFFFFF.toInt()
+    }
+    canvas.drawCircle(w * 0.5f, shieldH * 0.417f, w * 0.275f, circlePaint)
+
+    // ── 방패 안 사용자 아이콘 (파란색) ──
+    val iconDrawable = ContextCompat.getDrawable(context, R.drawable.ic_ep_user)
+    if (iconDrawable != null) {
+        val wrapped = DrawableCompat.wrap(iconDrawable.mutate())
+        DrawableCompat.setTint(wrapped, 0xFF5B7FD6.toInt())
+        val iconSize = (24 * density).toInt()
+        val iconLeft = (w - iconSize) / 2
+        val iconTop = (shieldH * 0.417f - iconSize / 2).toInt()
+        wrapped.setBounds(iconLeft, iconTop, iconLeft + iconSize, iconTop + iconSize)
+        wrapped.draw(canvas)
+    }
+
+    // ── 하단 포인터 도트 (흰 원 + 파란 테두리) ──
+    val dotCenterY = shieldH + (4 * density) + dotOuterRadius
+    // 파란 테두리
+    val dotStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF5B7FD6.toInt()
+        style = Paint.Style.STROKE
+        strokeWidth = dotStrokeWidth
+    }
+    canvas.drawCircle(w * 0.5f, dotCenterY, dotOuterRadius, dotStrokePaint)
+    // 흰색 채우기
+    val dotFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFFFFFFF.toInt()
+        style = Paint.Style.FILL
+    }
+    canvas.drawCircle(w * 0.5f, dotCenterY, dotInnerRadius, dotFillPaint)
+
+    return bitmap
 }
 
 // ════════════════════════════════════════════════════════════
@@ -359,10 +468,10 @@ private fun drawMapOffIcon(drawScope: DrawScope) {
 
         // 왼쪽 패널
         val leftPanel = Path().apply {
-            moveTo(w * 0.208f, h * 0.25f)   // (20/96, 24/96)
-            lineTo(w * 0.375f, h * 0.167f)  // (36/96, 16/96)
-            lineTo(w * 0.375f, h * 0.667f)  // (36/96, 64/96)
-            lineTo(w * 0.208f, h * 0.75f)   // (20/96, 72/96)
+            moveTo(w * 0.208f, h * 0.25f)
+            lineTo(w * 0.375f, h * 0.167f)
+            lineTo(w * 0.375f, h * 0.667f)
+            lineTo(w * 0.208f, h * 0.75f)
             close()
         }
         drawPath(
@@ -373,10 +482,10 @@ private fun drawMapOffIcon(drawScope: DrawScope) {
 
         // 중앙 패널
         val centerPanel = Path().apply {
-            moveTo(w * 0.375f, h * 0.167f)  // (36/96, 16/96)
-            lineTo(w * 0.625f, h * 0.25f)   // (60/96, 24/96)
-            lineTo(w * 0.625f, h * 0.75f)   // (60/96, 72/96)
-            lineTo(w * 0.375f, h * 0.667f)  // (36/96, 64/96)
+            moveTo(w * 0.375f, h * 0.167f)
+            lineTo(w * 0.625f, h * 0.25f)
+            lineTo(w * 0.625f, h * 0.75f)
+            lineTo(w * 0.375f, h * 0.667f)
             close()
         }
         drawPath(
@@ -387,10 +496,10 @@ private fun drawMapOffIcon(drawScope: DrawScope) {
 
         // 오른쪽 패널
         val rightPanel = Path().apply {
-            moveTo(w * 0.625f, h * 0.25f)   // (60/96, 24/96)
-            lineTo(w * 0.792f, h * 0.167f)  // (76/96, 16/96)
-            lineTo(w * 0.792f, h * 0.667f)  // (76/96, 64/96)
-            lineTo(w * 0.625f, h * 0.75f)   // (60/96, 72/96)
+            moveTo(w * 0.625f, h * 0.25f)
+            lineTo(w * 0.792f, h * 0.167f)
+            lineTo(w * 0.792f, h * 0.667f)
+            lineTo(w * 0.625f, h * 0.75f)
             close()
         }
         drawPath(
@@ -402,12 +511,10 @@ private fun drawMapOffIcon(drawScope: DrawScope) {
         // 대각선 슬래시
         drawLine(
             color = EmptyIconColor,
-            start = Offset(w * 0.167f, h * 0.833f),  // (16/96, 80/96)
-            end = Offset(w * 0.833f, h * 0.167f),    // (80/96, 16/96)
+            start = Offset(w * 0.167f, h * 0.833f),
+            end = Offset(w * 0.833f, h * 0.167f),
             strokeWidth = strokeW,
             cap = StrokeCap.Round
         )
     }
 }
-
-
