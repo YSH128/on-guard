@@ -2,11 +2,11 @@ services:
   # ───── MySQL (Local Development) ─────
   mysql:
     image: "mysql:8.0"
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci # ← 한국어 인코딩 설정
     container_name: shutter-local-mysql
     ports:
       - "3307:3306" # 호스트의 3307 포트를 컨테이너의 3306에 매핑 (application-local.yaml 기준)
     environment:
-      # 팀원들이 환경변수 파일(.env 등)에 값을 설정해서 사용해야 합니다.
       - MYSQL_DATABASE=${DB_NAME}
       - MYSQL_USER=${DB_USERNAME}
       - MYSQL_PASSWORD=${DB_PASSWORD}
@@ -18,7 +18,7 @@ services:
       retries: 5
     volumes:
       - local_mysql_data:/var/lib/mysql
-      - ./mysql-init.sql:/docker-entrypoint-initdb.d/init.sql # 초기화 SQL이 있다면 사용
+      - ./mysql-init.sql:/docker-entrypoint-initdb.d/init.sql
     restart: unless-stopped
 
   # ───── Redis (Local Development) ─────
