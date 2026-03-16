@@ -195,6 +195,7 @@ def main(args, loop=None):
         transcripts_path = config['transcripts_path_test'],
         vocab = vocab,
         use_video = config['use_video'],
+        use_audio = config.get('use_audio', True),  # 이 줄 추가
         raw_video = config['raw_video'],
         audio_transform_method = config['audio_transform_method'],
         audio_sample_rate = config['audio_sample_rate'],
