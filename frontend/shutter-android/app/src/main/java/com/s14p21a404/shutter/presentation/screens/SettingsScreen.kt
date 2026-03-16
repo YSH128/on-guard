@@ -19,7 +19,6 @@ import androidx.compose.ui.unit.sp
  *  - 보호자 목록 섹션: 등록된 보호자 카드 리스트 + 삭제 버튼
  *  - 보호자 추가 버튼 → GuardianRegistrationScreen으로 이동
  */
-@Suppress("UNUSED_PARAMETER")
 @Composable
 fun SettingsScreen(
     onNavigateToGuardianRegistration: () -> Unit,

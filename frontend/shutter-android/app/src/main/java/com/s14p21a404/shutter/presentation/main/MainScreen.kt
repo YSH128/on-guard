@@ -13,7 +13,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.s14p21a404.shutter.presentation.navigation.AppScaffold
 
-@Suppress("UNUSED_PARAMETER")
 @Composable
 fun MainScreen(
     uiState: MainUiState,

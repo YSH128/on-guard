@@ -19,7 +19,6 @@ import androidx.compose.ui.unit.sp
  *  - 보호자 목록 (체크 선택 가능)
  *  - 하단 "등록하기" 버튼
  */
-@Suppress("UNUSED_PARAMETER")
 @Composable
 fun GuardianRegistrationScreen(
     onBack: () -> Unit,
