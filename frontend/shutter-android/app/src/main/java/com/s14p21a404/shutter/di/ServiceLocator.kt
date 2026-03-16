@@ -40,7 +40,10 @@ class ServiceLocator private constructor(context: Context) {
     val detector: DeepfakeDetector = RealDeepfakeDetector(context)       // JNI 파이프라인 (NDK SO 필요)
 
     val detectionRepository: DeepfakeDetectionRepository =
-        DeepfakeDetectionRepositoryImpl(detector)
+        DeepfakeDetectionRepositoryImpl(
+            detector = detector,
+            telemetryApi = RetrofitClient.createTelemetryApi(tokenManager)
+        )
 
     val videoCallRepository: VideoCallRepository =
         VideoCallRepositoryImpl(context)
