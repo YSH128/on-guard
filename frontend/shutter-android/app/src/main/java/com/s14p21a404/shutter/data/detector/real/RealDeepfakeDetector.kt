@@ -68,7 +68,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
             val tv = dummyResultTextView!!
             tv.text = ""  // 초기화
 
-            bridge!!.request_deepfake_detection("FACE", buffer, tv)
+            bridge!!.request_deepfake_detection("FACE", buffer, width, height, rowStride, tv)
 
             // ── 2) 결과 읽기 ──
             val resultText = tv.text.toString()
@@ -102,7 +102,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
     private fun parseResult(text: String): DeepfakeDetectionResult {
         if (text.isBlank()) {
             Log.w(TAG, "NDK 결과 비어있음 — 미검출 처리")
-            return DeepfakeDetectionResult(detected = false)
+            return DeepfakeDetectionResult(detected = false, rawResultJson = text)
         }
 
         // JSON 형식 시도
@@ -114,7 +114,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
                 val roi = if (roiArray != null && roiArray.length() == 4) {
                     FloatArray(4) { roiArray.getDouble(it).toFloat() }
                 } else null
-                return DeepfakeDetectionResult(detected = detected, roi = roi)
+                return DeepfakeDetectionResult(detected = detected, roi = roi, rawResultJson = text)
             } catch (e: Exception) {
                 Log.w(TAG, "JSON 파싱 실패, 단순 텍스트로 시도: $text", e)
             }
@@ -122,7 +122,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
         // 단순 텍스트 ("1" = 감지, 그 외 = 미감지)
         val detected = text.trim() == "1"
-        return DeepfakeDetectionResult(detected = detected)
+        return DeepfakeDetectionResult(detected = detected, rawResultJson = text)
     }
 
     companion object {
