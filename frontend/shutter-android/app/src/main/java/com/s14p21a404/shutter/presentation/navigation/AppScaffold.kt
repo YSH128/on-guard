@@ -48,6 +48,8 @@ val bottomNavItems = listOf(
 @Composable
 fun AppScaffold(
     onLogout: () -> Unit,
+    isServiceRunning: Boolean,
+    onToggleService: () -> Unit,
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -95,7 +97,10 @@ fun AppScaffold(
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(Screen.Home.route) {
-                HomeScreen()
+                HomeScreen(
+                    isServiceRunning = isServiceRunning,
+                    onToggleService = onToggleService
+                )
             }
             composable(Screen.Location.route) {
                 LocationScreen()

@@ -23,7 +23,11 @@ fun MainScreen(
 ) {
     // 모든 권한이 충족되면 → AppScaffold (하단 네비게이션 + 홈/위치/설정 페이지)
     if (uiState.allPermissionsGranted && uiState.overlayPermissionGranted) {
-        AppScaffold(onLogout = onLogout)
+        AppScaffold(
+            onLogout = onLogout,
+            isServiceRunning = uiState.isServiceRunning,
+            onToggleService = onToggleService
+        )
     } else {
         // 권한 미충족 → 기존 권한 요청 UI
         PermissionRequestScreen(
