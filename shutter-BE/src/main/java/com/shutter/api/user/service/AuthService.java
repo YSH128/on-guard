@@ -52,7 +52,7 @@ public class AuthService {
                             .build());
                 });
 
-        Long userId = user.getId().longValue();
+        Long userId = user.getId();
 
         // 3. 카카오 토큰 Redis 저장 (알림 메시지 전송용)
         kakaoTokenService.saveTokens(userId, request.kakaoAccessToken(), request.kakaoRefreshToken());
@@ -63,7 +63,7 @@ public class AuthService {
         jwtRefreshTokenService.save(userId, refreshToken);
 
         log.info("Login success. userId={}", userId);
-        return new LoginResponse(accessToken, refreshToken);
+        return new LoginResponse(userId, accessToken, refreshToken);
     }
 
     /**

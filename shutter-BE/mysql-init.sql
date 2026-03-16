@@ -3,7 +3,7 @@ USE shutter;
 
 -- 보호자/피보호자 통합 유저 테이블
 CREATE TABLE users (
-                       id INT AUTO_INCREMENT PRIMARY KEY,
+                       id BIGINT AUTO_INCREMENT PRIMARY KEY,
                        kakao_id BIGINT NOT NULL UNIQUE,       -- 카카오 회원번호 (숫자형)
                        name VARCHAR(50) NOT NULL,             -- 지도에서 표시될 이름
                        role VARCHAR(10),             -- 'guardian' or 'ward'
@@ -12,9 +12,9 @@ CREATE TABLE users (
 
 -- 보호자-피보호자 N:M 관계 테이블 (user_guardians 대체)
 CREATE TABLE user_relationships (
-                                    id INT AUTO_INCREMENT PRIMARY KEY,
-                                    guardian_id INT NOT NULL,
-                                    ward_id INT NOT NULL,
+                                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                                    guardian_id BIGINT NOT NULL,
+                                    ward_id BIGINT NOT NULL,
                                     created_at TIMESTAMP,
                                     FOREIGN KEY (guardian_id) REFERENCES users(id),
                                     FOREIGN KEY (ward_id) REFERENCES users(id)
@@ -23,8 +23,8 @@ CREATE INDEX idx_user_relationships_ward_id ON user_relationships (ward_id);    
 CREATE INDEX idx_user_relationships_guardian_id ON user_relationships (guardian_id);
 
 CREATE TABLE ai_telemetry_logs (
-                                   id INT AUTO_INCREMENT PRIMARY KEY,
-                                   user_id INT NOT NULL,
+                                   id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                                   user_id BIGINT,
                                    model_version VARCHAR(100) NOT NULL,
                                    model_type VARCHAR(20) NOT NULL,        -- FACE, STT
                                    inference_success BOOLEAN NOT NULL,
@@ -49,9 +49,9 @@ CREATE INDEX idx_ai_telemetry_logs_timestamp ON ai_telemetry_logs (timestamp);
 CREATE INDEX idx_ai_telemetry_logs_inference_success ON ai_telemetry_logs (inference_success);
 
 CREATE TABLE notification_logs (
-                                   id INT AUTO_INCREMENT PRIMARY KEY,
-                                   ward_id INT NOT NULL,                   -- 피싱이 감지된 피보호자 (user_id → ward_id로 명확화)
-                                   guardian_id INT NOT NULL,              -- 알림을 받는 보호자
+                                   id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                                   ward_id BIGINT NOT NULL,                   -- 피싱이 감지된 피보호자 (user_id → ward_id로 명확화)
+                                   guardian_id BIGINT NOT NULL,              -- 알림을 받는 보호자
                                    status VARCHAR(20) NOT NULL,           -- SUCCESS, FAIL
                                    fail_reason VARCHAR(500),
                                    sent_at TIMESTAMP,
