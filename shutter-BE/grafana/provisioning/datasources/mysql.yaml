@@ -13,5 +13,6 @@ datasources:
       maxOpenConns: 10
       maxIdleConns: 10
       connMaxLifetime: 14400
+      timezone: Asia/Seoul
     isDefault: true
     editable: true
