@@ -31,7 +31,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.s14p21a404.shutter.presentation.main.MainUiState
 import com.s14p21a404.shutter.presentation.screens.GuardianRegistrationScreen
+
 import com.s14p21a404.shutter.presentation.screens.HomeScreen
 import com.s14p21a404.shutter.presentation.screens.LocationScreen
 import com.s14p21a404.shutter.presentation.screens.SettingsScreen
@@ -58,14 +60,18 @@ private val NavActiveColor = Color(0xFF1A1A1A)
 private val NavInactiveColor = Color(0xFF64666E)
 
 /**
- * 로그인 완료 + 권한 획득 후 표시되는 앱 셸
+ * 로그인 완료 후 표시되는 앱 셸
  * (하단 네비게이션 + NavHost)
+ * 홈 화면 진입 시 권한이 미충족이면 권한 요청을 수행한다.
  */
 @Composable
 fun AppScaffold(
     onLogout: () -> Unit,
     isServiceRunning: Boolean,
     onToggleService: () -> Unit,
+    uiState: MainUiState = MainUiState(),
+    onRequestPermissions: () -> Unit = {},
+    onRequestOverlayPermission: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -86,7 +92,11 @@ fun AppScaffold(
             composable(Screen.Home.route) {
                 HomeScreen(
                     isServiceRunning = isServiceRunning,
-                    onToggleService = onToggleService
+                    onToggleService = onToggleService,
+                    allPermissionsGranted = uiState.allPermissionsGranted,
+                    overlayPermissionGranted = uiState.overlayPermissionGranted,
+                    onRequestPermissions = onRequestPermissions,
+                    onRequestOverlayPermission = onRequestOverlayPermission,
                 )
             }
             composable(Screen.Location.route) {
@@ -97,7 +107,7 @@ fun AppScaffold(
                     onNavigateToGuardianRegistration = {
                         navController.navigate(Screen.GuardianRegistration.route)
                     },
-                    onLogout = onLogout
+                    onLogout = onLogout,
                 )
             }
             composable(Screen.GuardianRegistration.route) {

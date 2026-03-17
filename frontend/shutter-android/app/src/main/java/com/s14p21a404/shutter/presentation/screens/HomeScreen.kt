@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -109,14 +110,70 @@ private val ChipUnselectedText = Color(0xFF9CA3AF)
 private val filterNames = listOf("전체", "정민수", "김철수", "이영희")
 
 /**
- * 홈 화면 — 참고 프로젝트 디자인 1:1 구현
+ * 홈 화면 — 참고 프로젝트 디자인 1:1 구현.
+ * 첫 접속 시 권한이 없으면 권한 요청 다이얼로그를 표시한다.
  */
 @Composable
 fun HomeScreen(
     isServiceRunning: Boolean,
     onToggleService: () -> Unit,
+    allPermissionsGranted: Boolean = true,
+    overlayPermissionGranted: Boolean = true,
+    onRequestPermissions: () -> Unit = {},
+    onRequestOverlayPermission: () -> Unit = {},
 ) {
     val scrollState = rememberScrollState()
+
+    // 권한 요청 다이얼로그 표시 여부
+    var showPermissionDialog by remember { mutableStateOf(false) }
+    var showOverlayDialog by remember { mutableStateOf(false) }
+
+    // 첫 접속 시 권한 체크 → 다이얼로그 표시
+    LaunchedEffect(allPermissionsGranted, overlayPermissionGranted) {
+        if (!allPermissionsGranted) {
+            showPermissionDialog = true
+        } else if (!overlayPermissionGranted) {
+            showOverlayDialog = true
+        }
+    }
+
+    // ── 런타임 권한 요청 다이얼로그 (전화 상태, 알림, 위치) ──
+    if (showPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { /* 닫기 방지 */ },
+            title = { Text("권한 허용 필요", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("서비스 실행에 필요한 권한을 허용해주세요.\n(전화 상태, 알림, 위치)")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showPermissionDialog = false
+                    onRequestPermissions()
+                }) {
+                    Text("허용하기")
+                }
+            },
+        )
+    }
+
+    // ── 오버레이 권한 요청 다이얼로그 ──
+    if (showOverlayDialog && allPermissionsGranted) {
+        AlertDialog(
+            onDismissRequest = { /* 닫기 방지 */ },
+            title = { Text("오버레이 권한 필요", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("영상통화 위에 경고를 표시하려면\n'다른 앱 위에 표시' 권한이 필요합니다.\n설정 화면에서 직접 허용해주세요.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showOverlayDialog = false
+                    onRequestOverlayPermission()
+                }) {
+                    Text("설정으로 이동")
+                }
+            },
+        )
+    }
 
     Column(
         modifier = Modifier

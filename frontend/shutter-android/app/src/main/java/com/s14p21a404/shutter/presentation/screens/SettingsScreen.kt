@@ -1,5 +1,7 @@
 package com.s14p21a404.shutter.presentation.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,12 +19,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -61,6 +66,56 @@ fun SettingsScreen(
 ) {
     val uiState by settingsViewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
+    val context = LocalContext.current
+
+    // 위치 권한 요청 다이얼로그 표시 여부
+    var showLocationPermissionDialog by remember { mutableStateOf(false) }
+
+    // 위치 권한 요청 런처: 허용되면 바로 토글 ON
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            settingsViewModel.toggleGpsSharing()
+        }
+    }
+
+    // GPS 토글 핸들러: off→on 시 위치 권한 확인
+    val handleGpsToggle: () -> Unit = {
+        if (!uiState.gpsSharing) {
+            // off → on: 위치 권한 확인
+            val hasLocation = androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.ACCESS_FINE_LOCATION
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (hasLocation) {
+                settingsViewModel.toggleGpsSharing()
+            } else {
+                showLocationPermissionDialog = true
+            }
+        } else {
+            // on → off: 바로 토글
+            settingsViewModel.toggleGpsSharing()
+        }
+    }
+
+    // ── 위치 권한 요청 다이얼로그 ──
+    if (showLocationPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { /* 닫기 방지 */ },
+            title = { Text("위치 권한 필요", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("GPS 위치 공유를 사용하려면\n위치 권한을 허용해주세요.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showLocationPermissionDialog = false
+                    locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                }) {
+                    Text("허용하기")
+                }
+            },
+        )
+    }
 
     Box(
         modifier = Modifier
@@ -89,7 +144,7 @@ fun SettingsScreen(
                 // ── 알림 설정 섹션 ──
                 NotificationSettingsSection(
                     gpsSharing = uiState.gpsSharing,
-                    onToggleGps = { settingsViewModel.toggleGpsSharing() }
+                    onToggleGps = handleGpsToggle
                 )
 
                 Spacer(modifier = Modifier.height(32.dp))
