@@ -79,12 +79,12 @@ val extractOpenCVHeaders by tasks.registering(Copy::class) {
 }
 
 android {
-    namespace = "com.example.shutter_android_ai"
+    namespace = "com.s14p21a404.shutter_android_ai"
     compileSdk = 36
     ndkVersion = "21.4.7075529"
 
     defaultConfig {
-        applicationId = "com.example.shutter_android_ai"
+        applicationId = "com.s14p21a404.shutter_android_ai"
         minSdk = 33
         targetSdk = 36
         versionCode = 1
