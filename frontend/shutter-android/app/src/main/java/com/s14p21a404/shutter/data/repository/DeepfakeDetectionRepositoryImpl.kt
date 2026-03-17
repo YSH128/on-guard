@@ -34,7 +34,8 @@ import java.util.UUID
  */
 class DeepfakeDetectionRepositoryImpl(
     private val detector: DeepfakeDetector,
-    private val telemetryApi: com.s14p21a404.shutter.network.TelemetryApi
+    private val telemetryApi: com.s14p21a404.shutter.network.TelemetryApi,
+    private val tokenManager: com.s14p21a404.shutter.data.token.TokenManager,
 ) : DeepfakeDetectionRepository {
 
     private val _results = MutableSharedFlow<DeepfakeDetectionResult>(
@@ -152,7 +153,7 @@ class DeepfakeDetectionRepositoryImpl(
                 if (battery == 0f) battery = DeviceStatusProvider.getBatteryCurrentNow(ctx)
 
                 val request = TelemetryRequest(
-                    user_id = 6, // 로그인된 유저 ID 등을 주입해야 함
+                    user_id = tokenManager.getUserId().toInt(),
                     model_type = "FACE",
                     model_version = "v1",
                     inference_success = errorType == null,
