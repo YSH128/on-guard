@@ -99,7 +99,7 @@ fun GuardianRegistrationScreen(
                         imageVector = Icons.Filled.ChevronLeft,
                         contentDescription = "뒤로가기",
                         modifier = Modifier.size(24.dp),
-                        tint = TitleColor
+                        tint = Color(0xFF6083EE)
                     )
                 }
 
