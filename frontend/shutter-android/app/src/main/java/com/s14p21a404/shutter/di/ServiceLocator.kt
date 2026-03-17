@@ -5,13 +5,19 @@ import com.s14p21a404.shutter.data.detector.DeepfakeDetector
 import com.s14p21a404.shutter.data.detector.real.RealDeepfakeDetector
 import com.s14p21a404.shutter.data.repository.AuthRepositoryImpl
 import com.s14p21a404.shutter.data.repository.DeepfakeDetectionRepositoryImpl
+import com.s14p21a404.shutter.data.repository.GuardianRepositoryImpl
 import com.s14p21a404.shutter.data.repository.VideoCallRepositoryImpl
 import com.s14p21a404.shutter.data.token.TokenManager
 import com.s14p21a404.shutter.domain.repository.AuthRepository
 import com.s14p21a404.shutter.domain.repository.DeepfakeDetectionRepository
+import com.s14p21a404.shutter.domain.repository.GuardianRepository
 import com.s14p21a404.shutter.domain.repository.VideoCallRepository
+import com.s14p21a404.shutter.domain.usecase.AddGuardianUseCase
+import com.s14p21a404.shutter.domain.usecase.DeleteGuardianUseCase
 import com.s14p21a404.shutter.domain.usecase.DetectDeepfakeUseCase
 import com.s14p21a404.shutter.domain.usecase.GetAccessTokenUseCase
+import com.s14p21a404.shutter.domain.usecase.GetMyGuardiansUseCase
+import com.s14p21a404.shutter.domain.usecase.GetMyWardsUseCase
 import com.s14p21a404.shutter.domain.usecase.GetUserIdUseCase
 import com.s14p21a404.shutter.domain.usecase.LoginUseCase
 import com.s14p21a404.shutter.domain.usecase.LogoutUseCase
@@ -32,9 +38,15 @@ class ServiceLocator private constructor(context: Context) {
 
     val tokenManager = TokenManager(context)
 
+    private val apiService = RetrofitClient.create(tokenManager)
+
     val authRepository: AuthRepository = AuthRepositoryImpl(
-        apiService = RetrofitClient.create(tokenManager),
+        apiService = apiService,
         tokenManager = tokenManager,
+    )
+
+    val guardianRepository: GuardianRepository = GuardianRepositoryImpl(
+        apiService = apiService,
     )
 
     // val detector: DeepfakeDetector = BroadcastTriggerDetector(context)       // ADB 테스트용
@@ -47,10 +59,17 @@ class ServiceLocator private constructor(context: Context) {
             tokenManager = tokenManager,
         )
 
+    // ── Guardian UseCases ──
+
+    val getMyGuardiansUseCase = GetMyGuardiansUseCase(guardianRepository)
+    val addGuardianUseCase = AddGuardianUseCase(guardianRepository)
+    val deleteGuardianUseCase = DeleteGuardianUseCase(guardianRepository)
+    val getMyWardsUseCase = GetMyWardsUseCase(guardianRepository)
+
     val videoCallRepository: VideoCallRepository =
         VideoCallRepositoryImpl(context)
 
-    // ── Domain Layer ──
+    // ── Auth UseCases ──
 
     val loginUseCase = LoginUseCase(authRepository)
     val registerUseCase = RegisterUseCase(authRepository)

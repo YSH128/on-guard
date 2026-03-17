@@ -1,73 +1,77 @@
 package com.s14p21a404.shutter.presentation.screens
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.s14p21a404.shutter.di.ServiceLocator
 import com.s14p21a404.shutter.domain.model.Guardian
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
-
-/**
- * 환경 설정 화면 UI 상태
- */
 data class SettingsUiState(
     val gpsSharing: Boolean = false,
     val guardians: List<Guardian> = emptyList(),
-    /** 삭제 확인 다이얼로그에 표시할 보호자 (null이면 닫힘) */
     val guardianToDelete: Guardian? = null,
+    val isLoading: Boolean = false,
+    val error: String? = null,
 )
 
-/**
- * 환경 설정 ViewModel
- */
-class SettingsViewModel : ViewModel() {
+class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val _uiState = MutableStateFlow(
-        SettingsUiState(
-            guardians = listOf(
-                Guardian(id = "1", name = "김철수"),
-                Guardian(id = "2", name = "김철수"),
-                Guardian(id = "3", name = "김철수"),
-                Guardian(id = "4", name = "김철수"),
-            )
-        )
-    )
+    private val serviceLocator = ServiceLocator.getInstance(application)
+    private val getMyGuardiansUseCase = serviceLocator.getMyGuardiansUseCase
+    private val deleteGuardianUseCase = serviceLocator.deleteGuardianUseCase
+
+    private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
-    /** GPS 위치 공유 토글 */
+    fun loadGuardians() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null) }
+            getMyGuardiansUseCase()
+                .onSuccess { guardians ->
+                    _uiState.update { it.copy(guardians = guardians, isLoading = false) }
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(isLoading = false, error = e.message) }
+                }
+        }
+    }
+
     fun toggleGpsSharing() {
         _uiState.update { it.copy(gpsSharing = !it.gpsSharing) }
     }
 
-    /** 삭제 모달 열기 */
     fun requestDeleteGuardian(guardian: Guardian) {
         _uiState.update { it.copy(guardianToDelete = guardian) }
     }
 
-    /** 삭제 모달 닫기 */
     fun dismissDeleteDialog() {
         _uiState.update { it.copy(guardianToDelete = null) }
     }
 
-    /** 보호자 삭제 확정 */
     fun confirmDeleteGuardian() {
-        _uiState.update { state ->
-            val target = state.guardianToDelete ?: return@update state
-            state.copy(
-                guardians = state.guardians.filter { it.id != target.id },
-                guardianToDelete = null
-            )
+        val target = _uiState.value.guardianToDelete ?: return
+        _uiState.update { it.copy(guardianToDelete = null) }
+        viewModelScope.launch {
+            deleteGuardianUseCase(target.relationshipId)
+                .onSuccess {
+                    _uiState.update { state ->
+                        state.copy(
+                            guardians = state.guardians.filter { it.relationshipId != target.relationshipId }
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(error = e.message ?: "삭제에 실패했습니다.") }
+                }
         }
     }
 
-    /** 보호자 추가 (보호자 등록 화면에서 선택 후 돌아올 때) */
-    fun addGuardians(newGuardians: List<Guardian>) {
-        _uiState.update { state ->
-            val existingIds = state.guardians.map { it.id }.toSet()
-            val filtered = newGuardians.filter { it.id !in existingIds }
-            state.copy(guardians = state.guardians + filtered)
-        }
+    fun dismissError() {
+        _uiState.update { it.copy(error = null) }
     }
 }
-

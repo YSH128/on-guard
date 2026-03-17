@@ -2,7 +2,10 @@ package com.s14p21a404.shutter.network
 
 import com.google.gson.annotations.SerializedName
 import retrofit2.http.Body
+import retrofit2.http.DELETE
+import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.Path
 
 // ── 카카오 로그인 ──────────────────────────────────────────────────────────────
 
@@ -65,6 +68,72 @@ data class RefreshResponse(
     val data: String, // 새로운 access_token
 )
 
+// ── 보호자 등록 POST /guardians ────────────────────────────────────────────────
+
+data class RegisterGuardianRequest(
+    @SerializedName("guardian_kakao_id") val guardianKakaoId: Long,
+)
+
+data class RegisterGuardianData(
+    @SerializedName("relationship_id") val relationshipId: Long,
+    @SerializedName("guardian_id") val guardianId: Long,
+    @SerializedName("guardian_name") val guardianName: String,
+    @SerializedName("created_at") val createdAt: String,
+)
+
+data class RegisterGuardianResponse(
+    val success: Boolean,
+    val message: String,
+    val data: RegisterGuardianData,
+)
+
+// ── 내 보호자 목록 GET /guardians/me ──────────────────────────────────────────
+
+data class GuardianItem(
+    @SerializedName("relationship_id") val relationshipId: Long,
+    @SerializedName("guardian_id") val guardianId: Long,
+    @SerializedName("guardian_name") val guardianName: String,
+    @SerializedName("created_at") val createdAt: String,
+)
+
+data class GuardianListData(val guardians: List<GuardianItem>)
+
+data class GuardianListResponse(
+    val success: Boolean,
+    val message: String,
+    val data: GuardianListData,
+)
+
+// ── 보호자 관계 해제 DELETE /guardians/{relationshipId} ───────────────────────
+
+data class DeleteGuardianData(
+    @SerializedName("relationship_id") val relationshipId: Long,
+)
+
+data class DeleteGuardianResponse(
+    val success: Boolean,
+    val message: String,
+    val data: DeleteGuardianData,
+)
+
+// ── 내 피보호자 목록 GET /guardians/wards/me ──────────────────────────────────
+
+data class WardItem(
+    @SerializedName("ward_id") val wardId: Long,
+    val name: String,
+    val lat: Double?,
+    val lng: Double?,
+    @SerializedName("gps_updated_at") val gpsUpdatedAt: String?,
+)
+
+data class WardListData(val wards: List<WardItem>)
+
+data class WardListResponse(
+    val success: Boolean,
+    val message: String,
+    val data: WardListData,
+)
+
 // ── 인터페이스 ─────────────────────────────────────────────────────────────────
 
 interface ApiService {
@@ -77,4 +146,16 @@ interface ApiService {
 
     @POST("api/v1/auth/refresh")
     suspend fun refreshToken(@Body request: RefreshRequest): RefreshResponse
+
+    @POST("api/v1/guardians")
+    suspend fun registerGuardian(@Body request: RegisterGuardianRequest): RegisterGuardianResponse
+
+    @GET("api/v1/guardians/me")
+    suspend fun getMyGuardians(): GuardianListResponse
+
+    @DELETE("api/v1/guardians/{relationshipId}")
+    suspend fun deleteGuardian(@Path("relationshipId") relationshipId: Long): DeleteGuardianResponse
+
+    @GET("api/v1/guardians/wards/me")
+    suspend fun getMyWards(): WardListResponse
 }

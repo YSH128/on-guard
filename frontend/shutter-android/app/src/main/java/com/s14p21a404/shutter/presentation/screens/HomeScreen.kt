@@ -18,10 +18,12 @@ import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -107,7 +109,6 @@ private val ChipSelectedText = Color.White
 private val ChipUnselectedBg = Color.White
 private val ChipUnselectedText = Color(0xFF9CA3AF)
 
-private val filterNames = listOf("전체", "정민수", "김철수", "이영희")
 
 /**
  * 홈 화면 — 참고 프로젝트 디자인 1:1 구현.
@@ -121,8 +122,10 @@ fun HomeScreen(
     overlayPermissionGranted: Boolean = true,
     onRequestPermissions: () -> Unit = {},
     onRequestOverlayPermission: () -> Unit = {},
+    homeViewModel: HomeViewModel = viewModel(),
 ) {
     val scrollState = rememberScrollState()
+    val homeUiState by homeViewModel.uiState.collectAsState()
 
     // 권한 요청 다이얼로그 표시 여부
     var showPermissionDialog by remember { mutableStateOf(false) }
@@ -185,7 +188,11 @@ fun HomeScreen(
         HeaderSection(isServiceRunning = isServiceRunning, onToggleService = onToggleService)
 
         // ── 알림 타임라인 ──
-        TimelineSection()
+        TimelineSection(
+            filterNames = homeUiState.filterNames,
+            selectedFilter = homeUiState.selectedFilter,
+            onSelectFilter = { homeViewModel.selectFilter(it) },
+        )
     }
 }
 
@@ -300,9 +307,11 @@ private fun HeaderSection(
 // ════════════════════════════════════════════════════════════
 
 @Composable
-private fun TimelineSection() {
-    var selectedFilter by remember { mutableStateOf("전체") }
-
+private fun TimelineSection(
+    filterNames: List<String>,
+    selectedFilter: String,
+    onSelectFilter: (String) -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -317,7 +326,7 @@ private fun TimelineSection() {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // 필터 칩 가로 스크롤
+        // 피보호자 이름 필터 칩 가로 스크롤
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -325,7 +334,7 @@ private fun TimelineSection() {
                 FilterChip(
                     text = name,
                     selected = selectedFilter == name,
-                    onClick = { selectedFilter = name }
+                    onClick = { onSelectFilter(name) }
                 )
             }
         }
