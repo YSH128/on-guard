@@ -49,14 +49,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             context, Manifest.permission.POST_NOTIFICATIONS
         ) == PackageManager.PERMISSION_GRANTED
 
+        val hasLocation = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
         val hasOverlay = Settings.canDrawOverlays(context)
 
         _uiState.update { it.copy(
-            allPermissionsGranted = hasPhoneState && hasNotification,
+            allPermissionsGranted = hasPhoneState && hasNotification && hasLocation,
             overlayPermissionGranted = hasOverlay
         ) }
 
-        Log.d(TAG, "권한 상태 - Phone: $hasPhoneState, Notification: $hasNotification, Overlay: $hasOverlay")
+        Log.d(TAG, "권한 상태 - Phone: $hasPhoneState, Notification: $hasNotification, Location: $hasLocation, Overlay: $hasOverlay")
     }
 
     /**
