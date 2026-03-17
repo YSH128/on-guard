@@ -21,6 +21,10 @@ public enum ErrorCode {
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "유저를 찾을 수 없습니다."),
     USER_ALREADY_EXISTS(HttpStatus.CONFLICT, "USER_ALREADY_EXISTS", "이미 존재하는 유저입니다."),
 
+    // 보호자 관계 관련
+    GUARDIAN_NOT_FOUND(HttpStatus.NOT_FOUND, "GUARDIAN_NOT_FOUND", "해당 카카오 ID로 가입된 보호자를 찾을 수 없습니다."),
+    RELATIONSHIP_NOT_FOUND(HttpStatus.NOT_FOUND, "RELATIONSHIP_NOT_FOUND", "해당 관계를 찾을 수 없습니다."),
+
     // 요청 관련
     INVALID_REQUEST(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "잘못된 요청입니다."),
 
