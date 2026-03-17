@@ -107,7 +107,7 @@ fun AppScaffold(
                     onNavigateToGuardianRegistration = {
                         navController.navigate(Screen.GuardianRegistration.route)
                     },
-                    onLogout = onLogout
+                    onLogout = onLogout,
                 )
             }
             composable(Screen.GuardianRegistration.route) {
