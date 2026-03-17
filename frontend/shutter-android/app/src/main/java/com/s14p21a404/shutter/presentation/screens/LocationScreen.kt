@@ -42,6 +42,7 @@ import androidx.core.graphics.drawable.DrawableCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kakao.vectormap.KakaoMap
 import com.kakao.vectormap.KakaoMapReadyCallback
 import com.kakao.vectormap.LatLng
@@ -57,7 +58,7 @@ import com.s14p21a404.shutter.R
 private const val PULSE_FRAME_COUNT = 40
 private const val PULSE_INTERVAL_MS = 40L
 
-// ── 보호자 데이터 모델 (샘플) ──
+// ── 피보호자 UI 모델 (Ward 도메인 모델을 화면용으로 변환) ──
 
 private data class LocationGuardian(
     val id: String,
@@ -65,15 +66,6 @@ private data class LocationGuardian(
     val latitude: Double? = null,
     val longitude: Double? = null,
 )
-
-private val sampleGuardians = listOf(
-    LocationGuardian(id = "1", name = "김철수", latitude = 36.3553, longitude = 127.2985),  // 대전 SSAFY 근처
-    LocationGuardian(id = "2", name = "정민수"),
-    LocationGuardian(id = "3", name = "김영희"),
-)
-
-// 위치가 활성화된 보호자 (첫 번째만 활성)
-private val guardiansWithLocation = setOf("1")
 
 // ── 색상 상수 ──
 
@@ -89,50 +81,93 @@ private val EmptyIconColor = Color(0xFFC4C4C4)
 private val EmptyTextColor = Color(0xFF9CA3AF)
 
 /**
- * 위치 확인 화면 — Kakao Map 연동
+ * 위치 확인 화면 — 피보호자 목록 + Kakao Map 연동
+ *
+ * 보호자(현재 사용자)가 자신의 피보호자들의 실시간 위치를 확인합니다.
  */
 @Composable
-fun LocationScreen() {
-    var selectedGuardianId by remember {
-        mutableStateOf(sampleGuardians.firstOrNull()?.id)
+fun LocationScreen(
+    locationViewModel: LocationViewModel = viewModel(),
+) {
+    val uiState by locationViewModel.uiState.collectAsState()
+
+    // Ward 도메인 모델 → LocationGuardian UI 모델 변환
+    val wards = when (val s = uiState) {
+        is LocationUiState.Success -> s.wards.map { ward ->
+            LocationGuardian(
+                id = ward.wardId.toString(),
+                name = ward.name,
+                latitude = ward.lat,
+                longitude = ward.lng,
+            )
+        }
+        else -> emptyList()
     }
 
-    val selectedGuardian = sampleGuardians.find { it.id == selectedGuardianId }
+    var selectedId by remember { mutableStateOf<String?>(null) }
 
-    val hasActiveLocation = selectedGuardianId != null &&
-            selectedGuardianId in guardiansWithLocation &&
-            selectedGuardian?.latitude != null &&
-            selectedGuardian?.longitude != null
+    // 첫 데이터 수신 시 첫 번째 피보호자 자동 선택
+    LaunchedEffect(wards) {
+        if (selectedId == null && wards.isNotEmpty()) {
+            selectedId = wards.first().id
+        }
+    }
+
+    val selectedWard = wards.find { it.id == selectedId }
+    val hasActiveLocation = selectedWard?.latitude != null && selectedWard.longitude != null
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(BgColor)
     ) {
-        // ── 상단 타이틀 ──
         HeaderTitle()
 
-        // ── 보호자 선택 가로 스크롤 ──
-        GuardianSelector(
-            guardians = sampleGuardians,
-            selectedId = selectedGuardianId,
-            onSelect = { selectedGuardianId = it }
-        )
-
-        // ── 지도 영역 or 빈 상태 ──
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(BgColor),
-            contentAlignment = Alignment.Center
-        ) {
-            if (hasActiveLocation && selectedGuardian != null) {
-                KakaoMapWithMarker(
-                    latitude = selectedGuardian.latitude!!,
-                    longitude = selectedGuardian.longitude!!
+        when (uiState) {
+            is LocationUiState.Loading -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Color(0xFF6083EE))
+                }
+            }
+            is LocationUiState.Error -> {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text(
+                        text = (uiState as LocationUiState.Error).message,
+                        color = Color(0xFF9CA3AF),
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    TextButton(onClick = { locationViewModel.loadWards() }) {
+                        Text("다시 시도", color = Color(0xFF6083EE))
+                    }
+                }
+            }
+            is LocationUiState.Success -> {
+                GuardianSelector(
+                    guardians = wards,
+                    selectedId = selectedId,
+                    onSelect = { selectedId = it }
                 )
-            } else {
-                EmptyLocationState()
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(BgColor),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (hasActiveLocation && selectedWard != null) {
+                        KakaoMapWithMarker(
+                            latitude = selectedWard.latitude!!,
+                            longitude = selectedWard.longitude!!
+                        )
+                    } else {
+                        EmptyLocationState()
+                    }
+                }
             }
         }
     }

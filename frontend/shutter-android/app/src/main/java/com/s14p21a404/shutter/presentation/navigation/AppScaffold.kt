@@ -15,7 +15,10 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -80,6 +83,9 @@ fun AppScaffold(
     // 보호자 등록 화면에서는 하단 바를 숨김
     val showBottomBar = currentDestination?.route != Screen.GuardianRegistration.route
 
+    // 보호자 등록 성공 시 SettingsScreen 목록을 갱신하기 위한 키
+    var settingsRefreshKey by rememberSaveable { mutableIntStateOf(0) }
+
     Box(modifier = Modifier.fillMaxSize()) {
         // 콘텐츠 영역
         NavHost(
@@ -104,6 +110,7 @@ fun AppScaffold(
             }
             composable(Screen.Settings.route) {
                 SettingsScreen(
+                    refreshKey = settingsRefreshKey,
                     onNavigateToGuardianRegistration = {
                         navController.navigate(Screen.GuardianRegistration.route)
                     },
@@ -112,7 +119,11 @@ fun AppScaffold(
             }
             composable(Screen.GuardianRegistration.route) {
                 GuardianRegistrationScreen(
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStack() },
+                    onRegistered = {
+                        settingsRefreshKey++
+                        navController.popBackStack()
+                    },
                 )
             }
         }

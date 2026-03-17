@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,16 +51,14 @@ private val AvatarBg = Color(0xFFF3F4F6)
 private val DeleteIconColor = Color(0xFF9CA3AF)
 
 /**
- * 환경 설정 화면 — 참고 프로젝트 디자인 1:1 구현
+ * 환경 설정 화면
  *
- * 구성:
- *  - 상단 "환경 설정" 타이틀 (뒤로가기 → 홈)
- *  - 알림 설정 섹션: GPS 위치 공유 토글
- *  - 보호자 목록 섹션: 등록된 보호자 카드 리스트 + 삭제 버튼
- *  - 보호자 추가 버튼 → GuardianRegistrationScreen으로 이동
+ * [refreshKey] 값이 바뀔 때마다 보호자 목록을 서버에서 새로 불러옵니다.
+ * (보호자 등록 화면에서 돌아올 때 AppScaffold가 이 값을 증가시킵니다.)
  */
 @Composable
 fun SettingsScreen(
+    refreshKey: Int = 0,
     onNavigateToGuardianRegistration: () -> Unit,
     onLogout: () -> Unit,
     settingsViewModel: SettingsViewModel = viewModel(),
@@ -68,51 +67,54 @@ fun SettingsScreen(
     val scrollState = rememberScrollState()
     val context = LocalContext.current
 
-    // 위치 권한 요청 다이얼로그 표시 여부
-    var showLocationPermissionDialog by remember { mutableStateOf(false) }
+    // refreshKey 변화 시 보호자 목록 갱신 (첫 진입 포함)
+    LaunchedEffect(refreshKey) {
+        settingsViewModel.loadGuardians()
+    }
 
-    // 위치 권한 요청 런처: 허용되면 바로 토글 ON
+    // 위치 권한 요청
+    var showLocationPermissionDialog by remember { mutableStateOf(false) }
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        if (isGranted) {
-            settingsViewModel.toggleGpsSharing()
-        }
+        if (isGranted) settingsViewModel.toggleGpsSharing()
     }
 
-    // GPS 토글 핸들러: off→on 시 위치 권한 확인
     val handleGpsToggle: () -> Unit = {
         if (!uiState.gpsSharing) {
-            // off → on: 위치 권한 확인
             val hasLocation = androidx.core.content.ContextCompat.checkSelfPermission(
                 context, android.Manifest.permission.ACCESS_FINE_LOCATION
             ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-            if (hasLocation) {
-                settingsViewModel.toggleGpsSharing()
-            } else {
-                showLocationPermissionDialog = true
-            }
+            if (hasLocation) settingsViewModel.toggleGpsSharing()
+            else showLocationPermissionDialog = true
         } else {
-            // on → off: 바로 토글
             settingsViewModel.toggleGpsSharing()
         }
     }
 
-    // ── 위치 권한 요청 다이얼로그 ──
+    // ── 위치 권한 다이얼로그 ──
     if (showLocationPermissionDialog) {
         AlertDialog(
-            onDismissRequest = { /* 닫기 방지 */ },
+            onDismissRequest = {},
             title = { Text("위치 권한 필요", fontWeight = FontWeight.Bold) },
-            text = {
-                Text("GPS 위치 공유를 사용하려면\n위치 권한을 허용해주세요.")
-            },
+            text = { Text("GPS 위치 공유를 사용하려면\n위치 권한을 허용해주세요.") },
             confirmButton = {
                 TextButton(onClick = {
                     showLocationPermissionDialog = false
                     locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
-                }) {
-                    Text("허용하기")
-                }
+                }) { Text("허용하기") }
+            },
+        )
+    }
+
+    // ── 에러 스낵바 ──
+    uiState.error?.let { errorMsg ->
+        AlertDialog(
+            onDismissRequest = { settingsViewModel.dismissError() },
+            title = { Text("오류") },
+            text = { Text(errorMsg) },
+            confirmButton = {
+                TextButton(onClick = { settingsViewModel.dismissError() }) { Text("확인") }
             },
         )
     }
@@ -122,60 +124,62 @@ fun SettingsScreen(
             .fillMaxSize()
             .background(BgColor)
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            // ── 상단 헤더 (고정) ──
+        Column(modifier = Modifier.fillMaxSize()) {
             SettingsHeader()
 
-            // ── 스크롤 콘텐츠 ──
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(scrollState)
             ) {
-                // ── 콘텐츠 ──
                 Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(top = 24.dp, bottom = 96.dp)
-            ) {
-                // ── 알림 설정 섹션 ──
-                NotificationSettingsSection(
-                    gpsSharing = uiState.gpsSharing,
-                    onToggleGps = handleGpsToggle
-                )
-
-                Spacer(modifier = Modifier.height(32.dp))
-
-                // ── 보호자 목록 섹션 ──
-                GuardianListSection(
-                    guardians = uiState.guardians,
-                    onAddGuardian = onNavigateToGuardianRegistration,
-                    onDeleteGuardian = { settingsViewModel.requestDeleteGuardian(it) }
-                )
-
-                Spacer(modifier = Modifier.height(32.dp))
-
-                // ── 로그아웃 버튼 ──
-                OutlinedButton(
-                    onClick = onLogout,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = TextTertiary
-                    )
+                        .padding(horizontal = 20.dp)
+                        .padding(top = 24.dp, bottom = 96.dp)
                 ) {
-                    Text(text = "로그아웃", fontSize = 15.sp)
+                    NotificationSettingsSection(
+                        gpsSharing = uiState.gpsSharing,
+                        onToggleGps = handleGpsToggle
+                    )
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    if (uiState.isLoading) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = ToggleActiveColor)
+                        }
+                    } else {
+                        GuardianListSection(
+                            guardians = uiState.guardians,
+                            onAddGuardian = onNavigateToGuardianRegistration,
+                            onDeleteGuardian = { settingsViewModel.requestDeleteGuardian(it) }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    OutlinedButton(
+                        onClick = onLogout,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = TextTertiary
+                        )
+                    ) {
+                        Text(text = "로그아웃", fontSize = 15.sp)
+                    }
                 }
-            }
             }
         }
 
-        // ── 보호자 삭제 확인 모달 ──
         if (uiState.guardianToDelete != null) {
             DeleteGuardianDialog(
                 guardian = uiState.guardianToDelete!!,
@@ -256,7 +260,6 @@ private fun NotificationSettingsSection(
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            // 커스텀 토글 스위치
             CustomToggle(
                 checked = gpsSharing,
                 onCheckedChange = { onToggleGps() }
@@ -265,9 +268,6 @@ private fun NotificationSettingsSection(
     }
 }
 
-/**
- * 참고 디자인의 둥근 토글 스위치
- */
 @Composable
 private fun CustomToggle(
     checked: Boolean,
@@ -324,7 +324,6 @@ private fun GuardianListSection(
             color = TextPrimary
         )
 
-        // 추가 버튼
         Surface(
             onClick = onAddGuardian,
             shape = RoundedCornerShape(50),
@@ -353,13 +352,27 @@ private fun GuardianListSection(
 
     Spacer(modifier = Modifier.height(16.dp))
 
-    // 보호자 카드 리스트
-    guardians.forEach { guardian ->
-        GuardianCard(
-            guardian = guardian,
-            onDelete = { onDeleteGuardian(guardian) }
-        )
-        Spacer(modifier = Modifier.height(12.dp))
+    if (guardians.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "등록된 보호자가 없습니다",
+                fontSize = 14.sp,
+                color = TextSecondary
+            )
+        }
+    } else {
+        guardians.forEach { guardian ->
+            GuardianCard(
+                guardian = guardian,
+                onDelete = { onDeleteGuardian(guardian) }
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
     }
 }
 
@@ -379,7 +392,6 @@ private fun GuardianCard(
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // 아바타
             Box(
                 modifier = Modifier
                     .size(48.dp)
@@ -405,7 +417,6 @@ private fun GuardianCard(
                 modifier = Modifier.weight(1f)
             )
 
-            // 삭제 아이콘
             IconButton(onClick = onDelete) {
                 Icon(
                     imageVector = Icons.Filled.Delete,
@@ -461,7 +472,6 @@ private fun DeleteGuardianDialog(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // 보호자 정보
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
@@ -491,7 +501,6 @@ private fun DeleteGuardianDialog(
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // 확인 버튼
                 Button(
                     onClick = onConfirm,
                     modifier = Modifier
@@ -503,34 +512,22 @@ private fun DeleteGuardianDialog(
                         contentColor = Color.White,
                     )
                 ) {
-                    Text(
-                        text = "확인",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Text(text = "확인", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // 취소 버튼
                 OutlinedButton(
                     onClick = onDismiss,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = TextTertiary
-                    )
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextTertiary)
                 ) {
-                    Text(
-                        text = "취소",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Text(text = "취소", fontSize = 16.sp, fontWeight = FontWeight.Medium)
                 }
             }
         }
     }
 }
-
