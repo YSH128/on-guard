@@ -59,7 +59,7 @@ private const val PULSE_INTERVAL_MS = 40L
 
 // ── 보호자 데이터 모델 (샘플) ──
 
-private data class Guardian(
+private data class LocationGuardian(
     val id: String,
     val name: String,
     val latitude: Double? = null,
@@ -67,9 +67,9 @@ private data class Guardian(
 )
 
 private val sampleGuardians = listOf(
-    Guardian(id = "1", name = "김철수", latitude = 36.3553, longitude = 127.2985),  // 대전 SSAFY 근처
-    Guardian(id = "2", name = "정민수"),
-    Guardian(id = "3", name = "김영희"),
+    LocationGuardian(id = "1", name = "김철수", latitude = 36.3553, longitude = 127.2985),  // 대전 SSAFY 근처
+    LocationGuardian(id = "2", name = "정민수"),
+    LocationGuardian(id = "3", name = "김영희"),
 )
 
 // 위치가 활성화된 보호자 (첫 번째만 활성)
@@ -167,7 +167,7 @@ private fun HeaderTitle() {
 
 @Composable
 private fun GuardianSelector(
-    guardians: List<Guardian>,
+    guardians: List<LocationGuardian>,
     selectedId: String?,
     onSelect: (String) -> Unit,
 ) {
