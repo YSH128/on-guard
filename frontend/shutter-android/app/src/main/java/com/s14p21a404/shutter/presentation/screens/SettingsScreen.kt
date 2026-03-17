@@ -68,15 +68,19 @@ fun SettingsScreen(
             .background(BgColor)
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
+            modifier = Modifier.fillMaxSize()
         ) {
-            // ── 상단 헤더 ──
+            // ── 상단 헤더 (고정) ──
             SettingsHeader()
 
-            // ── 콘텐츠 ──
+            // ── 스크롤 콘텐츠 ──
             Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+            ) {
+                // ── 콘텐츠 ──
+                Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
@@ -112,6 +116,7 @@ fun SettingsScreen(
                 ) {
                     Text(text = "로그아웃", fontSize = 15.sp)
                 }
+            }
             }
         }
 
