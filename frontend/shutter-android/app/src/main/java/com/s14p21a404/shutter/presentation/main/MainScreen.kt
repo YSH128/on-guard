@@ -2,14 +2,26 @@ package com.s14p21a404.shutter.presentation.main
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.s14p21a404.shutter.presentation.navigation.AppScaffold
+
+private val AccentColor = Color(0xFF6083EE)
+private val ButtonColor = Color(0xFF2B3A5C)
+private val LabelColor = Color(0xFF1A1A1A)
+private val PlaceholderColor = Color(0xFF9CA3AF)
+private val UnfocusedLineColor = Color(0xFFD1D5DB)
 
 @Composable
 fun MainScreen(
@@ -23,18 +35,16 @@ fun MainScreen(
     loginError: String? = null,
     onDismissError: () -> Unit = {},
 ) {
-    // 신규 회원이면 이름 입력 화면 우선 표시
     if (isNewUser) {
         RegistrationScreen(
+            onBack = onLogout,
             onRegister = onRegister,
-            onLogout = onLogout,
             loginError = loginError,
             onDismissError = onDismissError,
         )
         return
     }
 
-    // 로그인 완료 → 바로 AppScaffold (홈 화면에서 권한 요청 처리)
     AppScaffold(
         onLogout = onLogout,
         isServiceRunning = uiState.isServiceRunning,
@@ -46,16 +56,29 @@ fun MainScreen(
 }
 
 /**
- * 신규 회원 등록 화면 — 이름을 입력하고 시작하기 버튼을 누르면 /auth/register 호출.
+ * 신규 회원 등록 화면 — 참고 디자인(b_mlBd8AWG4QY) 기반
+ *
+ * 구성:
+ *  - 상단 뒤로가기 아이콘
+ *  - "이름을 입력해주세요." 큰 타이틀
+ *  - "이름" 라벨 + 밑줄 입력창 (포커스 시 AccentColor)
+ *  - 하단 "시작하기" 버튼
  */
 @Composable
 private fun RegistrationScreen(
+    onBack: () -> Unit,
     onRegister: (name: String) -> Unit,
-    onLogout: () -> Unit,
     loginError: String?,
     onDismissError: () -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
+    var isFocused by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+
+    // 화면 진입 시 자동 포커스 → 키보드 표시
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
 
     if (loginError != null) {
         AlertDialog(
@@ -73,67 +96,100 @@ private fun RegistrationScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
         ) {
-            Text(
-                text = "🛡️ Shutter",
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "실시간 영상통화 딥페이크 탐지",
-                fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(48.dp))
-
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("이름") },
-                placeholder = { Text("사용하실 이름을 입력해주세요") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Button(
-                onClick = { if (name.isNotBlank()) onRegister(name.trim()) },
-                enabled = name.isNotBlank(),
+            // ── 상단 뒤로가기 ──
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(12.dp),
+                    .padding(start = 4.dp, top = 8.dp)
             ) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = Icons.Filled.ChevronLeft,
+                        contentDescription = "뒤로가기",
+                        modifier = Modifier.size(28.dp),
+                        tint = AccentColor
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(36.dp))
+
+            // ── 이름 입력 영역 ──
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+            ) {
+                // 라벨
                 Text(
-                    text = "시작하기",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
+                    text = "이름",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = LabelColor,
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 밑줄 입력창
+                TextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    placeholder = {
+                        Text(
+                            text = "이름을 입력해주세요",
+                            fontSize = 20.sp,
+                            color = PlaceholderColor,
+                        )
+                    },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { isFocused = it.isFocused },
+                    textStyle = TextStyle(
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = LabelColor,
+                    ),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = AccentColor,
+                        unfocusedIndicatorColor = UnfocusedLineColor,
+                        cursorColor = AccentColor,
+                    ),
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.weight(1f))
 
-            OutlinedButton(
-                onClick = onLogout,
+            // ── 하단 시작하기 버튼 ──
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 40.dp)
             ) {
-                Text(text = "로그아웃", fontSize = 15.sp)
+                Button(
+                    onClick = { if (name.isNotBlank()) onRegister(name.trim()) },
+                    enabled = name.isNotBlank(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ButtonColor,
+                        contentColor = Color.White,
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp),
+                ) {
+                    Text(
+                        text = "시작하기",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
         }
     }
