@@ -21,7 +21,7 @@ public class TelemetryRequest {
     private Boolean inferenceSuccess;
 
     @Pattern(
-            regexp = "MODEL_LOAD_FAIL|TIMEOUT|INFERENCE_ERROR|UNKNOWN",
+            regexp = "^$|MODEL_LOAD_FAIL|TIMEOUT|INFERENCE_ERROR|UNKNOWN",
             message = "failure_type must be one of MODEL_LOAD_FAIL, TIMEOUT, INFERENCE_ERROR, UNKNOWN"
     )
     private String failureType;
