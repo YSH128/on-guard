@@ -106,6 +106,7 @@ services:
   # ───── Redis ─────
   redis:
     image: "redis:alpine"
+    command: redis-server --notify-keyspace-events Ex
     expose:
       - "6379" # ← 외부 포트 제거, 내부망에서만 접근
     volumes:

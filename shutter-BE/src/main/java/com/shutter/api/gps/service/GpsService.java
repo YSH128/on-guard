@@ -9,6 +9,7 @@ import com.shutter.api.gps.dto.request.GpsSharingToggleRequest;
 import com.shutter.api.gps.dto.response.GpsLocationResponse;
 import com.shutter.api.gps.dto.response.GpsResponse;
 import com.shutter.api.gps.dto.response.GpsSharingToggleResponse;
+import com.shutter.api.gps.dto.response.LocationExpiredDto;
 import com.shutter.api.gps.dto.response.LocationUpdateDto;
 import com.shutter.api.user.domain.Role;
 import com.shutter.api.user.domain.User;
@@ -159,6 +160,16 @@ public class GpsService {
             String redisKey = GPS_KEY_PREFIX + userId;
             redisTemplate.delete(redisKey);
             log.debug("Deleted GPS location from Redis for user {} due to sharing toggle OFF", userId);
+
+            // 동일하게 LOCATION_EXPIRED 푸시
+            LocationExpiredDto expiredDto = LocationExpiredDto.builder()
+                    .wardId(userId)
+                    .isSharing(false)
+                    .build();
+
+            String destination = "/topic/location/" + userId;
+            messagingTemplate.convertAndSend(destination, expiredDto);
+            log.debug("Published LOCATION_EXPIRED to {} on toggle OFF", destination);
         }
 
         return new GpsSharingToggleResponse(user.getGpsSharing());
