@@ -60,7 +60,15 @@ class DeepfakeDetectionRepositoryImpl(
             sendTelemetry(result)
         }
 
-        // ── 화면 캡처 시작 ──
+        // ── 화면 캡처 시작/재개 ──
+        // 기존 ScreenCaptureManager가 살아있으면 일시정지만 해제하여 재개
+        val existing = screenCaptureManager
+        if (existing != null) {
+            Log.d(TAG, "기존 ScreenCaptureManager 재개 (pause 해제)")
+            existing.resumeCapture()
+            return
+        }
+
         val ctx = captureContext
         val projection = mediaProjection
         if (ctx == null || projection == null) {
@@ -79,9 +87,8 @@ class DeepfakeDetectionRepositoryImpl(
     override fun stopDetection() {
         Log.d(TAG, "감지 중단")
 
-        // ── 화면 캡처 중단 ──
-        screenCaptureManager?.stopCapture()
-        screenCaptureManager = null
+        // ── 화면 캡처 일시정지 (VirtualDisplay·MediaProjection 유지) ──
+        screenCaptureManager?.pauseCapture()
 
         detector.stopDetection()
     }

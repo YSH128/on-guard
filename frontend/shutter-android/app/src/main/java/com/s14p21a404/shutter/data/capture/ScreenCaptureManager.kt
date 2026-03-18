@@ -46,6 +46,11 @@ class ScreenCaptureManager(
     @Volatile
     private var isCapturing = false
 
+    /** 일시정지 상태: true이면 프레임 수신은 하되 Detector에 전달하지 않는다. */
+    @Volatile
+    var isPaused = false
+        private set
+
     // 최신 프레임 Bitmap 보존 (roi 크롭 오버레이용)
     @Volatile
     var latestBitmap: Bitmap? = null
@@ -78,6 +83,12 @@ class ScreenCaptureManager(
             if (!isCapturing) return@setOnImageAvailableListener
 
             val image = reader.acquireLatestImage() ?: return@setOnImageAvailableListener
+
+            // 일시정지 중이면 이미지만 소비하고 스킵
+            if (isPaused) {
+                image.close()
+                return@setOnImageAvailableListener
+            }
 
             try {
                 // 샘플링: 간격 미달이면 스킵
@@ -151,6 +162,24 @@ class ScreenCaptureManager(
         )
 
         Log.d(TAG, "화면 캡처 시작: ${captureWidth}x${captureHeight}, 간격=${sampleIntervalMs}ms")
+    }
+
+    /**
+     * 캡처 일시정지: VirtualDisplay·MediaProjection은 유지하고 프레임 처리만 중단한다.
+     * 영상통화 종료 시 호출. 다음 통화에서 resumeCapture()로 바로 재개 가능.
+     */
+    fun pauseCapture() {
+        isPaused = true
+        Log.d(TAG, "화면 캡처 일시정지")
+    }
+
+    /**
+     * 캡처 재개: 일시정지 상태를 해제하여 다시 프레임을 Detector에 전달한다.
+     */
+    fun resumeCapture() {
+        isPaused = false
+        lastCaptureTime = 0L   // 재개 즉시 첫 프레임을 처리하도록 리셋
+        Log.d(TAG, "화면 캡처 재개")
     }
 
     /**
