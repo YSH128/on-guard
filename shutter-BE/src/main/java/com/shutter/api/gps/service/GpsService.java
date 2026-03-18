@@ -5,8 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.shutter.api.global.exception.BusinessException;
 import com.shutter.api.global.exception.ErrorCode;
 import com.shutter.api.gps.dto.request.GpsRequest;
+import com.shutter.api.gps.dto.request.GpsSharingToggleRequest;
 import com.shutter.api.gps.dto.response.GpsLocationResponse;
 import com.shutter.api.gps.dto.response.GpsResponse;
+import com.shutter.api.gps.dto.response.GpsSharingToggleResponse;
 import com.shutter.api.user.domain.Role;
 import com.shutter.api.user.domain.User;
 import com.shutter.api.user.repository.UserRelationshipRepository;
@@ -15,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -110,5 +113,32 @@ public class GpsService {
         }
 
         return responseBuilder.build();
+    }
+
+    /**
+     * 피보호자(WARD)의 GPS 공유 상태 토글
+     */
+    @Transactional
+    public GpsSharingToggleResponse toggleSharing(Long userId, GpsSharingToggleRequest request) {
+        // 1. 유저 조회
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        // 2. 권한 검증 (보호자는 불가능)
+        if (Role.GUARDIAN.equals(user.getRole())) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED_ACCESS);
+        }
+
+        // 3. DB 공유 상태 업데이트 (Dirty Checking)
+        user.updateGpsSharing(request.getGpsSharing());
+
+        // 4. 공유 중지 시 Redis 잔여 데이터 즉시 삭제
+        if (Boolean.FALSE.equals(request.getGpsSharing())) {
+            String redisKey = GPS_KEY_PREFIX + userId;
+            redisTemplate.delete(redisKey);
+            log.debug("Deleted GPS location from Redis for user {} due to sharing toggle OFF", userId);
+        }
+
+        return new GpsSharingToggleResponse(user.getGpsSharing());
     }
 }
