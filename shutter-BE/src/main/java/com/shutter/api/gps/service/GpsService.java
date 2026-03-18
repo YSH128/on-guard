@@ -9,18 +9,22 @@ import com.shutter.api.gps.dto.request.GpsSharingToggleRequest;
 import com.shutter.api.gps.dto.response.GpsLocationResponse;
 import com.shutter.api.gps.dto.response.GpsResponse;
 import com.shutter.api.gps.dto.response.GpsSharingToggleResponse;
+import com.shutter.api.gps.dto.response.LocationUpdateDto;
 import com.shutter.api.user.domain.Role;
 import com.shutter.api.user.domain.User;
+import com.shutter.api.user.domain.UserRelationship;
 import com.shutter.api.user.repository.UserRelationshipRepository;
 import com.shutter.api.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -33,6 +37,7 @@ public class GpsService {
     private final UserRelationshipRepository userRelationshipRepository;
     private final RedisTemplate<String, String> redisTemplate;
     private final ObjectMapper objectMapper;
+    private final SimpMessagingTemplate messagingTemplate;
 
     private static final String GPS_KEY_PREFIX = "location:";
     private static final long GPS_TTL_SECONDS = 1800; // 30분
@@ -64,6 +69,23 @@ public class GpsService {
             redisTemplate.opsForValue().set(redisKey, value, GPS_TTL_SECONDS, TimeUnit.SECONDS);
 
             log.debug("Saved GPS location for user {}: {}", userId, value);
+
+            // WebSocket 푸시 전송 (구독 중인 채널로)
+            List<UserRelationship> relationships = userRelationshipRepository.findByWardIdWithGuardian(userId);
+            if (!relationships.isEmpty()) {
+                LocationUpdateDto updateDto = LocationUpdateDto.builder()
+                        .wardId(userId)
+                        .name(user.getName())
+                        .lat(request.getLat())
+                        .lng(request.getLng())
+                        .updatedAt(now.toString())
+                        .isSharing(true)
+                        .build();
+
+                String destination = "/topic/location/" + userId;
+                messagingTemplate.convertAndSend(destination, updateDto);
+                log.debug("Published LOCATION_UPDATE to {}", destination);
+            }
 
             return new GpsResponse(now);
         } catch (JsonProcessingException e) {
