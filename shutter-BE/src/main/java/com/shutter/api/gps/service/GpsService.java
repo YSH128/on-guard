@@ -5,9 +5,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.shutter.api.global.exception.BusinessException;
 import com.shutter.api.global.exception.ErrorCode;
 import com.shutter.api.gps.dto.request.GpsRequest;
+import com.shutter.api.gps.dto.response.GpsLocationResponse;
 import com.shutter.api.gps.dto.response.GpsResponse;
 import com.shutter.api.user.domain.Role;
 import com.shutter.api.user.domain.User;
+import com.shutter.api.user.repository.UserRelationshipRepository;
 import com.shutter.api.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 public class GpsService {
 
     private final UserRepository userRepository;
+    private final UserRelationshipRepository userRelationshipRepository;
     private final RedisTemplate<String, String> redisTemplate;
     private final ObjectMapper objectMapper;
 
@@ -64,5 +67,48 @@ public class GpsService {
             log.error("Failed to serialize GPS data", e);
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    /**
+     * 보호자가 피보호자의 위치를 조회
+     */
+    public GpsLocationResponse getLocation(Long guardianId, Long wardId) {
+        // 1. 권한 검증: guardianId가 wardId의 보호자가 맞는지 확인
+        boolean hasRelationship = userRelationshipRepository.existsByGuardianIdAndWardId(guardianId, wardId);
+        if (!hasRelationship) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED_ACCESS);
+        }
+
+        // 2. 피보호자 정보 조회 (이름을 얻기 위함)
+        User ward = userRepository.findById(wardId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        // 3. Redis에서 위치 데이터 조회
+        String redisKey = GPS_KEY_PREFIX + wardId;
+        String jsonValue = redisTemplate.opsForValue().get(redisKey);
+
+        GpsLocationResponse.GpsLocationResponseBuilder responseBuilder = GpsLocationResponse.builder()
+                .wardId(wardId)
+                .name(ward.getName());
+
+        if (jsonValue != null) {
+            try {
+                Map<String, Object> locationData = objectMapper.readValue(jsonValue, Map.class);
+                
+                responseBuilder.isSharing(true)
+                        .lat(Double.valueOf(locationData.get("lat").toString()))
+                        .lng(Double.valueOf(locationData.get("lng").toString()))
+                        .updatedAt(locationData.get("updated_at") != null ? locationData.get("updated_at").toString() : null);
+                        
+            } catch (Exception e) {
+                log.error("Failed to parse GPS data from Redis for user {}", wardId, e);
+                throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+            }
+        } else {
+            // Redis에 키가 없으면 공유 중지(또는 만료) 상태
+            responseBuilder.isSharing(false);
+        }
+
+        return responseBuilder.build();
     }
 }
