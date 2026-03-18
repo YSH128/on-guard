@@ -94,6 +94,7 @@ class ScreenCaptureManager(
                 // 샘플링: 간격 미달이면 스킵
                 val now = SystemClock.elapsedRealtime()
                 if (now - lastCaptureTime < sampleIntervalMs) {
+                    image.close()
                     return@setOnImageAvailableListener
                 }
                 lastCaptureTime = now
@@ -127,6 +128,8 @@ class ScreenCaptureManager(
                     bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
                     bitmap.copyPixelsFromBuffer(java.nio.ByteBuffer.wrap(cleanBytes))
                 }
+                // 이전 Bitmap 해제 (메모리 누수 방지)
+                latestBitmap?.recycle()
                 latestBitmap = bitmap
 
                 Log.d(TAG, "프레임 캡처: ${width}x${height}, stride=$rowStride, bytes=${bytes.size}")
@@ -170,6 +173,8 @@ class ScreenCaptureManager(
      */
     fun pauseCapture() {
         isPaused = true
+        latestBitmap?.recycle()
+        latestBitmap = null
         Log.d(TAG, "화면 캡처 일시정지")
     }
 
@@ -199,6 +204,7 @@ class ScreenCaptureManager(
         handlerThread = null
         handler = null
 
+        latestBitmap?.recycle()
         latestBitmap = null
 
         Log.d(TAG, "화면 캡처 중단")
