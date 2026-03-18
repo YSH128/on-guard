@@ -8,7 +8,9 @@ CREATE TABLE users (
                        name VARCHAR(50) NOT NULL,             -- 지도에서 표시될 이름
                        role VARCHAR(10),             -- 'guardian' or 'ward'
                        device_uuid VARCHAR(36) NOT NULL,    -- 기기 고유 ID
-                       created_at TIMESTAMP
+                       fcm_token VARCHAR(255),
+                       gps_sharing BOOLEAN DEFAULT FALSE NOT NULL,
+                       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
 -- 보호자-피보호자 N:M 관계 테이블 (user_guardians 대체)
@@ -16,7 +18,8 @@ CREATE TABLE user_relationships (
                                     id BIGINT AUTO_INCREMENT PRIMARY KEY,
                                     guardian_id BIGINT NOT NULL,
                                     ward_id BIGINT NOT NULL,
-                                    created_at TIMESTAMP,
+                                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                                    CONSTRAINT uq_guardian_ward UNIQUE (guardian_id, ward_id),
                                     FOREIGN KEY (guardian_id) REFERENCES users(id),
                                     FOREIGN KEY (ward_id) REFERENCES users(id)
 );
@@ -53,12 +56,14 @@ CREATE TABLE notification_logs (
                                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
                                    ward_id BIGINT NOT NULL,                   -- 피싱이 감지된 피보호자 (user_id → ward_id로 명확화)
                                    guardian_id BIGINT NOT NULL,              -- 알림을 받는 보호자
+                                   event_type VARCHAR(20) NOT NULL,        -- 'DEEPFAKE', 'MESSAGE', 'LOCATION'
                                    caller VARCHAR(50),                      -- 발신자 정보
+                                   call_started_at TIMESTAMP,              -- 통화 시작 시각
                                    status VARCHAR(20) NOT NULL,           -- SUCCESS, FAIL
                                    fail_reason VARCHAR(500),
-                                   sent_at TIMESTAMP,
+                                   sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
                                    FOREIGN KEY (ward_id) REFERENCES users(id),
-                                   FOREIGN KEY (guardian_id) REFERENCES users(id)  -- guardians 테이블 삭제로 users 참조
+                                   FOREIGN KEY (guardian_id) REFERENCES users(id)
 );
 CREATE INDEX idx_notification_logs_ward_id ON notification_logs (ward_id);
 CREATE INDEX idx_notification_logs_guardian_id ON notification_logs (guardian_id);
