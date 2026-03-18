@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
@@ -107,14 +109,20 @@ public class TelemetryService {
         }
     }
 
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+
     private LocalDateTime parseTimestamp(String timestamp) {
         try {
             TemporalAccessor parsed = TIMESTAMP_FORMATTER.parseBest(
                     timestamp, OffsetDateTime::from, LocalDateTime::from);
             if (parsed instanceof OffsetDateTime odt) {
-                return odt.toLocalDateTime();
+                // offset 포함 시: UTC로 정규화
+                return odt.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime();
             }
-            return (LocalDateTime) parsed;
+            // timezone 없음: KST(앱 기본값)로 간주 후 UTC 변환
+            return ((LocalDateTime) parsed).atZone(KST)
+                    .withZoneSameInstant(ZoneOffset.UTC)
+                    .toLocalDateTime();
         } catch (DateTimeParseException e) {
             throw new IllegalArgumentException(
                     "Invalid timestamp format: " + timestamp
