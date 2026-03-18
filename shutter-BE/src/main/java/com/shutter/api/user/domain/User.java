@@ -35,14 +35,24 @@ public class User {
     @Column(name = "device_uuid", nullable = false, length = 36)
     private String deviceUuid;
 
+    @Column(name = "fcm_token", length = 255)
+    private String fcmToken;
+
+    @Column(name = "gps_sharing", nullable = false)
+    private Boolean gpsSharing = false;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
     @Builder
-    public User(Long kakaoId, String name, String deviceUuid) {
+    public User(Long kakaoId, String name, String deviceUuid, String fcmToken, Boolean gpsSharing) {
         this.kakaoId = kakaoId;
         this.name = name;
         this.deviceUuid = deviceUuid;
+        this.fcmToken = fcmToken;
+        if (gpsSharing != null) {
+            this.gpsSharing = gpsSharing;
+        }
         this.role = null;
         this.createdAt = LocalDateTime.now();
     }

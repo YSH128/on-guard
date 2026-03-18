@@ -31,6 +31,13 @@ public class NotificationLog {
     private String caller;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "event_type", nullable = false, length = 20)
+    private NotificationEventType eventType;
+
+    @Column(name = "call_started_at")
+    private LocalDateTime callStartedAt;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private NotificationStatus status;
 
@@ -41,10 +48,13 @@ public class NotificationLog {
     private LocalDateTime sentAt;
 
     @Builder
-    public NotificationLog(User ward, User guardian, String caller, NotificationStatus status, String failReason, LocalDateTime sentAt) {
+    public NotificationLog(User ward, User guardian, String caller, NotificationEventType eventType,
+            LocalDateTime callStartedAt, NotificationStatus status, String failReason, LocalDateTime sentAt) {
         this.ward = ward;
         this.guardian = guardian;
         this.caller = caller;
+        this.eventType = eventType;
+        this.callStartedAt = callStartedAt;
         this.status = status;
         this.failReason = failReason;
         this.sentAt = sentAt;
