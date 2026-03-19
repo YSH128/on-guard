@@ -9,7 +9,7 @@ import warnings
 
 import torch
 import torchaudio
-try: 
+try:
     if platform.system() == 'Windows':
         torchaudio.set_audio_backend("soundfile")
     elif platform.system() == 'Linux':
