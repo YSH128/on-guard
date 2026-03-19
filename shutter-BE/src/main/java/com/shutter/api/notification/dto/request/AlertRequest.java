@@ -1,0 +1,30 @@
+package com.shutter.api.notification.dto.request;
+
+import com.shutter.api.notification.domain.NotificationEventType;
+import jakarta.validation.constraints.NotNull;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+
+/**
+ * 알림 전송 요청 DTO
+ */
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class AlertRequest {
+
+    private String caller;
+
+    @NotNull(message = "이벤트 타입은 필수입니다.")
+    private NotificationEventType eventType;
+
+    private LocalDateTime callStartedAt;
+
+    public AlertRequest(String caller, NotificationEventType eventType, LocalDateTime callStartedAt) {
+        this.caller = caller;
+        this.eventType = eventType;
+        this.callStartedAt = callStartedAt;
+    }
+}
