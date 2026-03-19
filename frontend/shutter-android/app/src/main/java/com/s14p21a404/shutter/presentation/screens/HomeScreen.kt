@@ -135,13 +135,17 @@ fun HomeScreen(
     var showOverlayDialog by remember { mutableStateOf(false) }
     var showAccessibilityDialog by remember { mutableStateOf(false) }
 
-    // 첫 접속 시 권한 체크 → 다이얼로그 표시
-    LaunchedEffect(allPermissionsGranted, overlayPermissionGranted, accessibilityServiceEnabled) {
+    // 순서: 런타임 권한 → 오버레이 → MediaProjection(서비스 시작) → 접근성
+    LaunchedEffect(allPermissionsGranted, overlayPermissionGranted, accessibilityServiceEnabled, isServiceRunning) {
         if (!allPermissionsGranted) {
             showPermissionDialog = true
         } else if (!overlayPermissionGranted) {
             showOverlayDialog = true
+        } else if (!isServiceRunning) {
+            // 런타임 + 오버레이 충족 → MediaProjection 동의 (서비스 시작)
+            onToggleService()
         } else if (!accessibilityServiceEnabled) {
+            // 서비스 실행 후 접근성 미활성 → 접근성 다이얼로그
             showAccessibilityDialog = true
         }
     }
@@ -185,12 +189,12 @@ fun HomeScreen(
     }
 
     // ── 접근성 서비스 활성화 요청 다이얼로그 ──
-    if (showAccessibilityDialog && allPermissionsGranted && overlayPermissionGranted) {
+    if (showAccessibilityDialog && allPermissionsGranted && overlayPermissionGranted && isServiceRunning) {
         AlertDialog(
             onDismissRequest = { /* 닫기 방지 */ },
             title = { Text("접근성 서비스 활성화 필요", fontWeight = FontWeight.Bold) },
             text = {
-                Text("영상통화 화면 감지를 위해\n접근성 설정에서 'Shutter' 서비스를 활성화해주세요.")
+                Text("영상통화 화면 감지를 위해\n접근성 서비스를 켜야 합니다.\n\n설정 화면에서 'Shutter'를 찾아\n토글을 켜주세요.")
             },
             confirmButton = {
                 TextButton(onClick = {

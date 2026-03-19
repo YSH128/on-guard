@@ -111,11 +111,25 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * 접근성 서비스 설정 화면으로 이동
+     * 접근성 서비스 설정 화면으로 이동.
+     * 우리 앱(ForegroundAppMonitorService)의 상세 설정 페이지로 바로 이동을 시도하고,
+     * 실패 시 접근성 목록 화면으로 fallback한다.
      */
     private fun requestAccessibilityPermission() {
-        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-        startActivity(intent)
+        val componentName = "${packageName}/${packageName}.presentation.service.ForegroundAppMonitorService"
+        try {
+            // Android 접근성 서비스 상세 페이지로 바로 이동
+            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                val bundle = Bundle()
+                bundle.putString(":settings:fragment_args_key", componentName)
+                putExtra(":settings:fragment_args_key", componentName)
+                putExtra(":settings:show_fragment_args", bundle)
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.w(TAG, "접근성 상세 설정 이동 실패, 접근성 목록으로 fallback", e)
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
     }
 
     /**
