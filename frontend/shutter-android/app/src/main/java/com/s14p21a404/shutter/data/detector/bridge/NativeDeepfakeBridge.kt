@@ -29,7 +29,8 @@ class NativeDeepfakeBridge(private val context: Context) {
     @Volatile
     var isQnnInitialized = false
 
-    private external fun initQnn(cacheDir: String, assetsPath: String): Boolean
+    private external fun initQnn(cacheDir: String): Boolean
+    private external fun loadModel(assetsPath: String): Boolean
     private external fun releaseQnn()
     private external fun detectDeepfakeVisual(buffer: ByteArray, width: Int, height: Int, stride: Int): FloatArray
 
@@ -43,15 +44,21 @@ class NativeDeepfakeBridge(private val context: Context) {
                 
                 Log.d("NativeDeepfakeBridge", "QNN 초기화 시작... (assets: $filesDir, cache: $cacheDir)")
                 val startCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
-                val success = initQnn(cacheDir, filesDir)
-                val endCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
-                val loadThreadCpuTime = endCpuTimeMs - startCpuTimeMs
-                
-                if (success) {
-                    isQnnInitialized = true
-                    Log.d("NativeDeepfakeBridge", "QNN 모델 초기화 완료 (CPU: ${loadThreadCpuTime}ms)")
+                val initSuccess = initQnn(cacheDir)
+                if (initSuccess) {
+                    Log.d("NativeDeepfakeBridge", "QNN 시스템 초기화 성공")
+                    val loadSuccess = loadModel(filesDir)
+                    val endCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
+                    val loadThreadCpuTime = endCpuTimeMs - startCpuTimeMs
+                    
+                    if (loadSuccess) {
+                        isQnnInitialized = true
+                        Log.d("NativeDeepfakeBridge", "QNN 모델 로드 및 최적화 완료 (CPU: ${loadThreadCpuTime}ms)")
+                    } else {
+                        Log.e("NativeDeepfakeBridge", "QNN 모델 로드 실패!")
+                    }
                 } else {
-                    Log.e("NativeDeepfakeBridge", "QNN 초기화 실패!")
+                    Log.e("NativeDeepfakeBridge", "QNN 시스템 초기화 실패!")
                 }
             } catch (e: Exception) {
                 Log.e("NativeDeepfakeBridge", "QNN 로드 에러: ${e.message}")
