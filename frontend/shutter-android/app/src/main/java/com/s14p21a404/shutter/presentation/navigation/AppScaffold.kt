@@ -75,6 +75,7 @@ fun AppScaffold(
     uiState: MainUiState = MainUiState(),
     onRequestPermissions: () -> Unit = {},
     onRequestOverlayPermission: () -> Unit = {},
+    onRequestAccessibilityPermission: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -101,8 +102,10 @@ fun AppScaffold(
                     onToggleService = onToggleService,
                     allPermissionsGranted = uiState.allPermissionsGranted,
                     overlayPermissionGranted = uiState.overlayPermissionGranted,
+                    accessibilityServiceEnabled = uiState.accessibilityServiceEnabled,
                     onRequestPermissions = onRequestPermissions,
                     onRequestOverlayPermission = onRequestOverlayPermission,
+                    onRequestAccessibilityPermission = onRequestAccessibilityPermission,
                 )
             }
             composable(Screen.Location.route) {
