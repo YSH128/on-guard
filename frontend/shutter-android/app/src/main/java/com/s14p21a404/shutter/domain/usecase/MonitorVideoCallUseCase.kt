@@ -31,9 +31,9 @@ class MonitorVideoCallUseCase(
             if (isVideoCall) {
                 // 통화 시작 후 2초 대기 (화면 안정화)
                 delay(DETECTION_START_DELAY_MS)
-                detectionRepo.startDetection()
-            } else {
-                detectionRepo.stopDetection()
             }
         }
+
+    fun startDetection() = detectionRepo.startDetection()
+    fun stopDetection() = detectionRepo.stopDetection()
 }

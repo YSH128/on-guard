@@ -59,14 +59,16 @@ class VideoCallDetectService : Service() {
         // 영상통화 모니터링 시작
         videoCallRepository.startMonitoring()
 
-        // 영상통화 상태 관찰 → 캡처·감지 자동 시작/중단 (data layer 내부에서 처리)
+        // 영상통화 상태 관찰 → 캡처·감지 자동 시작/중단 + 오버레이 enabled 제어
         serviceScope.launch {
             monitorUseCase.observeAndControl().collect { isVideoCall ->
                 Log.d(TAG, "영상통화 상태: $isVideoCall")
                 if (isVideoCall) {
                     warningOverlayManager.setEnabled(true)
+                    monitorUseCase.startDetection()
                 } else {
                     warningOverlayManager.setEnabled(false)
+                    monitorUseCase.stopDetection()
                     warningOverlayManager.dismissWarning()
                 }
             }
