@@ -458,6 +458,8 @@ class VideoCallDetectService : Service() {
         /** GPS 전송 세션 지속 시간: 30분 */
         private const val GPS_SHARING_DURATION_MS = 30 * 60 * 1000L
 
+        //private const val GPS_SHARING_DURATION_MS = 1 * 60 * 1000L
+
         const val EXTRA_RESULT_CODE = "extra_result_code"
         const val EXTRA_PROJECTION_DATA = "extra_projection_data"
     }
