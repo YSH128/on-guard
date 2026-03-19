@@ -27,7 +27,10 @@ class BroadcastTriggerDetector(private val context: Context) : DeepfakeDetector 
     private var receiver: BroadcastReceiver? = null
     private var onResultCallback: ((DeepfakeDetectionResult) -> Unit)? = null
 
-    override fun startDetection(onResult: (DeepfakeDetectionResult) -> Unit) {
+    override fun startDetection(
+        onResult: (DeepfakeDetectionResult) -> Unit,
+        onReady: () -> Unit
+    ) {
         if (receiver != null) {
             Log.d(TAG, "이미 리스닝 중")
             return
@@ -63,6 +66,8 @@ class BroadcastTriggerDetector(private val context: Context) : DeepfakeDetector 
         Log.d(TAG, "BroadcastTriggerDetector 시작 — ADB 브로드캐스트 대기 중")
         Log.d(TAG, "  딥페이크 트리거: adb shell am broadcast -a $ACTION_FAKE_DETECTION --ei detected 1 --ef roi_min_x 0.3 --ef roi_min_y 0.22 --ef roi_max_x 0.45 --ef roi_max_y 0.567")
         Log.d(TAG, "  안전 트리거:     adb shell am broadcast -a $ACTION_FAKE_DETECTION --ei detected 0")
+        
+        onReady()
     }
 
     override fun stopDetection() {

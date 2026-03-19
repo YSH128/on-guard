@@ -15,10 +15,19 @@ import com.s14p21a404.shutter.domain.model.DeepfakeDetectionResult
 interface DeepfakeDetector {
 
     /**
+     * 사전에 AI 모델을 초기화 및 컴파일/적재하여 첫 프레임 처리 속도를 향상시킵니다.
+     */
+    fun prepare() { /* no-op by default */ }
+
+    /**
      * 감지 시작.
      * 결과가 나올 때마다 [onResult] 콜백이 호출된다.
+     * 모델 초기화가 완료되어 프레임을 받을 준비가 되면 [onReady]가 호출된다.
      */
-    fun startDetection(onResult: (DeepfakeDetectionResult) -> Unit)
+    fun startDetection(
+        onResult: (DeepfakeDetectionResult) -> Unit,
+        onReady: () -> Unit = {}
+    )
 
     /**
      * 감지 중단. 리소스 정리.

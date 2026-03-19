@@ -51,15 +51,26 @@ class DeepfakeDetectionRepositoryImpl(
     override fun observeDetectionResults(): Flow<DeepfakeDetectionResult> = _results.asSharedFlow()
 
     override fun startDetection() {
-        Log.d(TAG, "감지 시작")
-        detector.startDetection { result ->
-            Log.d(TAG, "📊 감지 결과: $result")
-            _results.tryEmit(result)
-            
-            // 텔레메트리 비동기 전송
-            sendTelemetry(result)
-        }
+        Log.d(TAG, "감지 및 모델 로드 시작")
+        detector.startDetection(
+            onResult = { result ->
+                Log.d(TAG, "📊 감지 결과: $result")
+                _results.tryEmit(result)
+                
+                // 텔레메트리 비동기 전송
+                sendTelemetry(result)
+            },
+            onReady = {
+                // 모델 로드가 완료되었을 때 화면 캡처(ImageReader) 시작
+                Log.d(TAG, "모델 로드 완료 및 ScreenCaptureManager 캡처 시작 지시")
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    startScreenCaptureInternal()
+                }
+            }
+        )
+    }
 
+    private fun startScreenCaptureInternal() {
         // ── 화면 캡처 시작/재개 ──
         // 기존 ScreenCaptureManager가 살아있으면 일시정지만 해제하여 재개
         val existing = screenCaptureManager
