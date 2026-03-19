@@ -3,6 +3,7 @@ package com.s14p21a404.shutter.data.detector.bridge
 import android.content.Context
 import android.util.Log
 import android.widget.TextView
+import com.s14p21a404.shutter.data.detector.DeepfakeSettings
 import com.s14p21a404.shutter.telemetry.DeviceStatusProvider
 import java.io.File
 import java.io.FileOutputStream
@@ -29,39 +30,102 @@ class NativeDeepfakeBridge(private val context: Context) {
     @Volatile
     var isQnnInitialized = false
 
+    @Volatile
+    var isQnnCompiled = false
+
+    private var initJobThread: Thread? = null
+
     private external fun initQnn(cacheDir: String): Boolean
+    private external fun buildModelCache(assetsPath: String): Boolean
     private external fun loadModel(assetsPath: String): Boolean
     private external fun releaseQnn()
     private external fun detectDeepfakeVisual(buffer: ByteArray, width: Int, height: Int, stride: Int): FloatArray
 
-    init {
-        thread {
+    fun compileQnnCache() {
+        if (isQnnCompiled || isQnnInitialized) return
+        if (initJobThread?.isAlive == true) return
+        initJobThread = thread {
             try {
-                // 기존 face_deepfake_model.pt 대신, QNN을 위해 face_deepfake.bin 언패킹
                 val facePath = getAssetFilePath(context, "face_deepfake.bin")
                 val filesDir = context.filesDir.absolutePath
                 val cacheDir = context.cacheDir.absolutePath
                 
-                Log.d("NativeDeepfakeBridge", "QNN 초기화 시작... (assets: $filesDir, cache: $cacheDir)")
-                val startCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
+                Log.d("NativeDeepfakeBridge", "QNN 시스템 초기화 시작...")
                 val initSuccess = initQnn(cacheDir)
                 if (initSuccess) {
-                    Log.d("NativeDeepfakeBridge", "QNN 시스템 초기화 성공")
-                    val loadSuccess = loadModel(filesDir)
-                    val endCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
-                    val loadThreadCpuTime = endCpuTimeMs - startCpuTimeMs
-                    
-                    if (loadSuccess) {
-                        isQnnInitialized = true
-                        Log.d("NativeDeepfakeBridge", "QNN 모델 로드 및 최적화 완료 (CPU: ${loadThreadCpuTime}ms)")
+                    val keepInVram = DeepfakeSettings.keepModelInVram.value
+
+                    if (keepInVram) {
+                        Log.d("NativeDeepfakeBridge", "옵션: 모델 VRAM 상시 할당 활성화. (loadModel 즉시 호출)")
+                        val startCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
+                        val loadSuccess = loadModel(filesDir)
+                        val loadThreadCpuTime = DeviceStatusProvider.getThreadCpuTimeMs() - startCpuTimeMs
+                        
+                        if (loadSuccess) {
+                            isQnnCompiled = true
+                            isQnnInitialized = true // 메모리에 올렸으므로 초기화 완료
+                            Log.d("NativeDeepfakeBridge", "QNN 모델 초기 적재 완료 (CPU: ${loadThreadCpuTime}ms)")
+                        } else {
+                            Log.e("NativeDeepfakeBridge", "QNN 초기 적재 실패!")
+                        }
                     } else {
-                        Log.e("NativeDeepfakeBridge", "QNN 모델 로드 실패!")
+                        Log.d("NativeDeepfakeBridge", "옵션: 모델 VRAM 해제 활성화. (buildModelCache 호출)")
+                        val startCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
+                        val buildSuccess = buildModelCache(filesDir)
+                        val compileThreadCpuTime = DeviceStatusProvider.getThreadCpuTimeMs() - startCpuTimeMs
+                        
+                        if (buildSuccess) {
+                            isQnnCompiled = true
+                            Log.d("NativeDeepfakeBridge", "QNN 모델 컴파일 및 VRAM 해제 성공 (CPU: ${compileThreadCpuTime}ms)")
+                        } else {
+                            Log.e("NativeDeepfakeBridge", "QNN 모델 컴파일 실패!")
+                        }
                     }
                 } else {
                     Log.e("NativeDeepfakeBridge", "QNN 시스템 초기화 실패!")
                 }
             } catch (e: Exception) {
-                Log.e("NativeDeepfakeBridge", "QNN 로드 에러: ${e.message}")
+                Log.e("NativeDeepfakeBridge", "QNN 컴파일 에러: ${e.message}")
+            }
+        }
+    }
+
+    fun loadModelIntoMemory(onComplete: () -> Unit = {}) {
+        if (isQnnInitialized) {
+            onComplete()
+            return
+        }
+        thread {
+            // 사전 컴파일 및 적재 스레드가 돌고 있다면, C++ Mutex Lock에 막혀 19초 중복 호출되는 것을 방지하기 위해 대기
+            initJobThread?.join()
+
+            // 대기 후 이미 적재가 끝났다면 즉시 리턴
+            if (isQnnInitialized) {
+                onComplete()
+                return@thread
+            }
+
+            try {
+                val filesDir = context.filesDir.absolutePath
+                val cacheDir = context.cacheDir.absolutePath
+                
+                // 만일을 대비한 fallback
+                initQnn(cacheDir)
+
+                val startCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
+                val loadSuccess = loadModel(filesDir)
+                val loadThreadCpuTime = DeviceStatusProvider.getThreadCpuTimeMs() - startCpuTimeMs
+                
+                if (loadSuccess) {
+                    isQnnInitialized = true
+                    Log.d("NativeDeepfakeBridge", "QNN 모델 캐시 읽기 및 메모리 적재 완료 (CPU: ${loadThreadCpuTime}ms)")
+                } else {
+                    Log.e("NativeDeepfakeBridge", "QNN 모델 메모리 로드 실패!")
+                }
+                onComplete()
+            } catch (e: Exception) {
+                Log.e("NativeDeepfakeBridge", "QNN 로드 상태 에러: ${e.message}")
+                onComplete()
             }
         }
     }
