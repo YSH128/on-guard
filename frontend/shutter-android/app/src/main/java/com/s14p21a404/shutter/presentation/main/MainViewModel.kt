@@ -7,6 +7,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
+import com.s14p21a404.shutter.presentation.service.ForegroundAppMonitorService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,7 +19,8 @@ import kotlinx.coroutines.flow.update
 data class MainUiState(
     val isServiceRunning: Boolean = false,
     val allPermissionsGranted: Boolean = false,
-    val overlayPermissionGranted: Boolean = false
+    val overlayPermissionGranted: Boolean = false,
+    val accessibilityServiceEnabled: Boolean = false
 )
 
 /**
@@ -55,12 +57,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         val hasOverlay = Settings.canDrawOverlays(context)
 
+        val hasAccessibility = ForegroundAppMonitorService.isRunning()
+
         _uiState.update { it.copy(
             allPermissionsGranted = hasPhoneState && hasNotification && hasLocation,
-            overlayPermissionGranted = hasOverlay
+            overlayPermissionGranted = hasOverlay,
+            accessibilityServiceEnabled = hasAccessibility
         ) }
 
-        Log.d(TAG, "권한 상태 - Phone: $hasPhoneState, Notification: $hasNotification, Location: $hasLocation, Overlay: $hasOverlay")
+        Log.d(TAG, "권한 상태 - Phone: $hasPhoneState, Notification: $hasNotification, Location: $hasLocation, Overlay: $hasOverlay, Accessibility: $hasAccessibility")
     }
 
     /**
