@@ -41,7 +41,7 @@ public class GpsService {
     private final SimpMessagingTemplate messagingTemplate;
 
     private static final String GPS_KEY_PREFIX = "location:";
-    private static final long GPS_TTL_SECONDS = 10; // 테스트를 위해 10초로 변경 (기존 1800)
+    private static final long GPS_TTL_SECONDS = 1800; // 30분 (테스트 완료 후 복구)
 
     /**
      * 피보호자(WARD)의 GPS 위치 정보를 Redis에 저장
