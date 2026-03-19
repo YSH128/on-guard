@@ -26,6 +26,10 @@ class WarningOverlayManager(private val context: Context) {
 
     private var facePreviewImageView: ImageView? = null
 
+    /** 오버레이 활성화 여부 — false이면 show() 호출을 무시한다. */
+    @Volatile
+    private var enabled = false
+
     /** 상단 오버레이 높이 비율 */
     private val topRatio = 0.78f
 
@@ -53,6 +57,10 @@ class WarningOverlayManager(private val context: Context) {
     }
 
     fun showWarning() {
+        if (!enabled) {
+            Log.d(TAG, "오버레이 비활성 상태 — 표시 무시")
+            return
+        }
         if (!Settings.canDrawOverlays(context)) {
             Log.w(TAG, "오버레이 권한 없음 — 경고 표시 불가")
             return
@@ -62,6 +70,15 @@ class WarningOverlayManager(private val context: Context) {
 
     fun dismissWarning() {
         dismiss()
+    }
+
+    /**
+     * 오버레이 표시 허용 여부를 설정한다.
+     * 영상통화 시작 시 true, 종료 시 false로 설정하여
+     * 종료 직후 잔존 감지 결과에 의한 재표시를 방지한다.
+     */
+    fun setEnabled(value: Boolean) {
+        enabled = value
     }
 
     fun show() {
