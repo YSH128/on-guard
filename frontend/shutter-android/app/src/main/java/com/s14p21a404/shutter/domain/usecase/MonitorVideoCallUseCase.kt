@@ -19,7 +19,7 @@ class MonitorVideoCallUseCase(
 ) {
     companion object {
         /** 영상통화 감지 후 실제 감지 시작까지 대기 시간 (ms) */
-        private const val DETECTION_START_DELAY_MS = 1000L
+        private const val DETECTION_START_DELAY_MS = 2000L
     }
 
     /**
