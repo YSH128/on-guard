@@ -187,6 +187,12 @@ bool QnnModelLoader::SetupBackendOnly(const std::string& backendName, const std:
 
 bool QnnModelLoader::InitSystem(const std::string& cacheDir) {
     std::lock_guard<std::mutex> lock(m_mutex);
+    
+    if (m_backendHandle != nullptr && m_backend != nullptr) {
+        LOGI("QNN System already initialized with %s", m_activeBackendName.c_str());
+        return true;
+    }
+
     m_cacheDir = cacheDir;
     
     std::string configPath = cacheDir + "/active_backend.txt";
@@ -248,15 +254,16 @@ bool QnnModelLoader::InitSystem(const std::string& cacheDir) {
 bool QnnModelLoader::LoadModel(const std::string& assetsPath) {
     std::lock_guard<std::mutex> lock(m_mutex);
     
+    if (m_graph != nullptr) {
+        LOGI("Model already loaded and graph is active! Skipping reload.");
+        return true;
+    }
+
     if (!m_backend) {
         LOGE("Cannot load model. Backend is not initialized.");
         return false;
     }
     
-    if (!LoadModelLibrary()) {
-        return false;
-    }
-
     std::string cachePath = m_cacheDir + "/" + m_activeBackendName + "_deepfake_cache.bin";
 
     if (LoadFromCache(cachePath)) {
@@ -264,12 +271,44 @@ bool QnnModelLoader::LoadModel(const std::string& assetsPath) {
         return true;
     }
 
-    LOGI("Cache not found for %s. Building graph using ComposeGraphs...", m_activeBackendName.c_str());
+    LOGI("Cache not found in LoadModel! Fallback to building graph...");
+    if (!LoadModelLibrary()) return false;
     if (BuildAndCacheGraph(cachePath, assetsPath)) {
-        LOGI("Graph built and cached successfully for %s.", m_activeBackendName.c_str());
+        LOGI("Graph built and loaded for %s.", m_activeBackendName.c_str());
+        return true;
+    }
+    return false;
+}
+
+bool QnnModelLoader::CheckCacheExists(const std::string& cachePath) {
+    std::ifstream file(cachePath);
+    return file.good();
+}
+
+bool QnnModelLoader::BuildModelCache(const std::string& assetsPath) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (!m_backend) return false;
+    
+    std::string cachePath = m_cacheDir + "/" + m_activeBackendName + "_deepfake_cache.bin";
+
+    if (CheckCacheExists(cachePath)) {
+        LOGI("Cache already exists for %s. Skipping build.", m_activeBackendName.c_str());
         return true;
     }
 
+    if (!LoadModelLibrary()) return false;
+
+    LOGI("Cache not found for %s. Building cache using ComposeGraphs...", m_activeBackendName.c_str());
+    if (BuildAndCacheGraph(cachePath, assetsPath)) {
+        LOGI("Graph built successfully. Releasing context to free memory.");
+        // Free the context since we only wanted to compile the cache, not hold it in memory.
+        if (m_context && m_fpContextFree) {
+            m_fpContextFree(m_context, nullptr);
+            m_context = nullptr;
+            m_graph = nullptr;
+        }
+        return true;
+    }
     return false;
 }
 
@@ -299,6 +338,16 @@ bool QnnModelLoader::LoadFromCache(const std::string& cachePath) {
             Qnn_ErrorHandle_t retrieveErr = m_fpGraphRetrieve(m_context, "face_deepfake", &m_graph);
             if (retrieveErr != QNN_SUCCESS) {
                 m_fpGraphRetrieve(m_context, "model", &m_graph); // Alternative safe name
+            }
+        }
+        
+        // GPU 백엔드 등에서 바이너리 복원 후에도 Finalize가 다시 요구되는 경우가 있음
+        if (m_graph && m_fpGraphFinalize) {
+            Qnn_ErrorHandle_t finalizeErr = m_fpGraphFinalize(m_graph, nullptr, nullptr);
+            if (finalizeErr != QNN_SUCCESS) {
+                LOGE("QnnGraph_finalize failed after cache load with error: %llu", (unsigned long long)finalizeErr);
+            } else {
+                LOGI("Graph finalized successfully after cache load.");
             }
         }
     }
