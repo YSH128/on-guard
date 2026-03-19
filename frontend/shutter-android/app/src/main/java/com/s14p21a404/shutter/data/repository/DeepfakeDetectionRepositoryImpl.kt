@@ -91,9 +91,6 @@ class DeepfakeDetectionRepositoryImpl(
         screenCaptureManager?.pauseCapture()
 
         detector.stopDetection()
-
-        // 잔존 큐의 detected=true 결과를 무효화하기 위해 detected=false 강제 방출
-        _results.tryEmit(DeepfakeDetectionResult(detected = false))
     }
 
     override fun setMediaProjection(context: Context, mediaProjection: MediaProjection) {
