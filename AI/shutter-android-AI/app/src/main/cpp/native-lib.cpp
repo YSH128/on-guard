@@ -195,7 +195,7 @@ public:
 static DeepfakeDetector detector;
 
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_loadModels(
+Java_com_example_shutter_1android_1ai_MainActivity_loadModels(
         JNIEnv* env,
         jobject /* this */,
         jstring faceModelPath) {
@@ -212,7 +212,7 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_loadModels
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeepfakeVisual(
+Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeVisual(
         JNIEnv* env,
         jobject /* this */,
         jbyteArray buffer,

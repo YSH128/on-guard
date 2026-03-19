@@ -3,7 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:gravity="center"
+    android:gravity="center_horizontal"
     android:padding="16dp">
 
     <TextView
@@ -11,23 +11,42 @@
         android:layout_height="wrap_content"
         android:text="CAM 시각화"
         android:textSize="20sp"
+        android:textStyle="bold"
         android:layout_marginBottom="12dp" />
 
+    <!-- 원본 프레임 + CAM 오버레이 + ROI bbox 합성 결과 -->
     <ImageView
         android:id="@+id/ivCamResult"
-        android:layout_width="224dp"
-        android:layout_height="224dp"
+        android:layout_width="300dp"
+        android:layout_height="300dp"
         android:background="#EEEEEE"
         android:scaleType="fitCenter"
         android:layout_marginBottom="12dp" />
 
+    <!-- Fake/Real 확률 + ROI 좌표 정보 -->
     <TextView
         android:id="@+id/tvBboxInfo"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="로딩 중..."
-        android:textSize="14sp"
+        android:textSize="13sp"
         android:layout_marginBottom="16dp" />
+
+    <!-- CAM 히트맵 투명도 조절 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="CAM 히트맵 투명도"
+        android:textSize="13sp"
+        android:layout_marginBottom="4dp" />
+
+    <SeekBar
+        android:id="@+id/seekbarOpacity"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="100"
+        android:progress="50"
+        android:layout_marginBottom="20dp" />
 
     <Button
         android:id="@+id/btnBack"
