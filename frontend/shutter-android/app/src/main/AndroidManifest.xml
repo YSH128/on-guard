@@ -90,6 +90,19 @@
                 android:value="영상통화 감지를 위한 통화 상태 및 카메라 모니터링" />
         </service>
 
+        <!-- 포그라운드 앱 감지 AccessibilityService -->
+        <service
+            android:name=".presentation.service.ForegroundAppMonitorService"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
     </application>
 
 </manifest>

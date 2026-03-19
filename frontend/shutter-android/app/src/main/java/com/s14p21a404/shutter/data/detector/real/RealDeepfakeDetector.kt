@@ -31,9 +31,12 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
     /** NDK 결과를 받을 더미 TextView (NDK 쪽에서 setText로 결과를 써줄 예정) */
     private var dummyResultTextView: TextView? = null
 
+    // 추론 결과 누적용
+    private val resultBuffer = mutableListOf<DeepfakeDetectionResult>()
+
     override fun startDetection(onResult: (DeepfakeDetectionResult) -> Unit) {
         onResultCallback = onResult
-
+        resultBuffer.clear()  // 시작 시 초기화
         nativeAvailable = NativeDeepfakeBridge.loadLibrary()
         if (nativeAvailable) {
             bridge = NativeDeepfakeBridge(context)
@@ -75,17 +78,44 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
             Log.d(TAG, "JNI 결과 (TextView): $resultText")
 
             val result = parseResult(resultText)
-            callback(result)
+            resultBuffer.add(result)
+            Log.d(TAG, "결과 누적 ${resultBuffer.size}/$BUFFER_SIZE")
+
+            if (resultBuffer.size >= BUFFER_SIZE) {
+                val averaged = averageResults(resultBuffer.toList())
+                resultBuffer.clear()
+                Log.d(TAG, "평균 결과: $averaged")
+                callback(averaged)
+            }
 
         } catch (e: Exception) {
             Log.e(TAG, "JNI 호출 또는 파싱 실패", e)
         }
     }
 
+    private fun averageResults(results: List<DeepfakeDetectionResult>): DeepfakeDetectionResult {
+        // detected: 과반수(5개 이상)가 true면 true
+        val detectedCount = results.count { it.detected }
+        val detected = detectedCount >= BUFFER_SIZE / 2
+
+        // roi: null 아닌 것들의 평균
+        val roiList = results.mapNotNull { it.roi }
+        val avgRoi = if (roiList.isNotEmpty()) {
+            FloatArray(4) { i -> roiList.map { it[i] }.average().toFloat() }
+        } else null
+
+        return DeepfakeDetectionResult(
+            detected = detected,
+            roi = avgRoi,
+            rawResultJson = "averaged $BUFFER_SIZE frames (detected: $detectedCount/$BUFFER_SIZE)"
+        )
+    }
+
     override fun stopDetection() {
         onResultCallback = null
         bridge = null
         dummyResultTextView = null
+        resultBuffer.clear()
         Log.d(TAG, "RealDeepfakeDetector 중단")
     }
 
@@ -127,6 +157,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
     companion object {
         private const val TAG = "RealDeepfakeDetector"
+        private const val BUFFER_SIZE = 10
     }
 }
 

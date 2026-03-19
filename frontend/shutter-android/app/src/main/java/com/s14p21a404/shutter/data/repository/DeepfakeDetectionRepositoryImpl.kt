@@ -129,11 +129,14 @@ class DeepfakeDetectionRepositoryImpl(
                 var riskScore = 0f
                 
                 val rawJson = result.rawResultJson
+                val validFailureTypes = setOf("MODEL_LOAD_FAIL", "TIMEOUT", "INFERENCE_ERROR", "UNKNOWN")
+
                 if (rawJson != null && rawJson.startsWith("{")) {
                     try {
                         val obj = JSONObject(rawJson)
                         if (obj.has("error")) {
-                            errorType = obj.getString("error")
+                            val raw = obj.getString("error")
+                            errorType = if (raw in validFailureTypes) raw else "UNKNOWN"
                         } else if (obj.has("debug_info")) {
                             val debugInfo = obj.getString("debug_info")
                             // Fake: 85.00% 구문 찾기

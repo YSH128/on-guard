@@ -19,6 +19,7 @@ import androidx.core.net.toUri
 import com.s14p21a404.shutter.presentation.login.LoginScreen
 import com.s14p21a404.shutter.presentation.login.LoginUiState
 import com.s14p21a404.shutter.presentation.login.LoginViewModel
+import com.s14p21a404.shutter.presentation.service.ForegroundAppMonitorService
 import com.s14p21a404.shutter.presentation.service.VideoCallDetectService
 import com.s14p21a404.shutter.ui.theme.ShutterandroidTheme
 
@@ -76,6 +77,7 @@ class MainActivity : ComponentActivity() {
                             onRegister = { name -> loginViewModel.register(state.kakaoId, name) },
                             onRequestPermissions = { requestAllPermissions() },
                             onRequestOverlayPermission = { requestOverlayPermission() },
+                            onRequestAccessibilityPermission = { requestAccessibilityPermission() },
                             onToggleService = { toggleService() },
                             onLogout = { loginViewModel.logout() },
                             loginError = loginError,
@@ -88,6 +90,7 @@ class MainActivity : ComponentActivity() {
                             uiState = uiState,
                             onRequestPermissions = { requestAllPermissions() },
                             onRequestOverlayPermission = { requestOverlayPermission() },
+                            onRequestAccessibilityPermission = { requestAccessibilityPermission() },
                             onToggleService = { toggleService() },
                             onLogout = { loginViewModel.logout() }
                         )
@@ -100,6 +103,33 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         viewModel.checkAllPermissions()
+
+        // AccessibilityService 활성 여부 확인
+        if (!ForegroundAppMonitorService.isRunning()) {
+            Log.w(TAG, "⚠️ AccessibilityService 미활성 — 접근성 설정에서 Shutter를 켜주세요")
+        }
+    }
+
+    /**
+     * 접근성 서비스 설정 화면으로 이동.
+     * 우리 앱(ForegroundAppMonitorService)의 상세 설정 페이지로 바로 이동을 시도하고,
+     * 실패 시 접근성 목록 화면으로 fallback한다.
+     */
+    private fun requestAccessibilityPermission() {
+        val componentName = "${packageName}/${packageName}.presentation.service.ForegroundAppMonitorService"
+        try {
+            // Android 접근성 서비스 상세 페이지로 바로 이동
+            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                val bundle = Bundle()
+                bundle.putString(":settings:fragment_args_key", componentName)
+                putExtra(":settings:fragment_args_key", componentName)
+                putExtra(":settings:show_fragment_args", bundle)
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.w(TAG, "접근성 상세 설정 이동 실패, 접근성 목록으로 fallback", e)
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
     }
 
     /**

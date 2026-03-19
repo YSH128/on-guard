@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Shutter WebSocket Test (Guardian)</title>
+    <meta charset="utf-8">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        input[type="text"] { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; }
+        button { padding: 10px 15px; margin-right: 5px; cursor: pointer; }
+        #messages { border: 1px solid #ddd; padding: 10px; height: 400px; overflow-y: scroll; background-color: #f9f9f9; margin-top: 20px; font-family: monospace; }
+        .log { margin: 5px 0; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        .log-time { color: #888; font-size: 0.9em; margin-right: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>📡 Shutter GPS WebSocket Test (보호자용)</h2>
+        <p>Spring Boot 서버가 실행 중이어야 하며 (ws://localhost:8080/api/v1/ws/gps), 보호자(Guardian)의 JWT 토큰이 필요합니다.</p>
+        
+        <div>
+            <label><strong>보호자 JWT Access Token (Bearer 포함 권장, 없으면 자동 추가됨):</strong></label>
+            <input type="text" id="jwtToken" placeholder="Bearer eyJhbGciOiJIUzI1NiJ9...">
+            
+            <label><strong>구독할 피보호자(Ward)의 ID:</strong></label>
+            <input type="text" id="wardId" placeholder="예: 1">
+
+            <button onclick="connect()" style="background-color: #4CAF50; color: white; border: none;">연결 및 구독 (Connect & Subscribe)</button>
+            <button onclick="disconnect()" style="background-color: #f44336; color: white; border: none;">연결 해제 (Disconnect)</button>
+        </div>
+        
+        <div id="messages"></div>
+    </div>
+
+    <script>
+        var stompClient = null;
+
+        function connect() {
+            var token = document.getElementById('jwtToken').value.trim();
+            var wardId = document.getElementById('wardId').value.trim();
+            
+            if (!token || !wardId) {
+                alert("JWT 토큰과 피보호자(Ward) ID를 모두 입력해주세요.");
+                return;
+            }
+
+            if (!token.startsWith("Bearer ")) {
+                token = "Bearer " + token;
+            }
+
+            // 순수 WebSocket 연결 (SockJS 제거)
+            var socket = new WebSocket('ws://localhost:8080/api/v1/ws/gps');
+            stompClient = Stomp.over(socket);
+            
+            // 디버그 로그 비활성화 원할시 아래 주석 해제
+            // stompClient.debug = null;
+
+            // STOMP CONNECT Headers
+            var headers = {
+                'Authorization': token
+            };
+
+            logMessage('연결 시도 중... (Connecting...)');
+
+            stompClient.connect(headers, function (frame) {
+                logMessage('✅ 서버와 연결되었습니다. (Connected: ' + frame + ')');
+                
+                // 구독 경로
+                var topic = '/topic/location/' + wardId;
+                
+                stompClient.subscribe(topic, function (message) {
+                    var body = JSON.parse(message.body);
+                    logMessage('📩 <b>[메시지 수신]</b> ' + JSON.stringify(body, null, 2));
+                });
+                
+                logMessage('📡 대상 토픽 구독 완료: ' + topic);
+            }, function(error) {
+                logMessage('❌ <b>[연결 오류]</b> ' + error);
+            });
+        }
+
+        function disconnect() {
+            if (stompClient !== null && stompClient.connected) {
+                stompClient.disconnect(function() {
+                    logMessage("🔴 연결이 해제되었습니다. (Disconnected)");
+                });
+            } else {
+                logMessage("⚠️ 이미 연결이 해제되어 있거나 연결되지 않았습니다.");
+            }
+        }
+
+        function logMessage(message) {
+            var messagesDiv = document.getElementById('messages');
+            var div = document.createElement('div');
+            div.className = 'log';
+            
+            var timeSpan = document.createElement('span');
+            timeSpan.className = 'log-time';
+            timeSpan.innerText = '[' + new Date().toLocaleTimeString() + ']';
+            
+            var msgSpan = document.createElement('span');
+            msgSpan.innerHTML = message;
+            
+            div.appendChild(timeSpan);
+            div.appendChild(msgSpan);
+            
+            messagesDiv.appendChild(div);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight; // 자동 스크롤
+        }
+    </script>
+</body>
+</html>

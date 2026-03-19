@@ -2,6 +2,7 @@ package com.s14p21a404.shutter.domain.usecase
 
 import com.s14p21a404.shutter.domain.repository.DeepfakeDetectionRepository
 import com.s14p21a404.shutter.domain.repository.VideoCallRepository
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.onEach
 
@@ -16,6 +17,11 @@ class MonitorVideoCallUseCase(
     private val videoCallRepo: VideoCallRepository,
     private val detectionRepo: DeepfakeDetectionRepository
 ) {
+    companion object {
+        /** 영상통화 감지 후 실제 감지 시작까지 대기 시간 (ms) */
+        private const val DETECTION_START_DELAY_MS = 2000L
+    }
+
     /**
      * 영상통화 상태를 관찰하면서 캡처·감지를 자동 제어하는 Flow를 반환.
      * collect 해야 동작한다.
@@ -23,9 +29,11 @@ class MonitorVideoCallUseCase(
     fun observeAndControl(): Flow<Boolean> = videoCallRepo.observeVideoCallState()
         .onEach { isVideoCall ->
             if (isVideoCall) {
-                detectionRepo.startDetection()
-            } else {
-                detectionRepo.stopDetection()
+                // 통화 시작 후 2초 대기 (화면 안정화)
+                delay(DETECTION_START_DELAY_MS)
             }
         }
+
+    fun startDetection() = detectionRepo.startDetection()
+    fun stopDetection() = detectionRepo.stopDetection()
 }

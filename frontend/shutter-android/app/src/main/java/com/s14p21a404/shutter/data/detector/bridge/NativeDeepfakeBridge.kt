@@ -140,7 +140,7 @@ class NativeDeepfakeBridge(private val context: Context) {
             if (!isSuccess) {
                 val jsonString = org.json.JSONObject().apply {
                     put("detected", 0)
-                    put("error", "모델 로드 또는 추론 실패")
+                    put("error", "INFERENCE_ERROR")
                 }.toString()
                 resultTextView.text = jsonString
             } else {
@@ -176,9 +176,14 @@ class NativeDeepfakeBridge(private val context: Context) {
                 resultTextView.text = jsonString
             }
         } catch (e: Exception) {
+            val errorType = when {
+                e is java.util.concurrent.TimeoutException ||
+                e.message?.lowercase()?.contains("timeout") == true -> "TIMEOUT"
+                else -> "INFERENCE_ERROR"
+            }
             val jsonString = org.json.JSONObject().apply {
                 put("detected", 0)
-                put("error", "$typeName 에러: ${e.message}")
+                put("error", errorType)
             }.toString()
             resultTextView.text = jsonString
         }
