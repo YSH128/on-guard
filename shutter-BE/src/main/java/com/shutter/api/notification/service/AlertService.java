@@ -1,5 +1,6 @@
 package com.shutter.api.notification.service;
 
+import com.shutter.api.global.exception.AlertException;
 import com.shutter.api.global.exception.BusinessException;
 import com.shutter.api.global.exception.ErrorCode;
 import com.shutter.api.notification.client.KakaoPushClient;
@@ -44,15 +45,15 @@ public class AlertService {
     public AlertLogResponse sendAlert(Long wardId, Long guardianId, AlertRequest request) {
         // 1. 피보호자 존재 여부 확인
         User ward = userRepository.findById(wardId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.WARD_NOT_FOUND));
+                .orElseThrow(() -> new AlertException(ErrorCode.WARD_NOT_FOUND));
 
         // 2. 보호자 존재 여부 확인
         User guardian = userRepository.findById(guardianId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.GUARDIAN_NOT_FOUND));
+                .orElseThrow(() -> new AlertException(ErrorCode.GUARDIAN_NOT_FOUND));
 
         // 3. 보호자-피보호자 관계 존재 여부 확인
         if (!userRelationshipRepository.existsByGuardianIdAndWardId(guardianId, wardId)) {
-            throw new BusinessException(ErrorCode.RELATIONSHIP_NOT_FOUND);
+            throw new AlertException(ErrorCode.RELATIONSHIP_NOT_FOUND);
         }
 
         // 4. 카카오 푸시 발송 (WebClient 호출)

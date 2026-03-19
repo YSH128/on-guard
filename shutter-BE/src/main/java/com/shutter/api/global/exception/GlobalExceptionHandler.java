@@ -21,6 +21,15 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse(errorCode.getCode(), ex.getMessage()));
     }
 
+    /** 알림 예외 */
+    @ExceptionHandler(AlertException.class)
+    public ResponseEntity<ErrorResponse> handleAlert(AlertException ex) {
+        ErrorCode errorCode = ex.getErrorCode();
+        return ResponseEntity
+                .status(errorCode.getHttpStatus())
+                .body(new ErrorResponse(errorCode.getCode(), ex.getMessage()));
+    }
+
     /** 입력값 검증 실패 (@Valid) */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
