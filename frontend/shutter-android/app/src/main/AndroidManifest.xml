@@ -23,6 +23,8 @@
     <!-- 다른 앱 위에 오버레이 표시 -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
+
+    
     <application
         android:name=".ShutterApplication"
         android:allowBackup="true"
@@ -35,6 +37,11 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Shutterandroid">
+
+        <!-- 시스템 라이브러리 접근 허용 (OpenCL 및 DSP RPC) -->
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+        <uses-native-library android:name="libcdsprpc.so" android:required="false" />
+        <uses-native-library android:name="libadsprpc.so" android:required="false" />
 
         <!-- 카카오 네이티브 앱 키 (로그인 SDK) -->
         <meta-data
