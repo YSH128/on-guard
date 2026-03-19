@@ -116,18 +116,27 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_initQnn(
-        JNIEnv *env, jobject thiz, jstring cache_dir, jstring assets_path) {
+        JNIEnv *env, jobject thiz, jstring cache_dir) {
     
     if (!g_qnnLoader) {
         g_qnnLoader = std::make_unique<QnnModelLoader>();
     }
 
     const char *cacheDirStr = env->GetStringUTFChars(cache_dir, nullptr);
-    const char *assetsPathStr = env->GetStringUTFChars(assets_path, nullptr);
-
-    bool success = g_qnnLoader->Initialize(std::string(cacheDirStr), std::string(assetsPathStr));
-
+    bool success = g_qnnLoader->InitSystem(std::string(cacheDirStr));
     env->ReleaseStringUTFChars(cache_dir, cacheDirStr);
+
+    return success ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_loadModel(
+        JNIEnv *env, jobject thiz, jstring assets_path) {
+    
+    if (!g_qnnLoader) return JNI_FALSE;
+
+    const char *assetsPathStr = env->GetStringUTFChars(assets_path, nullptr);
+    bool success = g_qnnLoader->LoadModel(std::string(assetsPathStr));
     env->ReleaseStringUTFChars(assets_path, assetsPathStr);
 
     return success ? JNI_TRUE : JNI_FALSE;
