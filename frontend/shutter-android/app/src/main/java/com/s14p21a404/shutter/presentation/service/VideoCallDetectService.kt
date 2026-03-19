@@ -63,7 +63,10 @@ class VideoCallDetectService : Service() {
         serviceScope.launch {
             monitorUseCase.observeAndControl().collect { isVideoCall ->
                 Log.d(TAG, "영상통화 상태: $isVideoCall")
-                if (!isVideoCall) {
+                if (isVideoCall) {
+                    warningOverlayManager.setEnabled(true)
+                } else {
+                    warningOverlayManager.setEnabled(false)
                     warningOverlayManager.dismissWarning()
                 }
             }
@@ -108,10 +111,12 @@ class VideoCallDetectService : Service() {
         super.onDestroy()
         Log.d(TAG, "서비스 종료")
 
+
         serviceScope.cancel()
         detectionRepository.stopDetection()
         videoCallRepository.stopMonitoring()
         detectionRepository.releaseMediaProjection()
+        warningOverlayManager.setEnabled(false)
         warningOverlayManager.dismissWarning()
     }
 
