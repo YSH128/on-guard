@@ -2,6 +2,7 @@ package com.s14p21a404.shutter.presentation.login
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,6 +25,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.text.font.FontWeight
@@ -192,7 +195,7 @@ fun LoginScreen(
                     RealtimePill(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .offset(x = (-4).dp, y = (280 + floatAnim).dp)
+                            .offset(x = (-4).dp, y = (300 + floatAnim).dp)
                             .zIndex(10f),
                         pulseAlpha = pulseAlpha,
                         pulseRadius = pulseRadius
@@ -202,7 +205,7 @@ fun LoginScreen(
                     AlertCard(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .offset(x = (-4).dp, y = (320 + floatAnim).dp)
+                            .offset(x = (-4).dp, y = (340 + floatAnim).dp)
                             .zIndex(10f)
                     )
                 }
@@ -238,7 +241,7 @@ fun LoginScreen(
                 .fillMaxWidth()
                 .background(BottomAreaBg)
                 .padding(horizontal = 24.dp)
-                .padding(top = 16.dp, bottom = 56.dp),
+                .padding(top = 0.dp, bottom = 40.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
@@ -248,7 +251,7 @@ fun LoginScreen(
                 letterSpacing = 0.5.sp
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // ── 카카오 로그인 버튼 ──
             Box(
@@ -297,17 +300,17 @@ private fun AiForgeryCard(modifier: Modifier = Modifier) {
     // border gradient 색상 (회색 계열)
     val borderBrush = Brush.verticalGradient(
         colors = listOf(
-            Color(0xAAFFFFFF),
-            Color(0x44888888),
-            Color(0x11FFFFFF)
+            Color(0xCCA0A0A0),
+            Color(0x88888888),
+            Color(0x44FFFFFF)
         )
     )
-    // card 내부 gradient 배경 (회색 계열)
+    // card 내부 gradient 배경 (회색 계열) — 가독성을 위해 불투명도 상향
     val cardBrush = Brush.verticalGradient(
         colors = listOf(
-            Color(0xCC6B7280),
-            Color(0x33333333),
-            Color(0x22FFFFFF)
+            Color(0xEE6B7280),
+            Color(0xCC444444),
+            Color(0xAA3A3A3A)
         )
     )
     // icon ring gradient (회색 계열)
@@ -330,6 +333,7 @@ private fun AiForgeryCard(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .width(140.dp)
+            .shadow(24.dp, RoundedCornerShape(20.dp), ambientColor = Color.White, spotColor = Color.White)
             .clip(RoundedCornerShape(20.dp))
             .background(borderBrush)
             .padding(2.dp)
@@ -344,14 +348,14 @@ private fun AiForgeryCard(modifier: Modifier = Modifier) {
             // ── 아이콘 링 ──
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(30.dp)
                     .clip(CircleShape)
                     .background(iconRingBrush),
                 contentAlignment = Alignment.Center
             ) {
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(26.dp)
                         .clip(CircleShape)
                         .background(iconInnerBrush),
                     contentAlignment = Alignment.Center
@@ -359,13 +363,13 @@ private fun AiForgeryCard(modifier: Modifier = Modifier) {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_warning_triangle),
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(13.dp),
                         tint = Color.White
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // ── 타이틀 ──
             Text(
@@ -444,6 +448,19 @@ private fun AiForgeryCard(modifier: Modifier = Modifier) {
 // ════════════════════════════════════════════════════════
 @Composable
 private fun PhoneMockup(modifier: Modifier = Modifier) {
+    // 2초 후 on 이미지로 전환하기 위한 상태
+    var showOn by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(2000L)
+        showOn = true
+    }
+    // opacity 애니메이션
+    val onAlpha by animateFloatAsState(
+        targetValue = if (showOn) 1f else 0f,
+        animationSpec = tween(durationMillis = 800),
+        label = "detectOnAlpha"
+    )
+
     Box(
         modifier = modifier
             .width(200.dp)
@@ -455,54 +472,22 @@ private fun PhoneMockup(modifier: Modifier = Modifier) {
             .background(PhoneInnerBg),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+        // detect_off 이미지 (항상 표시, on이 위에 덮음)
+        Image(
+            painter = painterResource(id = R.drawable.detect_off),
+            contentDescription = "감지 비활성",
+            contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
-        ) {
-            // 사람 아바타
-            Box(
-                modifier = Modifier
-                    .size(60.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF2A3A6A)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Person,
-                    contentDescription = null,
-                    modifier = Modifier.size(32.dp),
-                    tint = Color(0x99FFFFFF)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = "영상통화 중",
-                fontSize = 12.sp,
-                color = Color(0x99FFFFFF)
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 딥페이크 감지 경고 뱃지
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0x33EF4444))
-                    .border(1.dp, Color(0x99EF4444), RoundedCornerShape(12.dp))
-                    .padding(horizontal = 14.dp, vertical = 4.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "⚠ 딥페이크 감지",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFFEF4444)
-                )
-            }
-        }
+        )
+        // detect_on 이미지 (2초 후 fade-in)
+        Image(
+            painter = painterResource(id = R.drawable.detect_on),
+            contentDescription = "감지 활성",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = onAlpha }
+        )
     }
 }
 
@@ -518,9 +503,10 @@ private fun RealtimePill(
     pulseRadius: Float
 ) {
     Surface(
-        modifier = modifier,
+        modifier = modifier
+            .shadow(20.dp, RoundedCornerShape(50), ambientColor = Color.White, spotColor = Color.White),
         shape = RoundedCornerShape(50),
-        color = Color.White.copy(alpha = 0.2f),
+        color = Color(0xFF4A4A4A).copy(alpha = 0.75f),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -563,7 +549,7 @@ private fun AlertCard(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .width(200.dp)
-            .shadow(8.dp, RoundedCornerShape(16.dp))
+            .shadow(20.dp, RoundedCornerShape(16.dp), ambientColor = Color.White, spotColor = Color.White)
             .clip(RoundedCornerShape(16.dp))
             .background(AlertCardBg)
             .border(1.dp, AlertCardBorder, RoundedCornerShape(16.dp))
