@@ -10,7 +10,7 @@ from tensorflow.keras.utils import Progbar
 
 from config import load_args
 from data.list_generator import ListGenerator
-from language_model.char_rnn_lm import CharRnnLmWrapperSingleton
+# from language_model.char_rnn_lm import CharRnnLmWrapperSingleton
 from lip_model.training_graph import TransformerTrainGraph
 from lip_model.inference_graph import TransformerInferenceGraph
 
