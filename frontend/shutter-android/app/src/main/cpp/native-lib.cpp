@@ -142,6 +142,19 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_loadModel(
     return success ? JNI_TRUE : JNI_FALSE;
 }
 
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_buildModelCache(
+        JNIEnv *env, jobject thiz, jstring assets_path) {
+    
+    if (!g_qnnLoader) return JNI_FALSE;
+
+    const char *assetsPathStr = env->GetStringUTFChars(assets_path, nullptr);
+    bool success = g_qnnLoader->BuildModelCache(std::string(assetsPathStr));
+    env->ReleaseStringUTFChars(assets_path, assetsPathStr);
+
+    return success ? JNI_TRUE : JNI_FALSE;
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_releaseQnn(
         JNIEnv *env, jobject thiz) {
