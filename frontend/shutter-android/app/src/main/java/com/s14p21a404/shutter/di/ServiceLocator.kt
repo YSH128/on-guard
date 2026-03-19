@@ -25,6 +25,7 @@ import com.s14p21a404.shutter.domain.usecase.RegisterUseCase
 import com.s14p21a404.shutter.domain.usecase.SaveUserIdUseCase
 import com.s14p21a404.shutter.domain.usecase.MonitorVideoCallUseCase
 import com.s14p21a404.shutter.network.RetrofitClient
+import com.s14p21a404.shutter.presentation.overlay.FinancialBlockOverlayManager
 import com.s14p21a404.shutter.presentation.overlay.WarningOverlayManager
 
 /**
@@ -90,6 +91,7 @@ class ServiceLocator private constructor(context: Context) {
     // ── Presentation Layer ──
 
     val warningOverlayManager = WarningOverlayManager(context)
+    val financialBlockOverlayManager = FinancialBlockOverlayManager(context)
 
 
     companion object {

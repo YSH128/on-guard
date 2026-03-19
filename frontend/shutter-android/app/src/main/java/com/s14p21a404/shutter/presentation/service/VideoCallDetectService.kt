@@ -15,6 +15,7 @@ import com.s14p21a404.shutter.domain.repository.DeepfakeDetectionRepository
 import com.s14p21a404.shutter.domain.repository.VideoCallRepository
 import com.s14p21a404.shutter.domain.usecase.DetectDeepfakeUseCase
 import com.s14p21a404.shutter.domain.usecase.MonitorVideoCallUseCase
+import com.s14p21a404.shutter.presentation.overlay.FinancialBlockOverlayManager
 import com.s14p21a404.shutter.presentation.overlay.WarningOverlayManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,11 +40,22 @@ class VideoCallDetectService : Service() {
     private lateinit var monitorUseCase: MonitorVideoCallUseCase
     private lateinit var detectUseCase: DetectDeepfakeUseCase
     private lateinit var warningOverlayManager: WarningOverlayManager
+    private lateinit var financialBlockOverlayManager: FinancialBlockOverlayManager
     private lateinit var videoCallRepository: VideoCallRepository
     private lateinit var detectionRepository: DeepfakeDetectionRepository
 
     /** 포그라운드 앱 모니터링 Job — 영상통화 감지 시 시작, 종료 시 취소 */
     private var foregroundMonitorJob: Job? = null
+
+    /** 금융 앱 포그라운드 모니터링 Job — 딥페이크 감지 시 시작, 종료 시 취소 */
+    private var financialAppMonitorJob: Job? = null
+
+    /**
+     * 딥페이크가 감지되었는지 여부.
+     * 금융 앱 차단 오버레이는 딥페이크 감지 + 금융 앱 포그라운드 시에만 표시한다.
+     */
+    @Volatile
+    private var isDeepfakeDetected = false
 
     /**
      * 오버레이가 표시 중이었는지 여부.
@@ -62,6 +74,7 @@ class VideoCallDetectService : Service() {
         monitorUseCase = locator.monitorVideoCallUseCase
         detectUseCase = locator.detectDeepfakeUseCase
         warningOverlayManager = locator.warningOverlayManager
+        financialBlockOverlayManager = locator.financialBlockOverlayManager
         videoCallRepository = locator.videoCallRepository
         detectionRepository = locator.detectionRepository
 
@@ -80,15 +93,19 @@ class VideoCallDetectService : Service() {
                     startForegroundAppMonitoring()
                 } else {
                     stopForegroundAppMonitoring()
+                    stopFinancialAppMonitoring()
                     warningOverlayManager.setEnabled(false)
+                    financialBlockOverlayManager.setEnabled(false)
                     monitorUseCase.stopDetection()
                     warningOverlayManager.dismissWarning()
+                    financialBlockOverlayManager.dismiss()
                     wasOverlayShowing = false
+                    isDeepfakeDetected = false
                 }
             }
         }
 
-        // 감지 결과 관찰 → 오버레이 표시/숨김
+        // 감지 결과 관찰 → 오버레이 표시/숨김 + 금융 앱 차단 제어
         serviceScope.launch {
             detectUseCase.observeResults().collect { result ->
                 Log.d(TAG, "📊 감지 결과: $result")
@@ -96,6 +113,18 @@ class VideoCallDetectService : Service() {
                     cropRoiBitmap(result)
                 } else null
                 warningOverlayManager.onDetectionResult(result, roiBitmap)
+
+                // 딥페이크 감지 상태에 따라 금융 앱 차단 오버레이 제어
+                if (result.detected) {
+                    isDeepfakeDetected = true
+                    financialBlockOverlayManager.setEnabled(true)
+                    startFinancialAppMonitoring()
+                } else {
+                    isDeepfakeDetected = false
+                    financialBlockOverlayManager.setEnabled(false)
+                    financialBlockOverlayManager.dismiss()
+                    stopFinancialAppMonitoring()
+                }
             }
         }
     }
@@ -147,6 +176,46 @@ class VideoCallDetectService : Service() {
         Log.d(TAG, "포그라운드 앱 모니터링 중단")
     }
 
+    // ── 금융 앱 포그라운드 모니터링 ──
+
+    /**
+     * 딥페이크 감지 후, 금융 앱이 포그라운드에 오면
+     * 금융 앱 접근 제한 오버레이를 표시/숨김한다.
+     */
+    private fun startFinancialAppMonitoring() {
+        if (financialAppMonitorJob?.isActive == true) return
+
+        if (!ForegroundAppMonitorService.isRunning()) {
+            Log.w(TAG, "⚠️ AccessibilityService 미활성 — 금융 앱 추적 불가")
+            return
+        }
+
+        Log.d(TAG, "금융 앱 모니터링 시작")
+        financialAppMonitorJob = serviceScope.launch {
+            videoCallRepository.observeForegroundIsFinancialApp().collect { isFinancialApp ->
+                Log.d(TAG, "금융 앱 여부: $isFinancialApp, 딥페이크 감지: $isDeepfakeDetected")
+
+                if (isFinancialApp && isDeepfakeDetected) {
+                    if (!financialBlockOverlayManager.isShowing()) {
+                        Log.d(TAG, "🏦 금융 앱 감지 → 접근 제한 오버레이 표시")
+                        financialBlockOverlayManager.show()
+                    }
+                } else {
+                    if (financialBlockOverlayManager.isShowing()) {
+                        Log.d(TAG, "🏦 금융 앱 이탈 → 접근 제한 오버레이 해제")
+                        financialBlockOverlayManager.dismiss()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun stopFinancialAppMonitoring() {
+        financialAppMonitorJob?.cancel()
+        financialAppMonitorJob = null
+        Log.d(TAG, "금융 앱 모니터링 중단")
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // MainActivity에서 전달한 MediaProjection 데이터로 초기화
         if (intent != null && intent.hasExtra(EXTRA_RESULT_CODE)) {
@@ -175,12 +244,15 @@ class VideoCallDetectService : Service() {
         Log.d(TAG, "서비스 종료")
 
         stopForegroundAppMonitoring()
+        stopFinancialAppMonitoring()
         serviceScope.cancel()
         detectionRepository.stopDetection()
         videoCallRepository.stopMonitoring()
         detectionRepository.releaseMediaProjection()
         warningOverlayManager.setEnabled(false)
         warningOverlayManager.dismissWarning()
+        financialBlockOverlayManager.setEnabled(false)
+        financialBlockOverlayManager.dismiss()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

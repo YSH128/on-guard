@@ -19,6 +19,13 @@ interface VideoCallRepository {
      */
     fun observeForegroundIsVideoCallApp(): Flow<Boolean>
 
+    /**
+     * 포그라운드 앱이 금융 앱인지 관찰.
+     * 딥페이크 통화 감지 후, 사용자가 금융 앱을 열었는지 여부를 반환한다.
+     * true = 금융 앱이 포그라운드, false = 금융 앱이 아님
+     */
+    fun observeForegroundIsFinancialApp(): Flow<Boolean>
+
     /** 영상통화가 시작된 앱 패키지명을 기록 */
     fun setVideoCallPackage(packageName: String?)
 
