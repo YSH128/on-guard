@@ -2,9 +2,12 @@
 #include <string>
 #include <vector>
 #include <chrono>
-#include <torch/script.h>
+#include <cmath>
+#include <algorithm>
 #include <opencv2/opencv.hpp>
 #include <android/log.h>
+#include <memory>
+#include "QnnModelLoader.h"
 
 #define LOG_TAG "NativeLib"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
@@ -15,54 +18,8 @@ float get_ms(std::chrono::high_resolution_clock::time_point start) {
     return std::chrono::duration<float, std::milli>(end - start).count();
 }
 
-class DeepfakeDetector {
-public:
-    torch::jit::script::Module faceModule;
-    bool isFaceLoaded = false;
-    float faceLoadTime = 0.0f;
-
-    bool loadModels(const std::string& facePath) {
-        bool success = true;
-
-        if (!isFaceLoaded) {
-            try {
-                auto start_face = std::chrono::high_resolution_clock::now();
-                faceModule = torch::jit::load(facePath);
-                faceModule.eval();
-                faceLoadTime = get_ms(start_face);
-                isFaceLoaded = true;
-                LOGD("Face model loaded. Time: %.2f ms", faceLoadTime);
-            } catch (const c10::Error& e) {
-                LOGE("Error loading face model");
-                isFaceLoaded = false;
-                success = false;
-            }
-        }
-
-        return success;
-    }
-};
-
-static DeepfakeDetector detector;
-
-extern "C" JNIEXPORT jfloatArray JNICALL
-Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_loadModels(
-        JNIEnv* env,
-        jobject /* this */,
-        jstring faceModelPath) {
-
-    const char* fPath = env->GetStringUTFChars(faceModelPath, nullptr);
-
-    bool loadSuccess = detector.loadModels(fPath);
-
-    env->ReleaseStringUTFChars(faceModelPath, fPath);
-
-    float results[2] = { loadSuccess ? 1.0f : 0.0f, detector.faceLoadTime };
-    jfloatArray resultMap = env->NewFloatArray(2);
-    env->SetFloatArrayRegion(resultMap, 0, 2, results);
-
-    return resultMap;
-}
+// Global Qnn Loader instance
+static std::unique_ptr<QnnModelLoader> g_qnnLoader = nullptr;
 
 extern "C" JNIEXPORT jfloatArray JNICALL
 Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeepfakeVisual(
@@ -78,13 +35,14 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
     jfloatArray resultMap = env->NewFloatArray(resultSize);
     std::vector<float> results(resultSize, -1.0f);
 
-    if (!detector.isFaceLoaded) {
+    if (!g_qnnLoader) {
+        LOGE("QNN Loader not initialized.");
         results[0] = -1.0f;
         env->SetFloatArrayRegion(resultMap, 0, resultSize, results.data());
         return resultMap;
     }
 
-    results[2] = detector.faceLoadTime;
+    results[2] = 0.0f; // QNN is pre-initialized, loadTime is 0 here
     auto start_inference = std::chrono::high_resolution_clock::now();
 
     jbyte* data = env->GetByteArrayElements(buffer, nullptr);
@@ -110,27 +68,31 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
     cv::Mat floatMat;
     rgb.convertTo(floatMat, CV_32F, 1.0f / 255.0f);
 
-    std::vector<float> frameData;
-    frameData.assign((float*)floatMat.datastart, (float*)floatMat.dataend);
+    // Apply normalization properly on NHWC data using OpenCV split/merge
+    std::vector<cv::Mat> channels(3);
+    cv::split(floatMat, channels);
+    channels[0] = (channels[0] - 0.485f) / 0.229f; // R
+    channels[1] = (channels[1] - 0.456f) / 0.224f; // G
+    channels[2] = (channels[2] - 0.406f) / 0.225f; // B
+    cv::merge(channels, floatMat);
 
-    auto options = torch::TensorOptions().dtype(torch::kFloat32);
-    torch::Tensor input_tensor = torch::from_blob(
-        frameData.data(), {1, W, H, C}, options).clone();
-    input_tensor = input_tensor.permute({0, 3, 1, 2});
+    std::vector<float> frameData((float*)floatMat.datastart, (float*)floatMat.dataend);
 
-    float mean_vals[3] = {0.485f, 0.456f, 0.406f};
-    float std_vals[3]  = {0.229f, 0.224f, 0.225f};
-    auto mean = torch::from_blob(mean_vals, {1, 3, 1, 1}).clone();
-    auto std  = torch::from_blob(std_vals,  {1, 3, 1, 1}).clone();
-    input_tensor = (input_tensor - mean) / std;
+    float out[2] = {0};
+    bool execSuccess = g_qnnLoader->ExecuteGraph(frameData.data(), frameData.size(), out, 2);
 
-    std::vector<torch::jit::IValue> inputs;
-    inputs.push_back(input_tensor);
-    at::Tensor output = detector.faceModule.forward(inputs).toTensor();
-    at::Tensor prob = torch::softmax(output, 1);
-
-    float fake = prob[0][1].item<float>();
-    float real = prob[0][0].item<float>();
+    float fake = 0.0f, real = 0.0f;
+    if (execSuccess) {
+        float max_val = std::max(out[0], out[1]);
+        float exp0 = std::exp(out[0] - max_val);
+        float exp1 = std::exp(out[1] - max_val);
+        float sum = exp0 + exp1;
+        
+        real = exp0 / sum;
+        fake = exp1 / sum;
+    } else {
+        LOGE("QNN Inference Execution Failed");
+    }
 
     results[3] = get_ms(start_inference);
     results[0] = fake; // avgFake
@@ -146,4 +108,36 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
     env->SetFloatArrayRegion(resultMap, 0, resultSize, results.data());
     
     return resultMap;
+}
+
+// ---------------------------------------------------------
+// QNN JNI Wrappers
+// ---------------------------------------------------------
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_initQnn(
+        JNIEnv *env, jobject thiz, jstring cache_dir, jstring assets_path) {
+    
+    if (!g_qnnLoader) {
+        g_qnnLoader = std::make_unique<QnnModelLoader>();
+    }
+
+    const char *cacheDirStr = env->GetStringUTFChars(cache_dir, nullptr);
+    const char *assetsPathStr = env->GetStringUTFChars(assets_path, nullptr);
+
+    bool success = g_qnnLoader->Initialize(std::string(cacheDirStr), std::string(assetsPathStr));
+
+    env->ReleaseStringUTFChars(cache_dir, cacheDirStr);
+    env->ReleaseStringUTFChars(assets_path, assetsPathStr);
+
+    return success ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_releaseQnn(
+        JNIEnv *env, jobject thiz) {
+    if (g_qnnLoader) {
+        g_qnnLoader->Cleanup();
+        g_qnnLoader.reset();
+    }
 }
