@@ -151,18 +151,15 @@ class NativeDeepfakeBridge(private val context: Context) {
         buffer: ByteArray,
         width: Int,
         height: Int,
-        stride: Int,
-        resultTextView: TextView
-    ) {
-        if (type != "FACE") return
+        stride: Int
+    ): String {
+        if (type != "FACE") return ""
         
         if (!isQnnInitialized) {
-            val jsonString = org.json.JSONObject().apply {
+            return org.json.JSONObject().apply {
                 put("detected", 0)
                 put("error", "AI 모델 빌드 및 최적화 중입니다...")
             }.toString()
-            resultTextView.text = jsonString
-            return
         }
 
         val typeName = "페이스"
@@ -209,11 +206,10 @@ class NativeDeepfakeBridge(private val context: Context) {
             val batteryCurrentmA = DeviceStatusProvider.getBatteryCurrentNow(context)
 
             if (!isSuccess) {
-                val jsonString = org.json.JSONObject().apply {
+                return org.json.JSONObject().apply {
                     put("detected", 0)
                     put("error", "INFERENCE_ERROR")
                 }.toString()
-                resultTextView.text = jsonString
             } else {
                 val header = "[$typeName 추론 성공 - $status]\nFake: ${String.format("%.2f%%", faceFakeProb * 100)}\nReal: ${String.format("%.2f%%", faceRealProb * 100)}" 
                 
@@ -231,7 +227,7 @@ class NativeDeepfakeBridge(private val context: Context) {
                     Thermal Status: $thermalStatus
                 """.trimIndent()
                 
-                val jsonString = org.json.JSONObject().apply {
+                return org.json.JSONObject().apply {
                     put("detected", if (isFake) 1 else 0)
                     if (results.size >= 10) {
                         put("roi", org.json.JSONArray().apply {
@@ -243,8 +239,6 @@ class NativeDeepfakeBridge(private val context: Context) {
                     }
                     put("debug_info", resultText)
                 }.toString()
-                
-                resultTextView.text = jsonString
             }
         } catch (e: Exception) {
             val errorType = when {
@@ -252,11 +246,10 @@ class NativeDeepfakeBridge(private val context: Context) {
                 e.message?.lowercase()?.contains("timeout") == true -> "TIMEOUT"
                 else -> "INFERENCE_ERROR"
             }
-            val jsonString = org.json.JSONObject().apply {
+            return org.json.JSONObject().apply {
                 put("detected", 0)
                 put("error", errorType)
             }.toString()
-            resultTextView.text = jsonString
         }
     }
 
