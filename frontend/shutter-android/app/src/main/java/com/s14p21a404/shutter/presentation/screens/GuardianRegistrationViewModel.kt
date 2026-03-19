@@ -1,9 +1,13 @@
 package com.s14p21a404.shutter.presentation.screens
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.kakao.sdk.talk.TalkApiClient
+import com.kakao.sdk.template.model.Link
+import com.kakao.sdk.template.model.TextTemplate
+import com.kakao.sdk.user.UserApiClient
 import com.s14p21a404.shutter.di.ServiceLocator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,7 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
-data class KakaoFriendItem(val id: Long, val name: String)
+data class KakaoFriendItem(val id: Long, val uuid: String, val name: String)
 
 sealed class RegistrationUiState {
     object Idle : RegistrationUiState()
@@ -65,7 +69,7 @@ class GuardianRegistrationViewModel(application: Application) : AndroidViewModel
                         ?.mapNotNull { friend ->
                             val id = friend.id ?: return@mapNotNull null
                             val name = friend.profileNickname ?: return@mapNotNull null
-                            KakaoFriendItem(id = id, name = name)
+                            KakaoFriendItem(id = id, uuid = friend.uuid, name = name)
                         } ?: emptyList()
                     cont.resume(Result.success(items))
                 }
@@ -80,15 +84,20 @@ class GuardianRegistrationViewModel(application: Application) : AndroidViewModel
     }
 
     fun registerSelectedFriends() {
-        val selected = _uiState.value.selectedIds
-        if (selected.isEmpty()) return
+        val selectedFriends = _uiState.value.friends.filter { it.id in _uiState.value.selectedIds }
+        if (selectedFriends.isEmpty()) return
 
         viewModelScope.launch {
             _uiState.update { it.copy(registrationState = RegistrationUiState.Loading) }
 
+            // 현재 유저 이름 조회
+            val wardName = getCurrentUserName() ?: "알 수 없음"
+
             var lastError: String? = null
-            for (kakaoId in selected) {
-                addGuardianUseCase(kakaoId).onFailure { e -> lastError = e.message }
+            for (friend in selectedFriends) {
+                addGuardianUseCase(friend.id)
+                    .onSuccess { sendGuardianMessage(wardName, friend) }
+                    .onFailure { e -> lastError = e.message }
             }
 
             _uiState.update {
@@ -102,7 +111,42 @@ class GuardianRegistrationViewModel(application: Application) : AndroidViewModel
         }
     }
 
+    private suspend fun getCurrentUserName(): String? = suspendCancellableCoroutine { cont ->
+        UserApiClient.instance.me { user, error ->
+            if (error != null) {
+                Log.w(TAG, "유저 정보 조회 실패", error)
+                cont.resume(null)
+            } else {
+                cont.resume(user?.kakaoAccount?.name)
+            }
+        }
+    }
+
+    private suspend fun sendGuardianMessage(wardName: String, guardian: KakaoFriendItem) =
+        suspendCancellableCoroutine { cont ->
+            val text = "${wardName}님이 ${guardian.name}님을 보호자로 등록하였습니다." +
+                    "\n\n보호자 : ${guardian.name}\n피보호자 : ${wardName}"
+
+            val template = TextTemplate(text = text, link = Link())
+
+            TalkApiClient.instance.sendDefaultMessage(
+                receiverUuids = listOf(guardian.uuid),
+                template = template,
+            ) { result, error ->
+                if (error != null) {
+                    Log.e(TAG, "메시지 발송 실패 (uuid: ${guardian.uuid})", error)
+                } else {
+                    Log.d(TAG, "메시지 발송 성공: ${result?.successfulReceiverUuids}")
+                }
+                cont.resume(Unit)
+            }
+        }
+
     fun resetRegistrationState() {
         _uiState.update { it.copy(registrationState = RegistrationUiState.Idle) }
+    }
+
+    companion object {
+        private const val TAG = "GuardianRegistrationVM"
     }
 }
