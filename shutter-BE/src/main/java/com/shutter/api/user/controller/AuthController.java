@@ -9,6 +9,7 @@ import com.shutter.api.user.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -60,5 +61,17 @@ public class AuthController {
     ) {
         String newAccessToken = authService.refresh(request.refreshToken());
         return ResponseEntity.ok(ApiResponse.of("토큰 갱신 성공", newAccessToken));
+    }
+
+    /**
+     * [테스트용] 특정 유저 ID로 즉시 JWT 발급 (로컬/Swagger 전용)
+     * URL: GET /api/v1/auth/test-token?userId={userId}
+     */
+    @GetMapping("/test-token")
+    public ResponseEntity<ApiResponse<LoginResponse>> testToken(
+            @RequestParam Long userId
+    ) {
+        LoginResponse response = authService.generateTestToken(userId);
+        return ResponseEntity.ok(ApiResponse.of("테스트 토큰 발급 완료 (ID: " + userId + ")", response));
     }
 }

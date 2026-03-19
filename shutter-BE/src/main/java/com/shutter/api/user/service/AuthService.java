@@ -141,5 +141,15 @@ public class AuthService {
         log.info("Access token refreshed. userId={}", userId);
         return jwtProvider.generateAccessToken(userId);
     }
+
+    /**
+     * [테스트용] 특정 유저 ID로 즉시 JWT 발급 (로컬 전용)
+     */
+    public LoginResponse generateTestToken(Long userId) {
+        String accessToken = jwtProvider.generateAccessToken(userId);
+        String refreshToken = jwtProvider.generateRefreshToken(userId);
+        jwtRefreshTokenService.save(userId, refreshToken);
+        return new LoginResponse(userId, accessToken, refreshToken);
+    }
 }
 
