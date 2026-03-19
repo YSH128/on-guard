@@ -50,10 +50,6 @@ public class GpsService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-        if (Role.GUARDIAN.equals(user.getRole())) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED_ACCESS);
-        }
-
         LocalDateTime now = LocalDateTime.now();
         String redisKey = GPS_KEY_PREFIX + userId;
 
@@ -120,12 +116,13 @@ public class GpsService {
         if (jsonValue != null) {
             try {
                 Map<String, Object> locationData = objectMapper.readValue(jsonValue, Map.class);
-                
+
                 responseBuilder.isSharing(true)
                         .lat(Double.valueOf(locationData.get("lat").toString()))
                         .lng(Double.valueOf(locationData.get("lng").toString()))
-                        .updatedAt(locationData.get("updated_at") != null ? locationData.get("updated_at").toString() : null);
-                        
+                        .updatedAt(locationData.get("updated_at") != null ? locationData.get("updated_at").toString()
+                                : null);
+
             } catch (Exception e) {
                 log.error("Failed to parse GPS data from Redis for user {}", wardId, e);
                 throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
@@ -147,10 +144,7 @@ public class GpsService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-        // 2. 권한 검증 (보호자는 불가능)
-        if (Role.GUARDIAN.equals(user.getRole())) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED_ACCESS);
-        }
+        // 2. 권한 검증: 모든 유저가 자신의 위치 공유를 토글할 수 있음
 
         // 3. DB 공유 상태 업데이트 (Dirty Checking)
         user.updateGpsSharing(request.getGpsSharing());
