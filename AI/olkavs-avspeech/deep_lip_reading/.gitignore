@@ -3,6 +3,7 @@
 __pycache__
 *.so
 *.o
+output.txt
 
 *.egg
 *.egg-info
