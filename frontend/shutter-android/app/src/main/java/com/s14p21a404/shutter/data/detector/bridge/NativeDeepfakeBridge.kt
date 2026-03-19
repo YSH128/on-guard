@@ -26,29 +26,35 @@ import kotlin.concurrent.thread
  */
 class NativeDeepfakeBridge(private val context: Context) {
 
-    private external fun loadModels(faceModelPath: String): FloatArray
+    @Volatile
+    var isQnnInitialized = false
+
+    private external fun initQnn(cacheDir: String, assetsPath: String): Boolean
+    private external fun releaseQnn()
     private external fun detectDeepfakeVisual(buffer: ByteArray, width: Int, height: Int, stride: Int): FloatArray
 
     init {
         thread {
             try {
-                val facePath = getAssetFilePath(context, "face_deepfake_model.pt")
+                // 기존 face_deepfake_model.pt 대신, QNN을 위해 face_deepfake.bin 언패킹
+                val facePath = getAssetFilePath(context, "face_deepfake.bin")
+                val filesDir = context.filesDir.absolutePath
+                val cacheDir = context.cacheDir.absolutePath
                 
-                Log.d("NativeDeepfakeBridge", "모델 로드 시작...")
+                Log.d("NativeDeepfakeBridge", "QNN 초기화 시작... (assets: $filesDir, cache: $cacheDir)")
                 val startCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
-                val results = loadModels(facePath)
+                val success = initQnn(cacheDir, filesDir)
                 val endCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
                 val loadThreadCpuTime = endCpuTimeMs - startCpuTimeMs
                 
-                val success = results[0] > 0.0f
                 if (success) {
-                    val faceLoadTime = results[1]
-                    Log.d("NativeDeepfakeBridge", "모델 로드 성공! 페이스: ${faceLoadTime}ms, CPU: ${loadThreadCpuTime}ms")
+                    isQnnInitialized = true
+                    Log.d("NativeDeepfakeBridge", "QNN 모델 초기화 완료 (CPU: ${loadThreadCpuTime}ms)")
                 } else {
-                    Log.e("NativeDeepfakeBridge", "모델 로드 실패!")
+                    Log.e("NativeDeepfakeBridge", "QNN 초기화 실패!")
                 }
             } catch (e: Exception) {
-                Log.e("NativeDeepfakeBridge", "모델 로드 에러: ${e.message}")
+                Log.e("NativeDeepfakeBridge", "QNN 로드 에러: ${e.message}")
             }
         }
     }
@@ -79,6 +85,15 @@ class NativeDeepfakeBridge(private val context: Context) {
     ) {
         if (type != "FACE") return
         
+        if (!isQnnInitialized) {
+            val jsonString = org.json.JSONObject().apply {
+                put("detected", 0)
+                put("error", "AI 모델 빌드 및 최적화 중입니다...")
+            }.toString()
+            resultTextView.text = jsonString
+            return
+        }
+
         val typeName = "페이스"
         
         try {
