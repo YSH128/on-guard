@@ -28,6 +28,7 @@ services:
     expose:
       - "8080"
     environment:
+      - TZ=Asia/Seoul
       - SPRING_PROFILES_ACTIVE=prod
       - DB_HOST=${DB_HOST:-mysql}
       - DB_PORT=${DB_PORT:-3306}
@@ -60,6 +61,7 @@ services:
     expose:
       - "8080"
     environment:
+      - TZ=Asia/Seoul
       - SPRING_PROFILES_ACTIVE=prod
       - DB_HOST=${DB_HOST:-mysql}
       - DB_PORT=${DB_PORT:-3306}
@@ -87,6 +89,7 @@ services:
     expose:
       - "3306" # ← 외부 포트 제거, 내부망에서만 접근
     environment:
+      - TZ=Asia/Seoul
       - MYSQL_DATABASE=${DB_NAME}
       - MYSQL_PASSWORD=${DB_PASSWORD}
       - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
