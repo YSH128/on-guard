@@ -1,5 +1,6 @@
 package com.s14p21a404.shutter.presentation.screens
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -273,6 +274,27 @@ private fun HeaderSection(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // 상태 뱃지 — 보호 시작/중지 기능
+                // Pulse 애니메이션 (서비스 실행 중일 때만)
+                val infiniteTransition = rememberInfiniteTransition(label = "homePulse")
+                val pulseAlpha by infiniteTransition.animateFloat(
+                    initialValue = 0.55f, targetValue = 0.55f,
+                    animationSpec = infiniteRepeatable(
+                        animation = keyframes {
+                            durationMillis = 1800
+                            0.55f at 0; 0f at 900; 0.55f at 1800
+                        }, repeatMode = RepeatMode.Restart
+                    ), label = "homePulseAlpha"
+                )
+                val pulseRadius by infiniteTransition.animateFloat(
+                    initialValue = 0f, targetValue = 0f,
+                    animationSpec = infiniteRepeatable(
+                        animation = keyframes {
+                            durationMillis = 1800
+                            0f at 0; 5f at 900; 0f at 1800
+                        }, repeatMode = RepeatMode.Restart
+                    ), label = "homePulseRadius"
+                )
+
                 Surface(
                     onClick = onToggleService,
                     shape = RoundedCornerShape(50),
@@ -282,12 +304,29 @@ private fun HeaderSection(
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val dotColor = if (isServiceRunning) StatusGreen else Color(0xFFEF4444)
+                        // 고정 크기 Box로 감싸서 레이아웃 흔들림 방지
                         Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(if (isServiceRunning) StatusGreen else Color(0xFFEF4444))
-                        )
+                            modifier = Modifier.size(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isServiceRunning) {
+                                // Pulse ring
+                                Box(
+                                    modifier = Modifier
+                                        .size((8 + pulseRadius * 2).dp)
+                                        .clip(CircleShape)
+                                        .background(dotColor.copy(alpha = pulseAlpha))
+                                )
+                            }
+                            // Core dot
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(dotColor)
+                            )
+                        }
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = if (isServiceRunning) "실시간 AI 감지 중" else "실시간 감지 시작하기",
