@@ -1,26 +1,19 @@
-#pragma once
+#ifndef QNN_MODEL_LOADER_H
+#define QNN_MODEL_LOADER_H
 
 #include <string>
 #include <vector>
 #include <mutex>
 #include <dlfcn.h>
-#include "QnnTypes.h"
-#include "QnnBackend.h"
-#include "QnnContext.h"
-#include "QnnGraph.h"
-#include "QnnLog.h"
-#include "QnnProperty.h"
-#include "QnnProfile.h"
-#include "QnnDevice.h"
-// If System API is used:
-#include "System/QnnSystemInterface.h"
+#include <android/log.h>
+#include "QNN/QnnInterface.h"
 
-// 백엔드 타입에 따른 라이브러리명 정의
-constexpr const char* LIB_QNN_HTP = "libQnnHtp.so";
-constexpr const char* LIB_QNN_GPU = "libQnnGpu.so";
-constexpr const char* LIB_QNN_CPU = "libQnnCpu.so";
-constexpr const char* LIB_QNN_SYSTEM = "libQnnSystem.so";
-constexpr const char* LIB_FACE_DEEPFAKE = "libface_deepfake.so"; // 사용자 제공 프리빌드 모델 라이브러리
+// 백엔드 라이브러리 경로 (Android 환경에 맞게 수정 필요)
+#define LIB_QNN_HTP "libQnnHtp.so"
+#define LIB_QNN_GPU "libQnnGpu.so"
+#define LIB_QNN_CPU "libQnnCpu.so"
+#define LIB_QNN_SYSTEM "libQnnSystem.so"
+#define LIB_FACE_DEEPFAKE "libface_deepfake.so"
 
 class QnnModelLoader {
 public:
@@ -29,6 +22,9 @@ public:
 
     // Initialize the QNN system (Backend, Device)
     bool InitSystem(const std::string& cacheDir);
+
+    // Compile the graph only and save to cache (no model holding in memory)
+    bool BuildModelCache(const std::string& assetsPath);
 
     // Load the model into memory (Context, Graph)
     bool LoadModel(const std::string& assetsPath);
@@ -111,6 +107,7 @@ private:
     bool LoadFunctionPointers();
     bool LoadModelLibrary();
     bool SetupBackendOnly(const std::string& backendName, const std::string& libName);
+    bool CheckCacheExists(const std::string& cachePath);
     bool LoadFromCache(const std::string& cachePath);
     bool BuildAndCacheGraph(const std::string& cachePath, const std::string& assetsPath);
     std::vector<uint8_t> ReadBinaryFile(const std::string& filePath);
@@ -118,3 +115,5 @@ private:
 
     std::string m_cacheDir;
 };
+
+#endif // QNN_MODEL_LOADER_H
