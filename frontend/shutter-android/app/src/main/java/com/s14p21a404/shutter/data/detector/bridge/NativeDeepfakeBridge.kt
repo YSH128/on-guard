@@ -3,6 +3,7 @@ package com.s14p21a404.shutter.data.detector.bridge
 import android.content.Context
 import android.util.Log
 import android.widget.TextView
+import com.s14p21a404.shutter.data.detector.DeepfakeSettings
 import com.s14p21a404.shutter.telemetry.DeviceStatusProvider
 import java.io.File
 import java.io.FileOutputStream
@@ -26,29 +27,105 @@ import kotlin.concurrent.thread
  */
 class NativeDeepfakeBridge(private val context: Context) {
 
-    private external fun loadModels(faceModelPath: String): FloatArray
+    @Volatile
+    var isQnnInitialized = false
+
+    @Volatile
+    var isQnnCompiled = false
+
+    private var initJobThread: Thread? = null
+
+    private external fun initQnn(cacheDir: String): Boolean
+    private external fun buildModelCache(assetsPath: String): Boolean
+    private external fun loadModel(assetsPath: String): Boolean
+    private external fun releaseQnn()
     private external fun detectDeepfakeVisual(buffer: ByteArray, width: Int, height: Int, stride: Int): FloatArray
 
-    init {
-        thread {
+    fun compileQnnCache() {
+        if (isQnnCompiled || isQnnInitialized) return
+        if (initJobThread?.isAlive == true) return
+        initJobThread = thread {
             try {
-                val facePath = getAssetFilePath(context, "face_deepfake_model.pt")
+                val facePath = getAssetFilePath(context, "face_deepfake.bin")
+                val filesDir = context.filesDir.absolutePath
+                val cacheDir = context.cacheDir.absolutePath
                 
-                Log.d("NativeDeepfakeBridge", "모델 로드 시작...")
-                val startCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
-                val results = loadModels(facePath)
-                val endCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
-                val loadThreadCpuTime = endCpuTimeMs - startCpuTimeMs
-                
-                val success = results[0] > 0.0f
-                if (success) {
-                    val faceLoadTime = results[1]
-                    Log.d("NativeDeepfakeBridge", "모델 로드 성공! 페이스: ${faceLoadTime}ms, CPU: ${loadThreadCpuTime}ms")
+                Log.d("NativeDeepfakeBridge", "QNN 시스템 초기화 시작...")
+                val initSuccess = initQnn(cacheDir)
+                if (initSuccess) {
+                    val keepInVram = DeepfakeSettings.keepModelInVram.value
+
+                    if (keepInVram) {
+                        Log.d("NativeDeepfakeBridge", "옵션: 모델 VRAM 상시 할당 활성화. (loadModel 즉시 호출)")
+                        val startCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
+                        val loadSuccess = loadModel(filesDir)
+                        val loadThreadCpuTime = DeviceStatusProvider.getThreadCpuTimeMs() - startCpuTimeMs
+                        
+                        if (loadSuccess) {
+                            isQnnCompiled = true
+                            isQnnInitialized = true // 메모리에 올렸으므로 초기화 완료
+                            Log.d("NativeDeepfakeBridge", "QNN 모델 초기 적재 완료 (CPU: ${loadThreadCpuTime}ms)")
+                        } else {
+                            Log.e("NativeDeepfakeBridge", "QNN 초기 적재 실패!")
+                        }
+                    } else {
+                        Log.d("NativeDeepfakeBridge", "옵션: 모델 VRAM 해제 활성화. (buildModelCache 호출)")
+                        val startCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
+                        val buildSuccess = buildModelCache(filesDir)
+                        val compileThreadCpuTime = DeviceStatusProvider.getThreadCpuTimeMs() - startCpuTimeMs
+                        
+                        if (buildSuccess) {
+                            isQnnCompiled = true
+                            Log.d("NativeDeepfakeBridge", "QNN 모델 컴파일 및 VRAM 해제 성공 (CPU: ${compileThreadCpuTime}ms)")
+                        } else {
+                            Log.e("NativeDeepfakeBridge", "QNN 모델 컴파일 실패!")
+                        }
+                    }
                 } else {
-                    Log.e("NativeDeepfakeBridge", "모델 로드 실패!")
+                    Log.e("NativeDeepfakeBridge", "QNN 시스템 초기화 실패!")
                 }
             } catch (e: Exception) {
-                Log.e("NativeDeepfakeBridge", "모델 로드 에러: ${e.message}")
+                Log.e("NativeDeepfakeBridge", "QNN 컴파일 에러: ${e.message}")
+            }
+        }
+    }
+
+    fun loadModelIntoMemory(onComplete: () -> Unit = {}) {
+        if (isQnnInitialized) {
+            onComplete()
+            return
+        }
+        thread {
+            // 사전 컴파일 및 적재 스레드가 돌고 있다면, C++ Mutex Lock에 막혀 19초 중복 호출되는 것을 방지하기 위해 대기
+            initJobThread?.join()
+
+            // 대기 후 이미 적재가 끝났다면 즉시 리턴
+            if (isQnnInitialized) {
+                onComplete()
+                return@thread
+            }
+
+            try {
+                val filesDir = context.filesDir.absolutePath
+                val cacheDir = context.cacheDir.absolutePath
+                
+                // 만일을 대비한 fallback
+                initQnn(cacheDir)
+
+                val startCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
+                val loadSuccess = loadModel(filesDir)
+                val loadThreadCpuTime = DeviceStatusProvider.getThreadCpuTimeMs() - startCpuTimeMs
+                
+                if (loadSuccess) {
+                    isQnnInitialized = true
+                    Log.d("NativeDeepfakeBridge", "QNN 모델 캐시 읽기 및 메모리 적재 완료 (CPU: ${loadThreadCpuTime}ms)")
+                } else {
+                    Log.e("NativeDeepfakeBridge", "QNN 모델 메모리 로드 실패!")
+                }
+                onComplete()
+            } catch (e: Exception) {
+                Log.e("NativeDeepfakeBridge", "QNN 로드 상태 에러: ${e.message}")
+                onComplete()
             }
         }
     }
@@ -74,11 +151,17 @@ class NativeDeepfakeBridge(private val context: Context) {
         buffer: ByteArray,
         width: Int,
         height: Int,
-        stride: Int,
-        resultTextView: TextView
-    ) {
-        if (type != "FACE") return
+        stride: Int
+    ): String {
+        if (type != "FACE") return ""
         
+        if (!isQnnInitialized) {
+            return org.json.JSONObject().apply {
+                put("detected", 0)
+                put("error", "AI 모델 빌드 및 최적화 중입니다...")
+            }.toString()
+        }
+
         val typeName = "페이스"
         
         try {
@@ -123,11 +206,10 @@ class NativeDeepfakeBridge(private val context: Context) {
             val batteryCurrentmA = DeviceStatusProvider.getBatteryCurrentNow(context)
 
             if (!isSuccess) {
-                val jsonString = org.json.JSONObject().apply {
+                return org.json.JSONObject().apply {
                     put("detected", 0)
                     put("error", "INFERENCE_ERROR")
                 }.toString()
-                resultTextView.text = jsonString
             } else {
                 val header = "[$typeName 추론 성공 - $status]\nFake: ${String.format("%.2f%%", faceFakeProb * 100)}\nReal: ${String.format("%.2f%%", faceRealProb * 100)}" 
                 
@@ -145,7 +227,7 @@ class NativeDeepfakeBridge(private val context: Context) {
                     Thermal Status: $thermalStatus
                 """.trimIndent()
                 
-                val jsonString = org.json.JSONObject().apply {
+                return org.json.JSONObject().apply {
                     put("detected", if (isFake) 1 else 0)
                     if (results.size >= 10) {
                         put("roi", org.json.JSONArray().apply {
@@ -157,8 +239,6 @@ class NativeDeepfakeBridge(private val context: Context) {
                     }
                     put("debug_info", resultText)
                 }.toString()
-                
-                resultTextView.text = jsonString
             }
         } catch (e: Exception) {
             val errorType = when {
@@ -166,11 +246,10 @@ class NativeDeepfakeBridge(private val context: Context) {
                 e.message?.lowercase()?.contains("timeout") == true -> "TIMEOUT"
                 else -> "INFERENCE_ERROR"
             }
-            val jsonString = org.json.JSONObject().apply {
+            return org.json.JSONObject().apply {
                 put("detected", 0)
                 put("error", errorType)
             }.toString()
-            resultTextView.text = jsonString
         }
     }
 

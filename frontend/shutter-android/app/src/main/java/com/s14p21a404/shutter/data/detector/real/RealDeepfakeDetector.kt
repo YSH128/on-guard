@@ -14,12 +14,12 @@ import com.s14p21a404.shutter.domain.model.DeepfakeDetectionResult
  * │  이 클래스의 역할 (앱/Kotlin 담당)                         │
  * │  1. RepositoryImpl에서 디스패치된 프레임(byte[])을 받아     │
  * │  2. NativeDeepfakeBridge.request_deepfake_detection() 호출│
- * │  3. resultTextView에 NDK가 써주는 결과를 읽어 파싱          │
+ * │  3. 반환된 JSON 문자열 읽어 파싱                            │
  * │  4. 결과를 onResult 콜백으로 전달                          │
  * ├──────────────────────────────────────────────────────────┤
  * │  NDK 담당 (이 클래스 바깥)                                 │
  * │  • libshutter-native.so 빌드 (deepfake_jni.cpp)          │
- * │  • C++ request_deepfake_detection(type, buffer, tv) 구현  │
+ * │  • request_deepfake_detection 에서 네이티브 C++ 추론 수행   │
  * └──────────────────────────────────────────────────────────┘
  */
 class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
@@ -28,22 +28,45 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
     private var onResultCallback: ((DeepfakeDetectionResult) -> Unit)? = null
     private var nativeAvailable = false
 
-    /** NDK 결과를 받을 더미 TextView (NDK 쪽에서 setText로 결과를 써줄 예정) */
-    private var dummyResultTextView: TextView? = null
+    /** NDK 결과를 받을 더미 TextView (NDK 쪽에서 setText로 결과를 써줄 예정) -> 폐기: 직관적인 String Return 사용 */
 
     // 추론 결과 누적용
     private val resultBuffer = mutableListOf<DeepfakeDetectionResult>()
 
-    override fun startDetection(onResult: (DeepfakeDetectionResult) -> Unit) {
+    override fun prepare() {
+        if (bridge == null) {
+            nativeAvailable = NativeDeepfakeBridge.loadLibrary()
+            if (nativeAvailable) {
+                bridge = NativeDeepfakeBridge(context)
+                bridge!!.compileQnnCache()
+                Log.d(TAG, "RealDeepfakeDetector 사전 컴파일 시작 (백그라운드 캐시화)")
+            }
+        }
+    }
+
+    override fun startDetection(
+        onResult: (DeepfakeDetectionResult) -> Unit,
+        onReady: () -> Unit
+    ) {
         onResultCallback = onResult
         resultBuffer.clear()  // 시작 시 초기화
-        nativeAvailable = NativeDeepfakeBridge.loadLibrary()
-        if (nativeAvailable) {
-            bridge = NativeDeepfakeBridge(context)
-            dummyResultTextView = TextView(context)
-            Log.d(TAG, "RealDeepfakeDetector 시작 — NDK 라이브러리 로드 성공")
+        
+        if (bridge == null) {
+            nativeAvailable = NativeDeepfakeBridge.loadLibrary()
+            if (nativeAvailable) {
+                bridge = NativeDeepfakeBridge(context)
+            } else {
+                Log.w(TAG, "RealDeepfakeDetector 시작 — NDK 라이브러리 없음 (JNI 호출 스킵)")
+            }
+        }
+        
+        if (nativeAvailable && bridge != null) {
+            bridge!!.loadModelIntoMemory {
+                onReady()
+            }
+            Log.d(TAG, "RealDeepfakeDetector 시작 — NDK 모델 로드 지시 및 대기")
         } else {
-            Log.w(TAG, "RealDeepfakeDetector 시작 — NDK 라이브러리 없음 (JNI 호출 스킵)")
+            onReady() // JNI 사용 불가 시에도 프레임 처리를 뚫어주기 위해 즉시 리턴
         }
     }
 
@@ -66,16 +89,19 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
             return
         }
 
+        if (!bridge!!.isQnnInitialized) {
+            Log.d(TAG, "⏳ 메모리에 AI 모델 적재 중입니다... 프레임 추론 건너뜀")
+            // 화면 쪽으로 로딩 상태를 전달하기 위해 가짜 결과 발행
+            callback(DeepfakeDetectionResult(detected = false, rawResultJson = "AI 모델 빌드 및 적재 중입니다..."))
+            return
+        }
+
         try {
-            // ── 1) JNI 호출: buffer 직접 전달 ──
-            val tv = dummyResultTextView!!
-            tv.text = ""  // 초기화
-
-            bridge!!.request_deepfake_detection("FACE", buffer, width, height, rowStride, tv)
-
+            // ── 1) JNI 브릿지 호출 (String 리턴) ──
+            val resultText = bridge!!.request_deepfake_detection("FACE", buffer, width, height, rowStride)
+            
             // ── 2) 결과 읽기 ──
-            val resultText = tv.text.toString()
-            Log.d(TAG, "JNI 결과 (TextView): $resultText")
+            Log.d(TAG, "JNI 결과: $resultText")
 
             val result = parseResult(resultText)
             resultBuffer.add(result)
@@ -113,8 +139,6 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
     override fun stopDetection() {
         onResultCallback = null
-        bridge = null
-        dummyResultTextView = null
         resultBuffer.clear()
         Log.d(TAG, "RealDeepfakeDetector 중단")
     }

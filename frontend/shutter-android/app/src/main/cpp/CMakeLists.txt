@@ -16,7 +16,8 @@ set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -v")
 
 # 1. 내 프로젝트의 기본 라이브러리 타겟 생성
 add_library(${CMAKE_PROJECT_NAME} SHARED
-        native-lib.cpp)
+        native-lib.cpp
+        QnnModelLoader.cpp)
 
 # 2. 루트 경로 설정
 set(LIBS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../build/native_libs)
@@ -33,6 +34,8 @@ endif()
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${PYTORCH_DIR}/headers
     ${OPENCV_INCLUDE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/QNN
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 # 5. 라이브러리 파일(.so) 연결
