@@ -5,6 +5,7 @@ import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 
 // ── 카카오 로그인 ──────────────────────────────────────────────────────────────
@@ -134,6 +135,56 @@ data class WardListResponse(
     val data: WardListData,
 )
 
+// ── GPS 위치 전송 POST /gps ────────────────────────────────────────────────────
+
+data class GpsRequest(
+    val lat: Double,
+    val lng: Double,
+)
+
+data class GpsResponseData(
+    @SerializedName("updated_at") val updatedAt: String,
+)
+
+data class GpsResponse(
+    val success: Boolean,
+    val message: String,
+    val data: GpsResponseData,
+)
+
+// ── 피보호자 위치 조회 GET /gps/{wardId} ──────────────────────────────────────
+
+data class GpsLocationData(
+    @SerializedName("ward_id") val wardId: Long,
+    val name: String,
+    val lat: Double?,
+    val lng: Double?,
+    @SerializedName("updated_at") val updatedAt: String?,
+    @SerializedName("is_sharing") val isSharing: Boolean,
+)
+
+data class GpsLocationResponse(
+    val success: Boolean,
+    val message: String,
+    val data: GpsLocationData,
+)
+
+// ── GPS 공유 토글 PUT /gps/sharing ─────────────────────────────────────────────
+
+data class GpsSharingRequest(
+    @SerializedName("gps_sharing") val gpsSharing: Boolean,
+)
+
+data class GpsSharingData(
+    @SerializedName("gps_sharing") val gpsSharing: Boolean,
+)
+
+data class GpsSharingResponse(
+    val success: Boolean,
+    val message: String,
+    val data: GpsSharingData,
+)
+
 // ── 인터페이스 ─────────────────────────────────────────────────────────────────
 
 interface ApiService {
@@ -158,4 +209,13 @@ interface ApiService {
 
     @GET("api/v1/guardians/wards/me")
     suspend fun getMyWards(): WardListResponse
+
+    @POST("api/v1/gps")
+    suspend fun postGps(@Body request: GpsRequest): GpsResponse
+
+    @GET("api/v1/gps/{wardId}")
+    suspend fun getWardGps(@Path("wardId") wardId: Long): GpsLocationResponse
+
+    @PUT("api/v1/gps/sharing")
+    suspend fun toggleGpsSharing(@Body request: GpsSharingRequest): GpsSharingResponse
 }

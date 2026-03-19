@@ -58,13 +58,14 @@ import com.s14p21a404.shutter.R
 private const val PULSE_FRAME_COUNT = 40
 private const val PULSE_INTERVAL_MS = 40L
 
-// ── 피보호자 UI 모델 (Ward 도메인 모델을 화면용으로 변환) ──
+// ── 피보호자 UI 모델 ──
 
 private data class LocationGuardian(
     val id: String,
     val name: String,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    val isSharing: Boolean = false,
 )
 
 // ── 색상 상수 ──
@@ -91,7 +92,7 @@ fun LocationScreen(
 ) {
     val uiState by locationViewModel.uiState.collectAsState()
 
-    // Ward 도메인 모델 → LocationGuardian UI 모델 변환
+    // WardWithLocation → LocationGuardian UI 모델 변환
     val wards = when (val s = uiState) {
         is LocationUiState.Success -> s.wards.map { ward ->
             LocationGuardian(
@@ -99,6 +100,7 @@ fun LocationScreen(
                 name = ward.name,
                 latitude = ward.lat,
                 longitude = ward.lng,
+                isSharing = ward.isSharing,
             )
         }
         else -> emptyList()
@@ -114,7 +116,9 @@ fun LocationScreen(
     }
 
     val selectedWard = wards.find { it.id == selectedId }
-    val hasActiveLocation = selectedWard?.latitude != null && selectedWard.longitude != null
+    val hasActiveLocation = selectedWard?.isSharing == true
+            && selectedWard.latitude != null
+            && selectedWard.longitude != null
 
     Column(
         modifier = Modifier
@@ -305,38 +309,37 @@ private fun KakaoMapWithMarker(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val density = LocalDensity.current
-    val targetLatLng = remember(latitude, longitude) {
-        LatLng.from(latitude, longitude)
-    }
 
-    // 방패 마커 Bitmap 미리 생성
-    val markerBitmap = remember(context) {
-        createShieldMarkerBitmap(context, density.density)
-    }
-
-    // 범위 파장 프레임 Bitmap 배열 생성 (크기+투명도 변화)
-    val pulseFrames = remember(context) {
-        createPulseFrames(density.density, PULSE_FRAME_COUNT)
-    }
+    val markerBitmap = remember(context) { createShieldMarkerBitmap(context, density.density) }
+    val pulseFrames = remember(context) { createPulseFrames(density.density, PULSE_FRAME_COUNT) }
 
     val mapView = remember { MapView(context) }
     var mapStarted by remember { mutableStateOf(false) }
     val animHandler = remember { Handler(Looper.getMainLooper()) }
 
+    // 지도 초기화 후 참조를 보관해 위치 업데이트에 재사용
+    var kakaoMapRef by remember { mutableStateOf<KakaoMap?>(null) }
+    var pulseLabelRef by remember { mutableStateOf<Label?>(null) }
+    var shieldLabelRef by remember { mutableStateOf<Label?>(null) }
+
+    // 위치 변경 시 카메라 이동 + 마커 위치 갱신
+    LaunchedEffect(latitude, longitude) {
+        val map = kakaoMapRef ?: return@LaunchedEffect
+        val newLatLng = LatLng.from(latitude, longitude)
+        map.moveCamera(CameraUpdateFactory.newCenterPosition(newLatLng, 16))
+        pulseLabelRef?.moveTo(newLatLng)
+        shieldLabelRef?.moveTo(newLatLng)
+    }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> {
-                    if (mapStarted) mapView.resume()
-                }
-                Lifecycle.Event.ON_PAUSE -> {
-                    if (mapStarted) mapView.pause()
-                }
+                Lifecycle.Event.ON_RESUME -> if (mapStarted) mapView.resume()
+                Lifecycle.Event.ON_PAUSE  -> if (mapStarted) mapView.pause()
                 else -> {}
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
             animHandler.removeCallbacksAndMessages(null)
@@ -353,9 +356,7 @@ private fun KakaoMapWithMarker(
                             mapStarted = true
                             start(
                                 object : MapLifeCycleCallback() {
-                                    override fun onMapDestroy() {
-                                        Log.d("KakaoMap", "지도 파괴됨")
-                                    }
+                                    override fun onMapDestroy() { Log.d("KakaoMap", "지도 파괴됨") }
                                     override fun onMapError(error: Exception?) {
                                         Log.e("KakaoMap", "지도 에러: ${error?.message}", error)
                                     }
@@ -363,62 +364,57 @@ private fun KakaoMapWithMarker(
                                 object : KakaoMapReadyCallback() {
                                     override fun onMapReady(kakaoMap: KakaoMap) {
                                         Log.d("KakaoMap", "지도 준비 완료")
+                                        kakaoMapRef = kakaoMap
 
-                                        // 카메라 이동
+                                        val targetLatLng = LatLng.from(latitude, longitude)
                                         kakaoMap.moveCamera(
                                             CameraUpdateFactory.newCenterPosition(targetLatLng, 16)
                                         )
 
-                                        // ── 좌표 고정 마커(Label) 추가 ──
                                         val labelLayer = kakaoMap.labelManager?.layer
                                         labelLayer?.zOrder = 10001
 
-                                        // 범위 파장 프레임 스타일 등록
+                                        // 파장 스타일 등록
                                         val pulseStyles = pulseFrames.map { frame ->
                                             kakaoMap.labelManager?.addLabelStyles(
                                                 LabelStyles.from(
-                                                    LabelStyle.from(frame)
-                                                        .setAnchorPoint(0.5f, 0.5f)
+                                                    LabelStyle.from(frame).setAnchorPoint(0.5f, 0.5f)
                                                 )
                                             )
                                         }
 
-                                        var pulseLabel: Label? = null
                                         if (pulseStyles.firstOrNull() != null) {
-                                            pulseLabel = labelLayer?.addLabel(
+                                            pulseLabelRef = labelLayer?.addLabel(
                                                 LabelOptions.from("pulse", targetLatLng)
                                                     .setStyles(pulseStyles.first()!!)
                                                     .setRank(1L)
                                             )
                                         }
 
-                                        // 파장 애니메이션 시작
+                                        // 파장 애니메이션
                                         var frameIndex = 0
                                         val animRunnable = object : Runnable {
                                             override fun run() {
                                                 frameIndex = (frameIndex + 1) % PULSE_FRAME_COUNT
                                                 val nextStyle = pulseStyles.getOrNull(frameIndex)
-                                                if (nextStyle != null && pulseLabel != null) {
-                                                    pulseLabel.changeStyles(nextStyle)
+                                                if (nextStyle != null && pulseLabelRef != null) {
+                                                    pulseLabelRef!!.changeStyles(nextStyle)
                                                 }
                                                 animHandler.postDelayed(this, PULSE_INTERVAL_MS)
                                             }
                                         }
                                         animHandler.postDelayed(animRunnable, PULSE_INTERVAL_MS)
 
-                                        // 방패 마커 (최상위)
-                                        val style = kakaoMap.labelManager
-                                            ?.addLabelStyles(
-                                                LabelStyles.from(
-                                                    LabelStyle.from(markerBitmap)
-                                                        .setAnchorPoint(0.5f, 1.0f)
-                                                )
+                                        // 방패 마커
+                                        val shieldStyle = kakaoMap.labelManager?.addLabelStyles(
+                                            LabelStyles.from(
+                                                LabelStyle.from(markerBitmap).setAnchorPoint(0.5f, 1.0f)
                                             )
-
-                                        if (style != null) {
-                                            labelLayer?.addLabel(
+                                        )
+                                        if (shieldStyle != null) {
+                                            shieldLabelRef = labelLayer?.addLabel(
                                                 LabelOptions.from(targetLatLng)
-                                                    .setStyles(style)
+                                                    .setStyles(shieldStyle)
                                                     .setRank(Long.MAX_VALUE)
                                             )
                                         }
@@ -428,7 +424,6 @@ private fun KakaoMapWithMarker(
                             resume()
                         }
                     }
-
                     override fun onViewDetachedFromWindow(v: android.view.View) {
                         Log.d("KakaoMap", "MapView detached")
                     }

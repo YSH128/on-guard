@@ -5,13 +5,16 @@ import com.s14p21a404.shutter.data.detector.DeepfakeDetector
 import com.s14p21a404.shutter.data.detector.real.RealDeepfakeDetector
 import com.s14p21a404.shutter.data.repository.AuthRepositoryImpl
 import com.s14p21a404.shutter.data.repository.DeepfakeDetectionRepositoryImpl
+import com.s14p21a404.shutter.data.repository.GpsRepositoryImpl
 import com.s14p21a404.shutter.data.repository.GuardianRepositoryImpl
 import com.s14p21a404.shutter.data.repository.VideoCallRepositoryImpl
 import com.s14p21a404.shutter.data.token.TokenManager
 import com.s14p21a404.shutter.domain.repository.AuthRepository
 import com.s14p21a404.shutter.domain.repository.DeepfakeDetectionRepository
+import com.s14p21a404.shutter.domain.repository.GpsRepository
 import com.s14p21a404.shutter.domain.repository.GuardianRepository
 import com.s14p21a404.shutter.domain.repository.VideoCallRepository
+import com.s14p21a404.shutter.network.GpsWebSocketClient
 import com.s14p21a404.shutter.domain.usecase.AddGuardianUseCase
 import com.s14p21a404.shutter.domain.usecase.DeleteGuardianUseCase
 import com.s14p21a404.shutter.domain.usecase.DetectDeepfakeUseCase
@@ -49,6 +52,10 @@ class ServiceLocator private constructor(context: Context) {
     val guardianRepository: GuardianRepository = GuardianRepositoryImpl(
         apiService = apiService,
     )
+
+    val gpsRepository: GpsRepository = GpsRepositoryImpl(apiService)
+
+    val gpsWebSocketClient = GpsWebSocketClient(tokenManager)
 
     // val detector: DeepfakeDetector = BroadcastTriggerDetector(context)       // ADB 테스트용
     val detector: DeepfakeDetector = RealDeepfakeDetector(context)       // JNI 파이프라인 (NDK SO 필요)
