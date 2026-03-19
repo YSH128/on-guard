@@ -129,18 +129,22 @@ bool QnnModelLoader::LoadFunctionPointers() {
         LOGE("QNN System context library not found: %s. Error: %s", LIB_QNN_SYSTEM, dlerror());
     }
 
-    // 미리 빌드된 JNI 라이브러리 (libface_deepfake.so)
+    return true;
+}
+
+bool QnnModelLoader::LoadModelLibrary() {
+    if (m_modelHandle) return true;
     m_modelHandle = dlopen(LIB_FACE_DEEPFAKE, RTLD_NOW | RTLD_LOCAL);
     if (m_modelHandle) {
         m_fpModelComposeGraphs = (QnnModel_ComposeGraphsFn_t)dlsym(m_modelHandle, "QnnModel_composeGraphs");
         if (!m_fpModelComposeGraphs) {
-            LOGE("Failed to find QnnModel_composeGraphs in %s. Error: %s", LIB_FACE_DEEPFAKE, dlerror());
+            LOGE("Failed to find QnnModel_composeGraphs in %s", LIB_FACE_DEEPFAKE);
+            return false;
         }
     } else {
-        LOGE("Failed to load model library: %s. Error: %s. Re-check if it's packed in jniLibs.", LIB_FACE_DEEPFAKE, dlerror());
+        LOGE("Failed to load model library: %s", LIB_FACE_DEEPFAKE);
         return false;
     }
-
     return true;
 }
 
@@ -158,7 +162,7 @@ std::vector<uint8_t> QnnModelLoader::ReadBinaryFile(const std::string& filePath)
     return {};
 }
 
-bool QnnModelLoader::SetupBackendAndGraph(const std::string& backendName, const std::string& libName, const std::string& cacheDir, const std::string& assetsPath) {
+bool QnnModelLoader::SetupBackendOnly(const std::string& backendName, const std::string& libName) {
     if (!TryLoadBackend(libName.c_str())) {
         LOGE("Failed to load backend library: %s", libName.c_str());
         return false;
@@ -178,24 +182,12 @@ bool QnnModelLoader::SetupBackendAndGraph(const std::string& backendName, const 
     }
 
     m_activeBackendName = backendName;
-    std::string cachePath = cacheDir + "/" + m_activeBackendName + "_deepfake_cache.bin";
-
-    if (LoadFromCache(cachePath)) {
-        LOGI("Model successfully loaded from cache for %s", backendName.c_str());
-        return true;
-    }
-
-    LOGI("Cache not found for %s. Building graph using ComposeGraphs...", backendName.c_str());
-    if (BuildAndCacheGraph(cachePath, assetsPath)) {
-        LOGI("Graph built and cached successfully for %s.", backendName.c_str());
-        return true;
-    }
-
-    return false;
+    return true;
 }
 
-bool QnnModelLoader::Initialize(const std::string& cacheDir, const std::string& assetsPath) {
+bool QnnModelLoader::InitSystem(const std::string& cacheDir) {
     std::lock_guard<std::mutex> lock(m_mutex);
+    m_cacheDir = cacheDir;
     
     std::string configPath = cacheDir + "/active_backend.txt";
     std::string savedBackend = "";
@@ -229,7 +221,7 @@ bool QnnModelLoader::Initialize(const std::string& cacheDir, const std::string& 
     bool success = false;
     for (const auto& target : targets) {
         LOGI("--- Attempting to initialize backend: %s ---", target.name.c_str());
-        if (SetupBackendAndGraph(target.name, target.lib, cacheDir, assetsPath)) {
+        if (SetupBackendOnly(target.name, target.lib)) {
             success = true;
             m_activeBackendName = target.name;
             break;
@@ -250,6 +242,34 @@ bool QnnModelLoader::Initialize(const std::string& cacheDir, const std::string& 
     }
 
     LOGE("CRITICAL: All QNN Backends failed to initialize and build graphs!");
+    return false;
+}
+
+bool QnnModelLoader::LoadModel(const std::string& assetsPath) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    
+    if (!m_backend) {
+        LOGE("Cannot load model. Backend is not initialized.");
+        return false;
+    }
+    
+    if (!LoadModelLibrary()) {
+        return false;
+    }
+
+    std::string cachePath = m_cacheDir + "/" + m_activeBackendName + "_deepfake_cache.bin";
+
+    if (LoadFromCache(cachePath)) {
+        LOGI("Model successfully loaded from cache for %s", m_activeBackendName.c_str());
+        return true;
+    }
+
+    LOGI("Cache not found for %s. Building graph using ComposeGraphs...", m_activeBackendName.c_str());
+    if (BuildAndCacheGraph(cachePath, assetsPath)) {
+        LOGI("Graph built and cached successfully for %s.", m_activeBackendName.c_str());
+        return true;
+    }
+
     return false;
 }
 
