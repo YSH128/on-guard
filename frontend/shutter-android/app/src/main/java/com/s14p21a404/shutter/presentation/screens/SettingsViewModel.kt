@@ -24,9 +24,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val serviceLocator = ServiceLocator.getInstance(application)
     private val getMyGuardiansUseCase = serviceLocator.getMyGuardiansUseCase
     private val deleteGuardianUseCase = serviceLocator.deleteGuardianUseCase
+    private val gpsRepository = serviceLocator.gpsRepository
+    private val tokenManager = serviceLocator.tokenManager
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+
+    init {
+        // SharedPreferences에 저장된 마지막 토글 상태 복원
+        _uiState.update { it.copy(gpsSharing = tokenManager.getGpsSharing()) }
+    }
 
     fun loadGuardians() {
         viewModelScope.launch {
@@ -42,7 +49,17 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun toggleGpsSharing() {
-        _uiState.update { it.copy(gpsSharing = !it.gpsSharing) }
+        val newState = !_uiState.value.gpsSharing
+        viewModelScope.launch {
+            gpsRepository.toggleGpsSharing(newState)
+                .onSuccess { enabled ->
+                    tokenManager.saveGpsSharing(enabled)
+                    _uiState.update { it.copy(gpsSharing = enabled) }
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(error = e.message ?: "GPS 공유 설정 변경에 실패했습니다.") }
+                }
+        }
     }
 
     fun requestDeleteGuardian(guardian: Guardian) {
