@@ -121,8 +121,10 @@ fun HomeScreen(
     onToggleService: () -> Unit,
     allPermissionsGranted: Boolean = true,
     overlayPermissionGranted: Boolean = true,
+    accessibilityServiceEnabled: Boolean = true,
     onRequestPermissions: () -> Unit = {},
     onRequestOverlayPermission: () -> Unit = {},
+    onRequestAccessibilityPermission: () -> Unit = {},
     homeViewModel: HomeViewModel = viewModel(),
 ) {
     val scrollState = rememberScrollState()
@@ -131,13 +133,16 @@ fun HomeScreen(
     // 권한 요청 다이얼로그 표시 여부
     var showPermissionDialog by remember { mutableStateOf(false) }
     var showOverlayDialog by remember { mutableStateOf(false) }
+    var showAccessibilityDialog by remember { mutableStateOf(false) }
 
     // 첫 접속 시 권한 체크 → 다이얼로그 표시
-    LaunchedEffect(allPermissionsGranted, overlayPermissionGranted) {
+    LaunchedEffect(allPermissionsGranted, overlayPermissionGranted, accessibilityServiceEnabled) {
         if (!allPermissionsGranted) {
             showPermissionDialog = true
         } else if (!overlayPermissionGranted) {
             showOverlayDialog = true
+        } else if (!accessibilityServiceEnabled) {
+            showAccessibilityDialog = true
         }
     }
 
@@ -172,6 +177,25 @@ fun HomeScreen(
                 TextButton(onClick = {
                     showOverlayDialog = false
                     onRequestOverlayPermission()
+                }) {
+                    Text("설정으로 이동")
+                }
+            },
+        )
+    }
+
+    // ── 접근성 서비스 활성화 요청 다이얼로그 ──
+    if (showAccessibilityDialog && allPermissionsGranted && overlayPermissionGranted) {
+        AlertDialog(
+            onDismissRequest = { /* 닫기 방지 */ },
+            title = { Text("접근성 서비스 활성화 필요", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("영상통화 화면 감지를 위해\n접근성 설정에서 'Shutter' 서비스를 활성화해주세요.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showAccessibilityDialog = false
+                    onRequestAccessibilityPermission()
                 }) {
                     Text("설정으로 이동")
                 }

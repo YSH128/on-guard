@@ -18,6 +18,7 @@ import com.s14p21a404.shutter.domain.usecase.MonitorVideoCallUseCase
 import com.s14p21a404.shutter.presentation.overlay.WarningOverlayManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -40,6 +41,16 @@ class VideoCallDetectService : Service() {
     private lateinit var warningOverlayManager: WarningOverlayManager
     private lateinit var videoCallRepository: VideoCallRepository
     private lateinit var detectionRepository: DeepfakeDetectionRepository
+
+    /** 포그라운드 앱 모니터링 Job — 영상통화 감지 시 시작, 종료 시 취소 */
+    private var foregroundMonitorJob: Job? = null
+
+    /**
+     * 오버레이가 표시 중이었는지 여부.
+     * 영상통화 화면을 벗어났다가 돌아올 때 오버레이를 복원하기 위해 사용.
+     */
+    @Volatile
+    private var wasOverlayShowing = false
 
     // ── 생명주기 ──
 
@@ -66,10 +77,13 @@ class VideoCallDetectService : Service() {
                 if (isVideoCall) {
                     warningOverlayManager.setEnabled(true)
                     monitorUseCase.startDetection()
+                    startForegroundAppMonitoring()
                 } else {
+                    stopForegroundAppMonitoring()
                     warningOverlayManager.setEnabled(false)
                     monitorUseCase.stopDetection()
                     warningOverlayManager.dismissWarning()
+                    wasOverlayShowing = false
                 }
             }
         }
@@ -84,6 +98,53 @@ class VideoCallDetectService : Service() {
                 warningOverlayManager.onDetectionResult(result, roiBitmap)
             }
         }
+    }
+
+    // ── 포그라운드 앱 모니터링 ──
+
+    /**
+     * 영상통화 감지 후, 포그라운드 앱 변경을 관찰하여
+     * 영상통화 화면을 벗어나면 오버레이를 숨기고,
+     * 다시 돌아오면 오버레이를 복원한다.
+     */
+    private fun startForegroundAppMonitoring() {
+        // 이미 모니터링 중이면 무시
+        if (foregroundMonitorJob?.isActive == true) return
+
+        if (!ForegroundAppMonitorService.isRunning()) {
+            Log.w(TAG, "⚠️ AccessibilityService(ForegroundAppMonitor) 미활성 — 포그라운드 앱 추적 불가")
+            return
+        }
+
+        Log.d(TAG, "포그라운드 앱 모니터링 시작")
+        foregroundMonitorJob = serviceScope.launch {
+            videoCallRepository.observeForegroundIsVideoCallApp().collect { isOnVideoCallScreen ->
+                Log.d(TAG, "영상통화 화면 여부: $isOnVideoCallScreen, 오버레이 표시 중: ${warningOverlayManager.isShowing()}")
+
+                if (isOnVideoCallScreen) {
+                    // 영상통화 화면으로 복귀 → 오버레이가 이전에 표시 중이었으면 복원
+                    if (wasOverlayShowing && !warningOverlayManager.isShowing()) {
+                        Log.d(TAG, "📱 영상통화 화면 복귀 → 오버레이 복원")
+                        warningOverlayManager.setEnabled(true)
+                        warningOverlayManager.showWarning()
+                    }
+                } else {
+                    // 영상통화 화면 이탈 → 오버레이 숨김
+                    if (warningOverlayManager.isShowing()) {
+                        wasOverlayShowing = true
+                        Log.d(TAG, "📱 영상통화 화면 이탈 → 오버레이 숨김")
+                        warningOverlayManager.dismissWarning()
+                        warningOverlayManager.setEnabled(false)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun stopForegroundAppMonitoring() {
+        foregroundMonitorJob?.cancel()
+        foregroundMonitorJob = null
+        Log.d(TAG, "포그라운드 앱 모니터링 중단")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -113,7 +174,7 @@ class VideoCallDetectService : Service() {
         super.onDestroy()
         Log.d(TAG, "서비스 종료")
 
-
+        stopForegroundAppMonitoring()
         serviceScope.cancel()
         detectionRepository.stopDetection()
         videoCallRepository.stopMonitoring()

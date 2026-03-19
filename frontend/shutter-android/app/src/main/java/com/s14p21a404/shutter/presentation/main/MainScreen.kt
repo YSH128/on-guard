@@ -30,6 +30,7 @@ fun MainScreen(
     onRegister: (name: String) -> Unit = {},
     onRequestPermissions: () -> Unit,
     onRequestOverlayPermission: () -> Unit,
+    onRequestAccessibilityPermission: () -> Unit = {},
     onToggleService: () -> Unit,
     onLogout: () -> Unit,
     loginError: String? = null,
@@ -52,6 +53,7 @@ fun MainScreen(
         uiState = uiState,
         onRequestPermissions = onRequestPermissions,
         onRequestOverlayPermission = onRequestOverlayPermission,
+        onRequestAccessibilityPermission = onRequestAccessibilityPermission,
     )
 }
 
