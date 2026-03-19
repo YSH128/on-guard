@@ -75,6 +75,10 @@ public class AlertService {
 
         log.info("Alert sent from ward {} to guardian {}. Status: {}", wardId, guardianId, savedLog.getStatus());
 
+        if (!pushSuccess) {
+            throw new AlertException(ErrorCode.FCM_SEND_FAILED);
+        }
+
         return AlertLogResponse.from(savedLog);
     }
 
