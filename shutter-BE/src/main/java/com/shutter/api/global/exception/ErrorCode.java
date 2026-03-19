@@ -25,6 +25,9 @@ public enum ErrorCode {
     GUARDIAN_NOT_FOUND(HttpStatus.NOT_FOUND, "GUARDIAN_NOT_FOUND", "해당 카카오 ID로 가입된 보호자를 찾을 수 없습니다."),
     RELATIONSHIP_NOT_FOUND(HttpStatus.NOT_FOUND, "RELATIONSHIP_NOT_FOUND", "해당 관계를 찾을 수 없습니다."),
 
+    // 권한 관련
+    UNAUTHORIZED_ACCESS(HttpStatus.FORBIDDEN, "UNAUTHORIZED_ACCESS", "접근 권한이 없습니다."),
+
     // 요청 관련
     INVALID_REQUEST(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "잘못된 요청입니다."),
 

@@ -7,6 +7,7 @@ services:
     ports:
       - "3307:3306" # 호스트의 3307 포트를 컨테이너의 3306에 매핑 (application-local.yaml 기준)
     environment:
+      - TZ=Asia/Seoul
       - MYSQL_DATABASE=${DB_NAME}
       - MYSQL_USER=${DB_USERNAME}
       - MYSQL_PASSWORD=${DB_PASSWORD}
@@ -24,6 +25,7 @@ services:
   # ───── Redis (Local Development) ─────
   redis:
     image: "redis:alpine"
+    command: redis-server --notify-keyspace-events Ex
     container_name: shutter-local-redis
     ports:
       - "6379:6379" # 호스트의 6379 포트를 컨테이너의 6379에 매핑

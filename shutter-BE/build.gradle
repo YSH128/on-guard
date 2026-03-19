@@ -42,6 +42,9 @@ dependencies {
 	// WebClient (카카오 API 호출용)
 	implementation 'org.springframework.boot:spring-boot-starter-webflux'
 
+	// WebSocket
+	implementation 'org.springframework.boot:spring-boot-starter-websocket'
+
 	// JWT (자체 Access/Refresh Token 발급 및 검증)
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
 	runtimeOnly    'io.jsonwebtoken:jjwt-impl:0.12.6'

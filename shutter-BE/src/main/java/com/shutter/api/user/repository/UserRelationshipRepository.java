@@ -18,4 +18,6 @@ public interface UserRelationshipRepository extends JpaRepository<UserRelationsh
 
     @Query("SELECT r FROM UserRelationship r JOIN FETCH r.guardian JOIN FETCH r.ward WHERE r.id = :id")
     Optional<UserRelationship> findByIdWithUsers(@Param("id") Long id);
+
+    boolean existsByGuardianIdAndWardId(Long guardianId, Long wardId);
 }

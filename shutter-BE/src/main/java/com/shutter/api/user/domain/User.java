@@ -64,4 +64,8 @@ public class User {
     public void updateDeviceUuid(String deviceUuid) {
         this.deviceUuid = deviceUuid;
     }
+
+    public void updateGpsSharing(Boolean gpsSharing) {
+        this.gpsSharing = gpsSharing;
+    }
 }
