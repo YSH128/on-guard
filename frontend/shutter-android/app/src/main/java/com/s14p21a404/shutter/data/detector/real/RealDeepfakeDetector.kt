@@ -34,16 +34,43 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
     // 추론 결과 누적용
     private val resultBuffer = mutableListOf<DeepfakeDetectionResult>()
 
-    override fun startDetection(onResult: (DeepfakeDetectionResult) -> Unit) {
+    override fun prepare() {
+        if (bridge == null) {
+            nativeAvailable = NativeDeepfakeBridge.loadLibrary()
+            if (nativeAvailable) {
+                bridge = NativeDeepfakeBridge(context)
+                bridge!!.compileQnnCache()
+                Log.d(TAG, "RealDeepfakeDetector 사전 컴파일 시작 (백그라운드 캐시화)")
+            }
+        }
+    }
+
+    override fun startDetection(
+        onResult: (DeepfakeDetectionResult) -> Unit,
+        onReady: () -> Unit
+    ) {
         onResultCallback = onResult
         resultBuffer.clear()  // 시작 시 초기화
-        nativeAvailable = NativeDeepfakeBridge.loadLibrary()
-        if (nativeAvailable) {
-            bridge = NativeDeepfakeBridge(context)
-            dummyResultTextView = TextView(context)
-            Log.d(TAG, "RealDeepfakeDetector 시작 — NDK 라이브러리 로드 성공")
+        
+        if (bridge == null) {
+            nativeAvailable = NativeDeepfakeBridge.loadLibrary()
+            if (nativeAvailable) {
+                bridge = NativeDeepfakeBridge(context)
+            } else {
+                Log.w(TAG, "RealDeepfakeDetector 시작 — NDK 라이브러리 없음 (JNI 호출 스킵)")
+            }
+        }
+        
+        if (nativeAvailable && bridge != null) {
+            bridge!!.loadModelIntoMemory {
+                onReady()
+            }
+            if (dummyResultTextView == null) {
+                dummyResultTextView = TextView(context)
+            }
+            Log.d(TAG, "RealDeepfakeDetector 시작 — NDK 모델 로드 지시 및 대기")
         } else {
-            Log.w(TAG, "RealDeepfakeDetector 시작 — NDK 라이브러리 없음 (JNI 호출 스킵)")
+            onReady() // JNI 사용 불가 시에도 프레임 처리를 뚫어주기 위해 즉시 리턴
         }
     }
 
@@ -63,6 +90,13 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
         if (!nativeAvailable || bridge == null) {
             Log.d(TAG, "✅ processFrame 도달 (${width}x${height}, ${buffer.size}bytes) — NDK SO 미로드로 JNI 호출 대기 중")
+            return
+        }
+
+        if (!bridge!!.isQnnInitialized) {
+            Log.d(TAG, "⏳ 메모리에 AI 모델 적재 중입니다... 프레임 추론 건너뜀")
+            // 화면 쪽으로 로딩 상태를 전달하기 위해 가짜 결과 발행
+            callback(DeepfakeDetectionResult(detected = false, rawResultJson = "AI 모델 빌드 및 적재 중입니다..."))
             return
         }
 
@@ -113,7 +147,6 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
     override fun stopDetection() {
         onResultCallback = null
-        bridge = null
         dummyResultTextView = null
         resultBuffer.clear()
         Log.d(TAG, "RealDeepfakeDetector 중단")
