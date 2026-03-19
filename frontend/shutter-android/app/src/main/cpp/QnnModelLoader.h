@@ -27,8 +27,11 @@ public:
     QnnModelLoader();
     ~QnnModelLoader();
 
-    // JNI 백그라운드 스레드용 캡슐화된 초기화 함수
-    bool Initialize(const std::string& cacheDir, const std::string& assetsPath);
+    // Initialize the QNN system (Backend, Device)
+    bool InitSystem(const std::string& cacheDir);
+
+    // Load the model into memory (Context, Graph)
+    bool LoadModel(const std::string& assetsPath);
 
     // QNN 그래프 실행 함수
     bool ExecuteGraph(const float* inputData, size_t inputElements, float* outputData, size_t outputElements);
@@ -106,9 +109,12 @@ private:
     // 내부 유틸
     bool TryLoadBackend(const char* libName);
     bool LoadFunctionPointers();
+    bool LoadModelLibrary();
+    bool SetupBackendOnly(const std::string& backendName, const std::string& libName);
     bool LoadFromCache(const std::string& cachePath);
     bool BuildAndCacheGraph(const std::string& cachePath, const std::string& assetsPath);
-    bool SetupBackendAndGraph(const std::string& backendName, const std::string& libName, const std::string& cacheDir, const std::string& assetsPath);
     std::vector<uint8_t> ReadBinaryFile(const std::string& filePath);
     void CleanupInternal();
+
+    std::string m_cacheDir;
 };
