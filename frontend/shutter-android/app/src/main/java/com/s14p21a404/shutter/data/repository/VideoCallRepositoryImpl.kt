@@ -91,6 +91,14 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
         }
     }
 
+    override fun observeForegroundIsFinancialApp(): Flow<Boolean> {
+        return ForegroundAppMonitorService.foregroundPackage.map { currentPkg ->
+            val isFinancial = currentPkg in FINANCIAL_APP_PACKAGES
+            Log.d(TAG, "포그라운드=$currentPkg → 금융앱=$isFinancial")
+            isFinancial
+        }
+    }
+
     override fun setVideoCallPackage(packageName: String?) {
         videoCallPackage = packageName
         Log.d(TAG, "영상통화 패키지 설정: $packageName")
@@ -163,6 +171,67 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
             "com.samsung.android.dialer",            // 삼성 전화 앱
             "com.android.dialer",                    // AOSP 전화 앱
             "com.samsung.android.vtcallplugin",      // 삼성 영상통화 플러그인
+        )
+
+        /**
+         * 금융 앱 패키지 목록.
+         * 딥페이크 통화 감지 중 이 앱이 포그라운드이면
+         * 금융 앱 접근 제한 오버레이를 표시한다.
+         */
+        private val FINANCIAL_APP_PACKAGES = setOf(
+            // ── 은행 ──
+            "com.kbstar.kbbank",                     // KB국민은행
+            "com.shinhan.sbanking",                  // 신한은행(SOL)
+            "com.wooribank.smart.npib",              // 우리은행(우리WON뱅킹)
+            "com.kebhana.hanapush",                  // 하나은행(하나원큐)
+            "nh.smart.banking",                      // NH농협은행
+            "com.ibk.neobanking",                    // IBK기업은행(i-ONE뱅크)
+            "com.kdb.talk",                          // KDB산업은행
+            "com.epost.psf.sdsi",                    // 우체국뱅킹
+            "com.sc.danb",                           // SC제일은행
+            "com.citi.android.citibank.kr",          // 한국씨티은행
+            "com.bnk.busanbank",                     // BNK부산은행
+            "com.bnk.cbank",                         // BNK경남은행
+            "com.knb.psb",                           // DGB대구은행
+            "com.jeonbukbank.jbm",                   // JB전북은행
+            "kr.co.kwangju.bank",                    // 광주은행
+            "com.jeju.jbank",                        // 제주은행
+            "com.suhyup.mbanking",                   // Sh수협은행
+            // ── 인터넷/디지털 뱅크 ──
+            "com.kakaobank.channel",                 // 카카오뱅크
+            "com.kbanknow",                          // 케이뱅크(K뱅크)
+            "viva.republica.toss",                   // 토스
+            // ── 증권 ──
+            "com.kiwoom.hero",                       // 키움증권(영웅문)
+            "com.kiwoom.herots",                     // 키움증권(영웅문S)
+            "com.samsung.android.samsungpop",        // 삼성증권(mPOP)
+            "com.mirae.mstock",                      // 미래에셋증권(M-STOCK)
+            "com.daishin.cybos",                     // 대신증권
+            "com.nhqv.namuh",                        // NH투자증권(나무)
+            "com.shinhan.smartstock",                // 신한투자증권
+            "com.kbsec.mstocku",                     // KB증권(M-able)
+            "com.hanwha.investment",                 // 한화투자증권
+            "com.hana.fnc.securities",               // 하나증권
+            // ── 보험 ──
+            "com.samsung.life.samsunglife",          // 삼성생명
+            "kr.co.hanwhalife",                      // 한화생명
+            "com.kyobo.kcpi",                        // 교보생명
+            "com.samsung.android.samsungfire",       // 삼성화재
+            "com.dbins.smart",                       // DB손해보험
+            "com.kbinsure.smart",                    // KB손해보험
+            // ── 카드 ──
+            "com.shinhancard.smartshinhan",          // 신한카드
+            "com.samsung.android.samsungcard",       // 삼성카드
+            "com.kbcard.cxh.appcard",                // KB국민카드
+            "com.hyundaicard.appcard",               // 현대카드
+            "com.lottecard.app",                     // 롯데카드
+            "com.wooricard.smartapp",                // 우리카드
+            "com.hanacard.smart",                    // 하나카드
+            "kr.co.bccard.bcsmartpay",               // BC카드
+            // ── 간편결제/핀테크 ──
+            "com.nhn.android.search",                // 네이버페이(네이버앱 내)
+            "com.kakaopay.app",                      // 카카오페이
+            "com.nhnent.payapp",                     // 페이앱
         )
     }
 }
