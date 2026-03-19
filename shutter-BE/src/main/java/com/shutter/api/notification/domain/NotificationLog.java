@@ -6,6 +6,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -27,12 +28,12 @@ public class NotificationLog {
     @JoinColumn(name = "guardian_id", nullable = false)
     private User guardian;
 
-    @Column(name = "caller", length = 50)
-    private String caller;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "event_type", nullable = false, length = 20)
     private NotificationEventType eventType;
+
+    @Column(name = "caller", length = 50)
+    private String caller;
 
     @Column(name = "call_started_at")
     private LocalDateTime callStartedAt;
@@ -44,12 +45,13 @@ public class NotificationLog {
     @Column(name = "fail_reason", length = 500)
     private String failReason;
 
-    @Column(name = "sent_at")
+    @CreationTimestamp
+    @Column(name = "sent_at", nullable = false, updatable = false)
     private LocalDateTime sentAt;
 
     @Builder
     public NotificationLog(User ward, User guardian, String caller, NotificationEventType eventType,
-            LocalDateTime callStartedAt, NotificationStatus status, String failReason, LocalDateTime sentAt) {
+            LocalDateTime callStartedAt, NotificationStatus status, String failReason) {
         this.ward = ward;
         this.guardian = guardian;
         this.caller = caller;
@@ -57,6 +59,5 @@ public class NotificationLog {
         this.callStartedAt = callStartedAt;
         this.status = status;
         this.failReason = failReason;
-        this.sentAt = sentAt;
     }
 }
