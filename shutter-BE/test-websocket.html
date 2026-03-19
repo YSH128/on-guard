@@ -3,7 +3,7 @@
 <head>
     <title>Shutter WebSocket Test (Guardian)</title>
     <meta charset="utf-8">
-    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
     <style>
         body { font-family: sans-serif; padding: 20px; }
@@ -18,7 +18,7 @@
 <body>
     <div class="container">
         <h2>📡 Shutter GPS WebSocket Test (보호자용)</h2>
-        <p>Spring Boot 서버가 실행 중이어야 하며 (http://localhost:8080), 보호자(Guardian)의 JWT 토큰이 필요합니다.</p>
+        <p>Spring Boot 서버가 실행 중이어야 하며 (ws://localhost:8080/api/v1/ws/gps), 보호자(Guardian)의 JWT 토큰이 필요합니다.</p>
         
         <div>
             <label><strong>보호자 JWT Access Token (Bearer 포함 권장, 없으면 자동 추가됨):</strong></label>
@@ -50,8 +50,8 @@
                 token = "Bearer " + token;
             }
 
-            // STOMP endpoint URL 연결 (SockJS 활용)
-            var socket = new SockJS('http://localhost:8080/api/v1/ws/gps');
+            // 순수 WebSocket 연결 (SockJS 제거)
+            var socket = new WebSocket('ws://localhost:8080/api/v1/ws/gps');
             stompClient = Stomp.over(socket);
             
             // 디버그 로그 비활성화 원할시 아래 주석 해제
