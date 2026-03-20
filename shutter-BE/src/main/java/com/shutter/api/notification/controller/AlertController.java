@@ -38,20 +38,18 @@ public class AlertController {
     }
 
     /**
-     * 알림 전송 (피보호자 -> 보호자)
+     * 알림 전송 (피보호자 -> 모든 보호자)
      *
-     * @param guardianId 보호자 ID
      * @param userId 현재 로그인한 피보호자 ID (JWT 추출)
      * @param request 알림 요청 정보
-     * @return 전송된 알림 상세 정보 (로그)
+     * @return 전송된 알림 상세 정보 목록 (로그)
      */
-    @PostMapping("/send/{guardianId}")
-    public ResponseEntity<ApiResponse<AlertLogResponse>> sendAlert(
-            @PathVariable("guardianId") Long guardianId,
+    @PostMapping("/send")
+    public ResponseEntity<ApiResponse<List<AlertLogResponse>>> sendAlerts(
             @AuthenticationPrincipal Long userId,
             @Valid @RequestBody AlertRequest request) {
         
-        AlertLogResponse response = alertService.sendAlert(userId, guardianId, request);
-        return ResponseEntity.ok(ApiResponse.of("알림 전송 성공", response));
+        List<AlertLogResponse> responses = alertService.sendAlertsToGuardians(userId, request);
+        return ResponseEntity.ok(ApiResponse.of("알림 그룹 전송 성공", responses));
     }
 }

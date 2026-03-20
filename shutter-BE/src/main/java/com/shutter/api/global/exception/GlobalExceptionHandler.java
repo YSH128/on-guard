@@ -16,6 +16,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ErrorResponse> handleBusiness(BusinessException ex) {
         ErrorCode errorCode = ex.getErrorCode();
+        log.warn("BusinessException 발생: {}", ex.getMessage());
         return ResponseEntity
                 .status(errorCode.getHttpStatus())
                 .body(new ErrorResponse(errorCode.getCode(), ex.getMessage()));
@@ -25,6 +26,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AlertException.class)
     public ResponseEntity<ErrorResponse> handleAlert(AlertException ex) {
         ErrorCode errorCode = ex.getErrorCode();
+        log.warn("AlertException 발생: {}", ex.getMessage());
         return ResponseEntity
                 .status(errorCode.getHttpStatus())
                 .body(new ErrorResponse(errorCode.getCode(), ex.getMessage()));

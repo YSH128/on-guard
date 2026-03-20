@@ -10,6 +10,7 @@ import com.shutter.api.notification.dto.request.AlertRequest;
 import com.shutter.api.notification.dto.response.AlertLogResponse;
 import com.shutter.api.notification.repository.NotificationLogRepository;
 import com.shutter.api.user.domain.User;
+import com.shutter.api.user.domain.UserRelationship;
 import com.shutter.api.user.repository.UserRelationshipRepository;
 import com.shutter.api.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -34,56 +35,66 @@ public class AlertService {
     private final KakaoPushClient kakaoPushClient;
 
     /**
-     * 알림 전송 및 로그 저장
+     * 알림 그룹 전송 및 로그 저장
      *
      * @param wardId     피보호자 ID (JWT 추출)
-     * @param guardianId 보호자 ID (PathVariable)
      * @param request    알림 요청 정보 (이벤트 타입, 발신자 등)
-     * @return 저장된 알림 로그 정보
+     * @return 저장된 알림 로그 목록
      */
-    @Transactional
-    public AlertLogResponse sendAlert(Long wardId, Long guardianId, AlertRequest request) {
+    @Transactional(noRollbackFor = AlertException.class)
+    public List<AlertLogResponse> sendAlertsToGuardians(Long wardId, AlertRequest request) {
         // 1. 피보호자 존재 여부 확인
         User ward = userRepository.findById(wardId)
                 .orElseThrow(() -> new AlertException(ErrorCode.WARD_NOT_FOUND));
 
-        // 2. 보호자 존재 여부 확인
-        User guardian = userRepository.findById(guardianId)
-                .orElseThrow(() -> new AlertException(ErrorCode.GUARDIAN_NOT_FOUND));
-
-        // 3. 보호자-피보호자 관계 존재 여부 확인
-        if (!userRelationshipRepository.existsByGuardianIdAndWardId(guardianId, wardId)) {
+        // 2. 보호자 목록 조회 (관계 테이블)
+        List<UserRelationship> relationships = userRelationshipRepository.findByWardIdWithGuardian(wardId);
+        
+        if (relationships.isEmpty()) {
             throw new AlertException(ErrorCode.RELATIONSHIP_NOT_FOUND);
         }
 
-        // 4. 카카오 푸시 발송 (WebClient 호출)
+        // 3. 알림 메시지 생성
         String pushMessage = switch (request.getEventType()) {
             case DEEPFAKE -> String.format("%s님이 딥페이크 의심 통화 중입니다.", ward.getName());
             case LOCATION -> String.format("%s님의 위치 정보 공유가 시작되었습니다.", ward.getName());
             default -> String.format("%s님에게 알림이 발생했습니다.", ward.getName());
         };
-        boolean pushSuccess = kakaoPushClient.sendPush(guardian.getKakaoId(), request.getEventType(), pushMessage);
 
-        // 5. 알림 로그 생성 및 저장
-        NotificationLog notificationLog = NotificationLog.builder()
-                .ward(ward)
-                .guardian(guardian)
-                .caller(request.getCaller())
-                .eventType(request.getEventType())
-                .callStartedAt(request.getCallStartedAt())
-                .status(pushSuccess ? NotificationStatus.SUCCESS : NotificationStatus.FAIL)
-                .failReason(pushSuccess ? null : "Kakao Push API 호출 실패")
-                .build();
+        boolean hasFailure = false;
+        java.util.List<NotificationLog> savedLogs = new java.util.ArrayList<>();
 
-        NotificationLog savedLog = notificationLogRepository.save(notificationLog);
+        // 4. 각 보호자에게 푸시 발송 및 로그 저장
+        for (UserRelationship rel : relationships) {
+            User guardian = rel.getGuardian();
+            boolean pushSuccess = kakaoPushClient.sendPush(guardian.getKakaoId(), request.getEventType(), pushMessage);
 
-        log.info("Alert sent from ward {} to guardian {}. Status: {}", wardId, guardianId, savedLog.getStatus());
+            NotificationLog notificationLog = NotificationLog.builder()
+                    .ward(ward)
+                    .guardian(guardian)
+                    .caller(request.getCaller())
+                    .eventType(request.getEventType())
+                    .callStartedAt(request.getCallStartedAt())
+                    .status(pushSuccess ? NotificationStatus.SUCCESS : NotificationStatus.FAIL)
+                    .failReason(pushSuccess ? null : "Kakao Push API 호출 실패")
+                    .build();
 
-        if (!pushSuccess) {
+            NotificationLog savedLog = notificationLogRepository.save(notificationLog);
+            savedLogs.add(savedLog);
+            
+            if (!pushSuccess) {
+                hasFailure = true;
+            }
+            
+            log.info("Alert sent from ward {} to guardian {}. Status: {}", wardId, guardian.getId(), savedLog.getStatus());
+        }
+
+        // 5. 하나라도 실패했다면 최종적으로 에러 반환 (선택적 정책)
+        if (hasFailure) {
             throw new AlertException(ErrorCode.FCM_SEND_FAILED);
         }
 
-        return AlertLogResponse.from(savedLog);
+        return savedLogs.stream().map(AlertLogResponse::from).collect(Collectors.toList());
     }
 
     /**

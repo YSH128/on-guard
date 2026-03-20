@@ -32,6 +32,7 @@ import static org.mockito.BDDMockito.given;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -97,8 +98,8 @@ class AlertControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/v1/alerts/send/{guardianId} - 성공: 알림 전송 및 로그 반환")
-    void sendAlert_success() throws Exception {
+    @DisplayName("POST /api/v1/alerts/send - 성공: 모든 보호자에게 알림 전송 및 로그 목록 반환")
+    void sendAlerts_success() throws Exception {
         // given
         AlertRequest request = new AlertRequest("010-1234-5678", NotificationEventType.DEEPFAKE, LocalDateTime.now());
         AlertLogResponse logResponse = AlertLogResponse.builder()
@@ -106,65 +107,51 @@ class AlertControllerTest {
                 .status(NotificationStatus.SUCCESS)
                 .build();
 
-        given(alertService.sendAlert(any(), any(), any())).willReturn(logResponse);
+        given(alertService.sendAlertsToGuardians(any(), any())).willReturn(List.of(logResponse));
 
         // when & then
-        mockMvc.perform(post("/api/v1/alerts/send/2")
+        mockMvc.perform(post("/api/v1/alerts/send")
                         .with(authentication(new UsernamePasswordAuthenticationToken(userId, null, Collections.emptyList())))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.status").value("SUCCESS"));
+                .andExpect(jsonPath("$.data[0].status").value("SUCCESS"));
     }
 
     @Test
-    @DisplayName("POST /api/v1/alerts/send/{guardianId} - 실패: 존재하지 않는 guardianId")
-    void sendAlert_fail_guardianNotFound() throws Exception {
+    @DisplayName("POST /api/v1/alerts/send - 실패: 존재하지 않는 보호자 관계")
+    void sendAlerts_fail_relationshipNotFound() throws Exception {
         // given
         AlertRequest request = new AlertRequest("caller", NotificationEventType.DEEPFAKE, null);
-        given(alertService.sendAlert(any(), any(), any()))
-                .willThrow(new AlertException(ErrorCode.GUARDIAN_NOT_FOUND));
-
-        // when & then
-        mockMvc.perform(post("/api/v1/alerts/send/999")
-                        .with(authentication(new UsernamePasswordAuthenticationToken(userId, null, Collections.emptyList())))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("GUARDIAN_NOT_FOUND"));
-    }
-
-    @Test
-    @DisplayName("POST /api/v1/alerts/send/{guardianId} - 실패: 관계 없음")
-    void sendAlert_fail_relationshipNotFound() throws Exception {
-        // given
-        AlertRequest request = new AlertRequest("caller", NotificationEventType.DEEPFAKE, null);
-        given(alertService.sendAlert(any(), any(), any()))
+        given(alertService.sendAlertsToGuardians(any(), any()))
                 .willThrow(new AlertException(ErrorCode.RELATIONSHIP_NOT_FOUND));
 
         // when & then
-        mockMvc.perform(post("/api/v1/alerts/send/3")
+        mockMvc.perform(post("/api/v1/alerts/send")
                         .with(authentication(new UsernamePasswordAuthenticationToken(userId, null, Collections.emptyList())))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("RELATIONSHIP_NOT_FOUND"));
     }
 
     @Test
-    @DisplayName("POST /api/v1/alerts/send/{guardianId} - 실패: FCM 발송 실패")
-    void sendAlert_fail_fcmSendFailed() throws Exception {
+    @DisplayName("POST /api/v1/alerts/send - 실패: FCM 발송 실패")
+    void sendAlerts_fail_fcmSendFailed() throws Exception {
         // given
         AlertRequest request = new AlertRequest("caller", NotificationEventType.DEEPFAKE, null);
-        given(alertService.sendAlert(any(), any(), any()))
+        given(alertService.sendAlertsToGuardians(any(), any()))
                 .willThrow(new AlertException(ErrorCode.FCM_SEND_FAILED));
 
         // when & then
-        mockMvc.perform(post("/api/v1/alerts/send/2")
+        mockMvc.perform(post("/api/v1/alerts/send")
                         .with(authentication(new UsernamePasswordAuthenticationToken(userId, null, Collections.emptyList())))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
                 .andExpect(status().isBadGateway())
                 .andExpect(jsonPath("$.code").value("FCM_SEND_FAILED"));
     }

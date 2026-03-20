@@ -1,5 +1,7 @@
 package com.shutter.api.notification.dto.response;
 
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import com.shutter.api.notification.domain.NotificationLog;
 import com.shutter.api.notification.domain.NotificationStatus;
 import lombok.Builder;
@@ -12,6 +14,7 @@ import java.time.LocalDateTime;
  */
 @Getter
 @Builder
+@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class AlertLogResponse {
 
     private Long id;

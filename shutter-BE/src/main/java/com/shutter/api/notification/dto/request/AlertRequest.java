@@ -17,9 +17,11 @@ public class AlertRequest {
 
     private String caller;
 
+    @com.fasterxml.jackson.annotation.JsonProperty("event_type")
     @NotNull(message = "이벤트 타입은 필수입니다.")
     private NotificationEventType eventType;
 
+    @com.fasterxml.jackson.annotation.JsonProperty("call_started_at")
     private LocalDateTime callStartedAt;
 
     public AlertRequest(String caller, NotificationEventType eventType, LocalDateTime callStartedAt) {
