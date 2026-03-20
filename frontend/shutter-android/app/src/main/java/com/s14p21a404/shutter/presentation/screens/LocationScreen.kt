@@ -92,6 +92,11 @@ fun LocationScreen(
 ) {
     val uiState by locationViewModel.uiState.collectAsState()
 
+    // 화면 진입마다 피보호자 목록 새로고침
+    LaunchedEffect(Unit) {
+        locationViewModel.loadWards()
+    }
+
     // WardWithLocation → LocationGuardian UI 모델 변환
     val wards = when (val s = uiState) {
         is LocationUiState.Success -> s.wards.map { ward ->
