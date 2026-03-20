@@ -60,6 +60,7 @@ android {
         }
         jniLibs {
             pickFirsts += "**/libc++_shared.so"
+            useLegacyPackaging = true // [필수] DSP가 APK 내부 .so를 직접 읽을 수 없으므로 압축 해제 강제
         }
     }
 

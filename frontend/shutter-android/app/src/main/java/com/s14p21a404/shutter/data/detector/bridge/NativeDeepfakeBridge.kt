@@ -51,7 +51,7 @@ class NativeDeepfakeBridge(private val context: Context) {
 
     private var initJobThread: Thread? = null
 
-    private external fun initQnn(cacheDir: String): Boolean
+    private external fun initQnn(cacheDir: String, nativeLibDir: String): Boolean
     private external fun buildModelCache(assetsPath: String): Boolean
     private external fun loadModel(assetsPath: String): Boolean
     private external fun releaseQnn()
@@ -103,9 +103,10 @@ class NativeDeepfakeBridge(private val context: Context) {
                 val facePath = getAssetFilePath(context, "face_deepfake.bin")
                 val filesDir = context.filesDir.absolutePath
                 val cacheDir = context.cacheDir.absolutePath
+                val nativeLibDir = context.applicationInfo.nativeLibraryDir
                 
                 Log.d("NativeDeepfakeBridge", "QNN 시스템 초기화 시작...")
-                val initSuccess = initQnn(cacheDir)
+                val initSuccess = initQnn(cacheDir, nativeLibDir)
                 if (initSuccess) {
                     val keepInVram = DeepfakeSettings.keepModelInVram.value
 
@@ -120,7 +121,9 @@ class NativeDeepfakeBridge(private val context: Context) {
                             isQnnInitialized = true // 메모리에 올렸으므로 초기화 완료
                             Log.d("NativeDeepfakeBridge", "QNN 모델 초기 적재 완료 (CPU: ${loadThreadCpuTime}ms)")
                         } else {
-                            Log.e("NativeDeepfakeBridge", "QNN 초기 적재 실패!")
+                            Log.e("NativeDeepfakeBridge", "QNN 초기 적재 실패! ONNX 폴백 시도...")
+                            isQnnSupported = false
+                            initOnnxFallback()
                         }
                     } else {
                         Log.d("NativeDeepfakeBridge", "옵션: 모델 VRAM 해제 활성화. (buildModelCache 호출)")
@@ -132,7 +135,9 @@ class NativeDeepfakeBridge(private val context: Context) {
                             isQnnCompiled = true
                             Log.d("NativeDeepfakeBridge", "QNN 모델 컴파일 및 VRAM 해제 성공 (CPU: ${compileThreadCpuTime}ms)")
                         } else {
-                            Log.e("NativeDeepfakeBridge", "QNN 모델 컴파일 실패!")
+                            Log.e("NativeDeepfakeBridge", "QNN 모델 컴파일 실패! ONNX 폴백 시도...")
+                            isQnnSupported = false
+                            initOnnxFallback()
                         }
                     }
                 } else {
@@ -164,8 +169,9 @@ class NativeDeepfakeBridge(private val context: Context) {
             try {
                 val filesDir = context.filesDir.absolutePath
                 val cacheDir = context.cacheDir.absolutePath
+                val nativeLibDir = context.applicationInfo.nativeLibraryDir
                 
-                val qnnInitSuccess = initQnn(cacheDir)
+                val qnnInitSuccess = initQnn(cacheDir, nativeLibDir)
                 if (!qnnInitSuccess) {
                     isQnnSupported = false
                     Log.e("NativeDeepfakeBridge", "QNN 시스템 초기화 실패! (비 퀄컴칩 지원안됨)")
@@ -182,7 +188,9 @@ class NativeDeepfakeBridge(private val context: Context) {
                     isQnnInitialized = true
                     Log.d("NativeDeepfakeBridge", "QNN 모델 캐시 읽기 및 메모리 적재 완료 (CPU: ${loadThreadCpuTime}ms)")
                 } else {
-                    Log.e("NativeDeepfakeBridge", "QNN 모델 메모리 로드 실패!")
+                    Log.e("NativeDeepfakeBridge", "QNN 모델 메모리 로드 실패! ONNX 폴백 시도...")
+                    isQnnSupported = false
+                    initOnnxFallback()
                 }
                 onComplete()
             } catch (e: Exception) {

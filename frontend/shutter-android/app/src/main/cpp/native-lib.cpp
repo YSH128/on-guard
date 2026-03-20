@@ -116,15 +116,19 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_initQnn(
-        JNIEnv *env, jobject thiz, jstring cache_dir) {
+        JNIEnv *env, jobject thiz, jstring cache_dir, jstring native_lib_dir) {
     
     if (!g_qnnLoader) {
         g_qnnLoader = std::make_unique<QnnModelLoader>();
     }
 
     const char *cacheDirStr = env->GetStringUTFChars(cache_dir, nullptr);
-    bool success = g_qnnLoader->InitSystem(std::string(cacheDirStr));
+    const char *nativeLibDirStr = env->GetStringUTFChars(native_lib_dir, nullptr);
+
+    bool success = g_qnnLoader->InitSystem(std::string(cacheDirStr), std::string(nativeLibDirStr));
+
     env->ReleaseStringUTFChars(cache_dir, cacheDirStr);
+    env->ReleaseStringUTFChars(native_lib_dir, nativeLibDirStr);
 
     return success ? JNI_TRUE : JNI_FALSE;
 }
