@@ -7,6 +7,7 @@ import com.s14p21a404.shutter.data.repository.AuthRepositoryImpl
 import com.s14p21a404.shutter.data.repository.DeepfakeDetectionRepositoryImpl
 import com.s14p21a404.shutter.data.repository.GpsRepositoryImpl
 import com.s14p21a404.shutter.data.repository.GuardianRepositoryImpl
+import com.s14p21a404.shutter.data.repository.GuardianUuidStore
 import com.s14p21a404.shutter.data.repository.VideoCallRepositoryImpl
 import com.s14p21a404.shutter.data.token.TokenManager
 import com.s14p21a404.shutter.domain.repository.AuthRepository
@@ -31,6 +32,7 @@ import com.s14p21a404.shutter.network.RetrofitClient
 import com.s14p21a404.shutter.presentation.overlay.FinancialBlockOverlayManager
 import com.s14p21a404.shutter.presentation.overlay.WarningOverlayManager
 import com.s14p21a404.shutter.presentation.service.AlertSoundManager
+import com.s14p21a404.shutter.presentation.service.DeepfakeAlertSender
 
 /**
  * 수동 DI 컨테이너
@@ -101,6 +103,8 @@ class ServiceLocator private constructor(context: Context) {
     val warningOverlayManager = WarningOverlayManager(context)
     val financialBlockOverlayManager = FinancialBlockOverlayManager(context)
     val alertSoundManager = AlertSoundManager(context)
+    val guardianUuidStore = GuardianUuidStore(context)
+    val deepfakeAlertSender = DeepfakeAlertSender(guardianRepository, guardianUuidStore)
 
 
     companion object {

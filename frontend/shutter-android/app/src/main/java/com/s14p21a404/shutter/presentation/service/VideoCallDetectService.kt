@@ -31,6 +31,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.time.LocalDateTime
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
@@ -54,6 +55,7 @@ class VideoCallDetectService : Service() {
     private lateinit var alertSoundManager: AlertSoundManager
     private lateinit var videoCallRepository: VideoCallRepository
     private lateinit var detectionRepository: DeepfakeDetectionRepository
+    private lateinit var deepfakeAlertSender: DeepfakeAlertSender
     private lateinit var gpsRepository: GpsRepository
     private lateinit var tokenManager: TokenManager
 
@@ -73,6 +75,10 @@ class VideoCallDetectService : Service() {
      */
     @Volatile
     private var isDeepfakeDetected = false
+
+    /** 현재 통화 세션에서 보호자 카카오톡 알림을 이미 발송했는지 여부. */
+    @Volatile
+    private var alertSentForCurrentSession = false
 
     /**
      * 오버레이가 표시 중이었는지 여부.
@@ -95,6 +101,7 @@ class VideoCallDetectService : Service() {
         alertSoundManager = locator.alertSoundManager
         videoCallRepository = locator.videoCallRepository
         detectionRepository = locator.detectionRepository
+        deepfakeAlertSender = locator.deepfakeAlertSender
         gpsRepository = locator.gpsRepository
         tokenManager = locator.tokenManager
 
@@ -122,6 +129,7 @@ class VideoCallDetectService : Service() {
                     financialBlockOverlayManager.dismiss()
                     wasOverlayShowing = false
                     isDeepfakeDetected = false
+                    alertSentForCurrentSession = false
                 }
             }
         }
@@ -141,6 +149,13 @@ class VideoCallDetectService : Service() {
                     alertSoundManager.startAlert()
                     financialBlockOverlayManager.setEnabled(true)
                     startFinancialAppMonitoring()
+                    if (!alertSentForCurrentSession) {
+                        alertSentForCurrentSession = true
+                        serviceScope.launch(Dispatchers.Main) {
+                            Log.d(TAG, "딥페이크 최초 감지 — 보호자 카카오톡 알림 발송 시작")
+                            deepfakeAlertSender.sendAlert(LocalDateTime.now())
+                        }
+                    }
                     startGpsSendingIfEligible()
                 } else {
                     isDeepfakeDetected = false
