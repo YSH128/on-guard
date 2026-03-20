@@ -18,10 +18,17 @@ import kotlinx.coroutines.flow.update
  */
 data class MainUiState(
     val isServiceRunning: Boolean = false,
-    val allPermissionsGranted: Boolean = false,
+    val phoneStateGranted: Boolean = false,
+    val notificationGranted: Boolean = false,
+    val locationGranted: Boolean = false,
     val overlayPermissionGranted: Boolean = false,
-    val accessibilityServiceEnabled: Boolean = false
-)
+    val accessibilityServiceEnabled: Boolean = false,
+    /** checkAllPermissions() 호출마다 증가 — LaunchedEffect 재트리거용 */
+    val permissionCheckCount: Int = 0,
+) {
+    val allPermissionsGranted: Boolean
+        get() = phoneStateGranted && notificationGranted && locationGranted
+}
 
 /**
  * Main 화면 ViewModel
@@ -60,12 +67,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val hasAccessibility = ForegroundAppMonitorService.isRunning()
 
         _uiState.update { it.copy(
-            allPermissionsGranted = hasPhoneState && hasNotification && hasLocation,
+            phoneStateGranted = hasPhoneState,
+            notificationGranted = hasNotification,
+            locationGranted = hasLocation,
             overlayPermissionGranted = hasOverlay,
-            accessibilityServiceEnabled = hasAccessibility
+            accessibilityServiceEnabled = hasAccessibility,
+            permissionCheckCount = it.permissionCheckCount + 1,
         ) }
 
-        Log.d(TAG, "권한 상태 - Phone: $hasPhoneState, Notification: $hasNotification, Location: $hasLocation, Overlay: $hasOverlay, Accessibility: $hasAccessibility")
+        Log.d(TAG, "권한 상태 - Phone: $hasPhoneState, Notification: $hasNotification, Location: $hasLocation, Overlay: $hasOverlay, Accessibility: $hasAccessibility, checkCount: ${_uiState.value.permissionCheckCount}")
     }
 
     /**

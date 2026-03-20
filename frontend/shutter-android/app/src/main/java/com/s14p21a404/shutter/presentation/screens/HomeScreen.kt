@@ -119,10 +119,15 @@ private val ChipUnselectedText = Color(0xFF9CA3AF)
 fun HomeScreen(
     isServiceRunning: Boolean,
     onToggleService: () -> Unit,
-    allPermissionsGranted: Boolean = true,
+    phoneStateGranted: Boolean = true,
+    notificationGranted: Boolean = true,
+    locationGranted: Boolean = true,
     overlayPermissionGranted: Boolean = true,
     accessibilityServiceEnabled: Boolean = true,
-    onRequestPermissions: () -> Unit = {},
+    permissionCheckCount: Int = 0,
+    onRequestPhoneState: () -> Unit = {},
+    onRequestNotification: () -> Unit = {},
+    onRequestLocation: () -> Unit = {},
     onRequestOverlayPermission: () -> Unit = {},
     onRequestAccessibilityPermission: () -> Unit = {},
     homeViewModel: HomeViewModel = viewModel(),
@@ -131,46 +136,57 @@ fun HomeScreen(
     val homeUiState by homeViewModel.uiState.collectAsState()
 
     // 권한 요청 다이얼로그 표시 여부
-    var showPermissionDialog by remember { mutableStateOf(false) }
     var showOverlayDialog by remember { mutableStateOf(false) }
     var showAccessibilityDialog by remember { mutableStateOf(false) }
 
-    // 순서: 런타임 권한 → 오버레이 → MediaProjection(서비스 시작) → 접근성
-    LaunchedEffect(allPermissionsGranted, overlayPermissionGranted, accessibilityServiceEnabled, isServiceRunning) {
-        if (!allPermissionsGranted) {
-            showPermissionDialog = true
-        } else if (!overlayPermissionGranted) {
-            showOverlayDialog = true
-        } else if (!isServiceRunning) {
-            // 런타임 + 오버레이 충족 → MediaProjection 동의 (서비스 시작)
-            onToggleService()
-        } else if (!accessibilityServiceEnabled) {
-            // 서비스 실행 후 접근성 미활성 → 접근성 다이얼로그
-            showAccessibilityDialog = true
+    val allPermissionsGranted = phoneStateGranted && notificationGranted && locationGranted
+
+    // ── 권한 상태 통합 체크 ──
+    // permissionCheckCount 가 key → onResume 에서 checkAllPermissions() 호출될 때마다 재실행
+    // 순서: 전화 → 알림 → 위치 → 오버레이 → 서비스 시작 → 접근성
+    LaunchedEffect(permissionCheckCount) {
+        android.util.Log.d("HomeScreen",
+            "권한 체크 (count=$permissionCheckCount) phone=$phoneStateGranted, noti=$notificationGranted, location=$locationGranted, overlay=$overlayPermissionGranted, accessibility=$accessibilityServiceEnabled, running=$isServiceRunning")
+
+        when {
+            !phoneStateGranted -> {
+                showOverlayDialog = false
+                showAccessibilityDialog = false
+                onRequestPhoneState()
+            }
+            !notificationGranted -> {
+                showOverlayDialog = false
+                showAccessibilityDialog = false
+                onRequestNotification()
+            }
+            !locationGranted -> {
+                showOverlayDialog = false
+                showAccessibilityDialog = false
+                onRequestLocation()
+            }
+            !overlayPermissionGranted -> {
+                showAccessibilityDialog = false
+                showOverlayDialog = true
+            }
+            !isServiceRunning -> {
+                showOverlayDialog = false
+                showAccessibilityDialog = false
+                onToggleService()
+            }
+            !accessibilityServiceEnabled -> {
+                showOverlayDialog = false
+                showAccessibilityDialog = true
+            }
+            else -> {
+                showOverlayDialog = false
+                showAccessibilityDialog = false
+            }
         }
     }
 
-    // ── 런타임 권한 요청 다이얼로그 (전화 상태, 알림, 위치) ──
-    if (showPermissionDialog) {
-        AlertDialog(
-            onDismissRequest = { /* 닫기 방지 */ },
-            title = { Text("권한 허용 필요", fontWeight = FontWeight.Bold) },
-            text = {
-                Text("서비스 실행에 필요한 권한을 허용해주세요.\n(전화 상태, 알림, 위치)")
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    showPermissionDialog = false
-                    onRequestPermissions()
-                }) {
-                    Text("허용하기")
-                }
-            },
-        )
-    }
 
     // ── 오버레이 권한 요청 다이얼로그 ──
-    if (showOverlayDialog && allPermissionsGranted) {
+    if (showOverlayDialog) {
         AlertDialog(
             onDismissRequest = { /* 닫기 방지 */ },
             title = { Text("오버레이 권한 필요", fontWeight = FontWeight.Bold) },
@@ -188,13 +204,50 @@ fun HomeScreen(
         )
     }
 
-    // ── 접근성 서비스 활성화 요청 다이얼로그 ──
+
     if (showAccessibilityDialog && allPermissionsGranted && overlayPermissionGranted && isServiceRunning) {
         AlertDialog(
             onDismissRequest = { /* 닫기 방지 */ },
-            title = { Text("접근성 서비스 활성화 필요", fontWeight = FontWeight.Bold) },
+            title = {
+                Text(
+                    "접근성 서비스 활성화 필요",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                )
+            },
             text = {
-                Text("영상통화 화면 감지를 위해\n접근성 서비스를 켜야 합니다.\n\n설정 화면에서 'Shutter'를 찾아\n토글을 켜주세요.")
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "영상통화 화면 감지를 위해 접근성 서비스를 켜야 합니다.",
+                        fontSize = 14.sp,
+                        color = Color(0xFF6B7280),
+                    )
+
+                    // 단계별 가이드
+                    AccessibilityGuideStep(
+                        stepNumber = 1,
+                        text = "설정으로 이동 버튼을 눌러주세요."
+                    )
+                    AccessibilityGuideStep(
+                        stepNumber = 2,
+                        text = "'설치된 앱' 항목을 선택해주세요."
+                    )
+                    AccessibilityGuideStep(
+                        stepNumber = 3,
+                        text = "'Shutter' 를 찾아 선택해주세요."
+                    )
+                    AccessibilityGuideStep(
+                        stepNumber = 4,
+                        text = "토글을 켜서 '사용함' 으로 변경해주세요."
+                    )
+
+                    Text(
+                        "✅ 설정 완료 후 앱으로 돌아오면 자동으로 확인됩니다.",
+                        fontSize = 12.sp,
+                        color = Color(0xFF22C55E),
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -221,6 +274,40 @@ fun HomeScreen(
             filterNames = homeUiState.filterNames,
             selectedFilter = homeUiState.selectedFilter,
             onSelectFilter = { homeViewModel.selectFilter(it) },
+        )
+    }
+}
+
+// ════════════════════════════════════════════════════════════
+// 접근성 가이드 단계 아이템
+// ════════════════════════════════════════════════════════════
+
+@Composable
+private fun AccessibilityGuideStep(stepNumber: Int, text: String) {
+    Row(
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        // 숫자 배지
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF3D527E)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "$stepNumber",
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        Text(
+            text = text,
+            fontSize = 14.sp,
+            color = Color(0xFF374151),
+            modifier = Modifier.padding(top = 2.dp),
         )
     }
 }

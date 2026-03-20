@@ -73,7 +73,9 @@ fun AppScaffold(
     isServiceRunning: Boolean,
     onToggleService: () -> Unit,
     uiState: MainUiState = MainUiState(),
-    onRequestPermissions: () -> Unit = {},
+    onRequestPhoneState: () -> Unit = {},
+    onRequestNotification: () -> Unit = {},
+    onRequestLocation: () -> Unit = {},
     onRequestOverlayPermission: () -> Unit = {},
     onRequestAccessibilityPermission: () -> Unit = {},
 ) {
@@ -100,10 +102,15 @@ fun AppScaffold(
                 HomeScreen(
                     isServiceRunning = isServiceRunning,
                     onToggleService = onToggleService,
-                    allPermissionsGranted = uiState.allPermissionsGranted,
+                    phoneStateGranted = uiState.phoneStateGranted,
+                    notificationGranted = uiState.notificationGranted,
+                    locationGranted = uiState.locationGranted,
                     overlayPermissionGranted = uiState.overlayPermissionGranted,
                     accessibilityServiceEnabled = uiState.accessibilityServiceEnabled,
-                    onRequestPermissions = onRequestPermissions,
+                    permissionCheckCount = uiState.permissionCheckCount,
+                    onRequestPhoneState = onRequestPhoneState,
+                    onRequestNotification = onRequestNotification,
+                    onRequestLocation = onRequestLocation,
                     onRequestOverlayPermission = onRequestOverlayPermission,
                     onRequestAccessibilityPermission = onRequestAccessibilityPermission,
                 )

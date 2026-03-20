@@ -28,11 +28,27 @@ class MainActivity : ComponentActivity() {
     private val loginViewModel: LoginViewModel by viewModels()
     private val viewModel: MainViewModel by viewModels()
 
-    // 런타임 권한 요청 런처
-    private val permissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        Log.d(TAG, "권한 결과: $permissions")
+    // 전화 상태 권한 런처
+    private val phoneStateLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        Log.d(TAG, "전화 상태 권한 결과: $granted")
+        viewModel.checkAllPermissions()
+    }
+
+    // 알림 권한 런처
+    private val notificationLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        Log.d(TAG, "알림 권한 결과: $granted")
+        viewModel.checkAllPermissions()
+    }
+
+    // 위치 권한 런처
+    private val locationLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        Log.d(TAG, "위치 권한 결과: $granted")
         viewModel.checkAllPermissions()
     }
 
@@ -75,7 +91,9 @@ class MainActivity : ComponentActivity() {
                             uiState = uiState,
                             isNewUser = true,
                             onRegister = { name -> loginViewModel.register(state.kakaoId, name) },
-                            onRequestPermissions = { requestAllPermissions() },
+                            onRequestPhoneState = { requestPhoneStatePermission() },
+                            onRequestNotification = { requestNotificationPermission() },
+                            onRequestLocation = { requestLocationPermission() },
                             onRequestOverlayPermission = { requestOverlayPermission() },
                             onRequestAccessibilityPermission = { requestAccessibilityPermission() },
                             onToggleService = { toggleService() },
@@ -88,7 +106,9 @@ class MainActivity : ComponentActivity() {
                         val uiState by viewModel.uiState.collectAsState()
                         MainScreen(
                             uiState = uiState,
-                            onRequestPermissions = { requestAllPermissions() },
+                            onRequestPhoneState = { requestPhoneStatePermission() },
+                            onRequestNotification = { requestNotificationPermission() },
+                            onRequestLocation = { requestLocationPermission() },
                             onRequestOverlayPermission = { requestOverlayPermission() },
                             onRequestAccessibilityPermission = { requestAccessibilityPermission() },
                             onToggleService = { toggleService() },
@@ -112,53 +132,72 @@ class MainActivity : ComponentActivity() {
 
     /**
      * 접근성 서비스 설정 화면으로 이동.
-     * 우리 앱(ForegroundAppMonitorService)의 상세 설정 페이지로 바로 이동을 시도하고,
-     * 실패 시 접근성 목록 화면으로 fallback한다.
      */
     private fun requestAccessibilityPermission() {
-        val componentName = "${packageName}/${packageName}.presentation.service.ForegroundAppMonitorService"
-        try {
-            // Android 접근성 서비스 상세 페이지로 바로 이동
-            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
-                val bundle = Bundle()
-                bundle.putString(":settings:fragment_args_key", componentName)
-                putExtra(":settings:fragment_args_key", componentName)
-                putExtra(":settings:show_fragment_args", bundle)
+        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+    }
+
+
+    /**
+     * 전화 상태 권한 요청
+     * "다시 묻지 않음" 선택 시 앱 설정으로 이동
+     */
+    private fun requestPhoneStatePermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            if (!shouldShowRequestPermissionRationale(Manifest.permission.READ_PHONE_STATE)
+                && viewModel.uiState.value.permissionCheckCount > 2
+            ) {
+                openAppSettings()
+            } else {
+                phoneStateLauncher.launch(Manifest.permission.READ_PHONE_STATE)
             }
-            startActivity(intent)
-        } catch (e: Exception) {
-            Log.w(TAG, "접근성 상세 설정 이동 실패, 접근성 목록으로 fallback", e)
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
     }
 
     /**
-     * 필요한 모든 권한 요청
+     * 알림 권한 요청
      */
-    private fun requestAllPermissions() {
-        val permissionsToRequest = mutableListOf<String>()
-
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            permissionsToRequest.add(Manifest.permission.READ_PHONE_STATE)
-        }
-
+    private fun requestNotificationPermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
         ) {
-            permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+            if (!shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)
+                && viewModel.uiState.value.permissionCheckCount > 2
+            ) {
+                openAppSettings()
+            } else {
+                notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
         }
+    }
 
+    /**
+     * 위치 권한 요청
+     */
+    private fun requestLocationPermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED
         ) {
-            permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION)
+            if (!shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)
+                && viewModel.uiState.value.permissionCheckCount > 2
+            ) {
+                openAppSettings()
+            } else {
+                locationLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            }
         }
+    }
 
-        if (permissionsToRequest.isNotEmpty()) {
-            permissionLauncher.launch(permissionsToRequest.toTypedArray())
+    /**
+     * 앱 상세 설정 화면으로 이동 (영구 거부된 권한 처리용)
+     */
+    private fun openAppSettings() {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = "package:$packageName".toUri()
         }
+        startActivity(intent)
     }
 
     /**
