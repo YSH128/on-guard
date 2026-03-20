@@ -229,6 +229,7 @@ class NativeDeepfakeBridge(private val context: Context) {
                 
                 return org.json.JSONObject().apply {
                     put("detected", if (isFake) 1 else 0)
+                    put("fakeprob", faceFakeProb)
                     if (results.size >= 10) {
                         put("roi", org.json.JSONArray().apply {
                             put(roi[0])

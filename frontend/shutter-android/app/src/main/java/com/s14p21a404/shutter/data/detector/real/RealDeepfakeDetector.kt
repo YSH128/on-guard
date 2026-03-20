@@ -121,9 +121,8 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
     private fun averageResults(results: List<DeepfakeDetectionResult>): DeepfakeDetectionResult {
         // detected: 과반수(5개 이상)가 true면 true
-        val detectedCount = results.count { it.detected }
-        val detected = detectedCount >= BUFFER_SIZE / 2
-
+        val avgFakeProb = results.map{ it.fakeProb }.average().toFloat()
+        val detected = avgFakeProb > 0.5f
         // roi: null 아닌 것들의 평균
         val roiList = results.mapNotNull { it.roi }
         val avgRoi = if (roiList.isNotEmpty()) {
@@ -132,8 +131,9 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
         return DeepfakeDetectionResult(
             detected = detected,
+            fakeProb = avgFakeProb,
             roi = avgRoi,
-            rawResultJson = "averaged $BUFFER_SIZE frames (detected: $detectedCount/$BUFFER_SIZE)"
+            rawResultJson = "averaged $BUFFER_SIZE frames (fakeProb: $avgFakeProb)"
         )
     }
 
@@ -164,6 +164,9 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
             try {
                 val obj = org.json.JSONObject(text)
                 val detected = obj.optInt("detected", 0) == 1
+                val fakeProb = obj.optDouble("fakeprob", 0.0).toFloat()
+                Log.w(TAG, "fakeProb : ${fakeProb}")
+
                 val roiArray = obj.optJSONArray("roi")
                 val roi = if (roiArray != null && roiArray.length() == 4) {
                     FloatArray(4) { roiArray.getDouble(it).toFloat() }

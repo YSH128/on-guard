@@ -16,6 +16,8 @@ package com.s14p21a404.shutter.domain.model
  */
 data class DeepfakeDetectionResult(
     val detected: Boolean,
+
+    val fakeProb: Float = 0f,
     val roi: FloatArray? = null,       // [minX, minY, maxX, maxY] 상대좌표, 미검출 시 null
     val timestamp: Long = System.currentTimeMillis(),
     val rawResultJson: String? = null  // NDK로부터 받은 전체 JSON (텔레메트리용 추가 필드 포함)
