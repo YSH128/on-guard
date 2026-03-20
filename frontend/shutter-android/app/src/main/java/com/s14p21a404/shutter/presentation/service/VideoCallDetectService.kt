@@ -1,17 +1,23 @@
 package com.s14p21a404.shutter.presentation.service
 
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.graphics.Bitmap
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.media.projection.MediaProjectionManager
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import com.s14p21a404.shutter.data.token.TokenManager
 import com.s14p21a404.shutter.di.ServiceLocator
 import com.s14p21a404.shutter.domain.repository.DeepfakeDetectionRepository
+import com.s14p21a404.shutter.domain.repository.GpsRepository
 import com.s14p21a404.shutter.domain.repository.VideoCallRepository
 import com.s14p21a404.shutter.domain.usecase.DetectDeepfakeUseCase
 import com.s14p21a404.shutter.domain.usecase.MonitorVideoCallUseCase
@@ -22,7 +28,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 import java.time.LocalDateTime
 
 /**
@@ -46,6 +56,12 @@ class VideoCallDetectService : Service() {
     private lateinit var videoCallRepository: VideoCallRepository
     private lateinit var detectionRepository: DeepfakeDetectionRepository
     private lateinit var deepfakeAlertSender: DeepfakeAlertSender
+    private lateinit var gpsRepository: GpsRepository
+    private lateinit var tokenManager: TokenManager
+
+    // GPS 전송 세션 관리
+    private var gpsSendingJob: Job? = null
+    private var gpsSessionStartedAt: Long? = null
 
     /** 포그라운드 앱 모니터링 Job — 영상통화 감지 시 시작, 종료 시 취소 */
     private var foregroundMonitorJob: Job? = null
@@ -86,6 +102,8 @@ class VideoCallDetectService : Service() {
         videoCallRepository = locator.videoCallRepository
         detectionRepository = locator.detectionRepository
         deepfakeAlertSender = locator.deepfakeAlertSender
+        gpsRepository = locator.gpsRepository
+        tokenManager = locator.tokenManager
 
         startAsForeground()
 
@@ -116,7 +134,7 @@ class VideoCallDetectService : Service() {
             }
         }
 
-        // 감지 결과 관찰 → 오버레이 표시/숨김 + 금융 앱 차단 제어
+        // 감지 결과 관찰 → 오버레이 표시/숨김 + 금융 앱 차단 제어 + GPS 전송 시작
         serviceScope.launch {
             detectUseCase.observeResults().collect { result ->
                 Log.d(TAG, "📊 감지 결과: $result")
@@ -131,6 +149,7 @@ class VideoCallDetectService : Service() {
                     alertSoundManager.startAlert()
                     financialBlockOverlayManager.setEnabled(true)
                     startFinancialAppMonitoring()
+                    startGpsSendingIfEligible()
                     if (!alertSentForCurrentSession) {
                         alertSentForCurrentSession = true
                         serviceScope.launch(Dispatchers.Main) {
@@ -157,7 +176,6 @@ class VideoCallDetectService : Service() {
      * 다시 돌아오면 오버레이를 복원한다.
      */
     private fun startForegroundAppMonitoring() {
-        // 이미 모니터링 중이면 무시
         if (foregroundMonitorJob?.isActive == true) return
 
         if (!ForegroundAppMonitorService.isRunning()) {
@@ -171,14 +189,12 @@ class VideoCallDetectService : Service() {
                 Log.d(TAG, "영상통화 화면 여부: $isOnVideoCallScreen, 오버레이 표시 중: ${warningOverlayManager.isShowing()}")
 
                 if (isOnVideoCallScreen) {
-                    // 영상통화 화면으로 복귀 → 오버레이가 이전에 표시 중이었으면 복원
                     if (wasOverlayShowing && !warningOverlayManager.isShowing()) {
                         Log.d(TAG, "📱 영상통화 화면 복귀 → 오버레이 복원")
                         warningOverlayManager.setEnabled(true)
                         warningOverlayManager.showWarning()
                     }
                 } else {
-                    // 영상통화 화면 이탈 → 오버레이 숨김
                     if (warningOverlayManager.isShowing()) {
                         wasOverlayShowing = true
                         Log.d(TAG, "📱 영상통화 화면 이탈 → 오버레이 숨김")
@@ -237,7 +253,6 @@ class VideoCallDetectService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // MainActivity에서 전달한 MediaProjection 데이터로 초기화
         if (intent != null && intent.hasExtra(EXTRA_RESULT_CODE)) {
             val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0)
             val projectionData = intent.getParcelableExtra(EXTRA_PROJECTION_DATA, Intent::class.java)
@@ -248,7 +263,6 @@ class VideoCallDetectService : Service() {
                 val mediaProjection = projectionManager.getMediaProjection(resultCode, projectionData)
                 Log.d(TAG, "MediaProjection 초기화 완료")
 
-                // Data 레이어에 MediaProjection 전달 (캡처는 data layer 내부에서 관리)
                 if (mediaProjection != null) {
                     detectionRepository.setMediaProjection(this, mediaProjection)
                 } else {
@@ -265,6 +279,8 @@ class VideoCallDetectService : Service() {
 
         stopForegroundAppMonitoring()
         stopFinancialAppMonitoring()
+        gpsSendingJob?.cancel()
+
         alertSoundManager.stopAlert()
         serviceScope.cancel()
         detectionRepository.stopDetection()
@@ -278,12 +294,108 @@ class VideoCallDetectService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    // ── ROI 크롭 ──
+    // ── GPS 전송 ──
 
     /**
-     * 최신 캡처 프레임에서 ROI 영역을 잘라낸 Bitmap을 반환한다.
-     * ROI 좌표는 0.0~1.0 상대좌표이므로 실제 픽셀 좌표로 변환한다.
+     * 딥페이크 감지 시 호출.
+     * GPS 공유 토글이 ON이고 아직 활성 세션이 없을 때만 30분 전송 세션을 시작한다.
+     *
+     * 감지 시점에 토글이 OFF이면 세션을 시작하지 않으며,
+     * 이후 토글을 ON으로 켜도 해당 감지에 대한 전송은 시작되지 않는다.
      */
+    private fun startGpsSendingIfEligible() {
+        if (!tokenManager.getGpsSharing()) return
+
+        val now = System.currentTimeMillis()
+        val sessionStart = gpsSessionStartedAt
+
+        // 이미 활성 세션이 있으면 중복 시작 방지
+        if (sessionStart != null && now - sessionStart < GPS_SHARING_DURATION_MS) return
+
+        gpsSessionStartedAt = now
+        gpsSendingJob?.cancel()
+
+        Log.d(TAG, "GPS 전송 세션 시작")
+
+        gpsSendingJob = serviceScope.launch {
+            val endTime = now + GPS_SHARING_DURATION_MS
+
+            while (isActive && System.currentTimeMillis() < endTime) {
+                if (!tokenManager.getGpsSharing()) {
+                    Log.d(TAG, "GPS 공유 토글 OFF — 전송 중단")
+                    gpsSessionStartedAt = null
+                    break
+                }
+
+                try {
+                    val location = getCurrentLocation()
+                    if (location != null) {
+                        gpsRepository.postGps(location.latitude, location.longitude)
+                        Log.d(TAG, "GPS 전송: ${location.latitude}, ${location.longitude}")
+                    } else {
+                        Log.w(TAG, "위치 획득 실패")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "GPS 전송 오류", e)
+                }
+
+                delay(GPS_SEND_INTERVAL_MS)
+            }
+
+            if (gpsSessionStartedAt == now) gpsSessionStartedAt = null
+            Log.d(TAG, "GPS 전송 세션 종료")
+        }
+    }
+
+    /**
+     * 현재 위치를 단발성으로 가져온다.
+     * GPS → Network 순으로 provider를 시도하며, 30초 이내 캐시가 있으면 즉시 반환한다.
+     */
+    @SuppressLint("MissingPermission")
+    private suspend fun getCurrentLocation(): Location? = suspendCancellableCoroutine { cont ->
+        val locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
+
+        val cached = sequenceOf(
+            LocationManager.GPS_PROVIDER,
+            LocationManager.NETWORK_PROVIDER
+        ).mapNotNull { provider ->
+            runCatching { locationManager.getLastKnownLocation(provider) }.getOrNull()
+        }.firstOrNull { System.currentTimeMillis() - it.time < 30_000L }
+
+        if (cached != null) {
+            cont.resume(cached)
+            return@suspendCancellableCoroutine
+        }
+
+        val provider = when {
+            locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ->
+                LocationManager.GPS_PROVIDER
+            locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) ->
+                LocationManager.NETWORK_PROVIDER
+            else -> {
+                cont.resume(null)
+                return@suspendCancellableCoroutine
+            }
+        }
+
+        val listener = object : LocationListener {
+            override fun onLocationChanged(location: Location) {
+                if (cont.isActive) cont.resume(location)
+                locationManager.removeUpdates(this)
+            }
+        }
+
+        try {
+            locationManager.requestSingleUpdate(provider, listener, mainLooper)
+            cont.invokeOnCancellation { locationManager.removeUpdates(listener) }
+        } catch (e: SecurityException) {
+            Log.e(TAG, "위치 권한 없음", e)
+            cont.resume(null)
+        }
+    }
+
+    // ── ROI 크롭 ──
+
     private fun cropRoiBitmap(result: com.s14p21a404.shutter.domain.model.DeepfakeDetectionResult): Bitmap? {
         val source = detectionRepository.getLatestBitmap() ?: return null
         return try {
@@ -304,6 +416,7 @@ class VideoCallDetectService : Service() {
 
     // ── Foreground Service 설정 ──
 
+    @SuppressLint("InlinedApi", "NewApi")
     private fun startAsForeground(includeMediaProjection: Boolean = false) {
         val channelId = "shutter_detect_channel"
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
@@ -326,9 +439,11 @@ class VideoCallDetectService : Service() {
 
         val serviceType = if (includeMediaProjection) {
             android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
         } else {
-            android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
         }
 
         ServiceCompat.startForeground(
@@ -343,10 +458,15 @@ class VideoCallDetectService : Service() {
         private const val TAG = "VideoCallDetectService"
         private const val NOTIFICATION_ID = 1001
 
-        /** MainActivity → Service: MediaProjection 결과 코드 */
+        /** GPS 전송 주기: 10초 */
+        private const val GPS_SEND_INTERVAL_MS = 10_000L
+
+        /** GPS 전송 세션 지속 시간: 30분 */
+        private const val GPS_SHARING_DURATION_MS = 30 * 60 * 1000L
+
+        //private const val GPS_SHARING_DURATION_MS = 1 * 60 * 1000L
+
         const val EXTRA_RESULT_CODE = "extra_result_code"
-        /** MainActivity → Service: MediaProjection Intent 데이터 */
         const val EXTRA_PROJECTION_DATA = "extra_projection_data"
     }
 }
-
