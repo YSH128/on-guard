@@ -12,6 +12,7 @@ try:
 except AttributeError:
     pass
 
+
 class Spectrogram(object):
     """
     Create a spectrogram from a audio signal.

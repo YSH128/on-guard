@@ -97,7 +97,7 @@ class ErrorRate(object):
                 save_folder = f'results/metric_log'
                 if not os.path.exists(save_folder):
                     os.makedirs(save_folder)
-                with open(f'{save_folder}/{self.log_path}', 'a') as f:
+                with open(f'{save_folder}/{self.log_path}', 'a', encoding='utf-8') as f:
                     f.write(f"Tar: {s1}\n")
                     f.write(f"Out: {s2}\n")
                     if file_path is not None:

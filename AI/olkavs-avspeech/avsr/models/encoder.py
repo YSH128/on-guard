@@ -31,8 +31,8 @@ class FusionConformerEncoder(nn.Module):
             video_inputs, video_input_lengths,
             audio_inputs, audio_input_lengths,
             *args, **kwargs):
-        audio_feature = self.audio_model(None, None, audio_inputs, audio_input_lengths)
         visual_feature = self.visual_model(video_inputs, video_input_lengths, None, None)
+        audio_feature = torch.zeros_like(visual_feature)
         features = self.fusion(visual_feature, audio_feature)
         return features
         
