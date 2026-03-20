@@ -185,9 +185,16 @@ bool QnnModelLoader::SetupBackendOnly(const std::string& backendName, const std:
     return true;
 }
 
-bool QnnModelLoader::InitSystem(const std::string& cacheDir) {
+bool QnnModelLoader::InitSystem(const std::string& cacheDir, const std::string& nativeLibDir) {
     std::lock_guard<std::mutex> lock(m_mutex);
     
+    // [필수] Android 앱 샌드박스에서 QNN HTP Skel 라이브러리를 로딩하기 위해
+    // ADSP_LIBRARY_PATH에 앱의 nativeLibraryDir을 최우선으로 주입합니다.
+    // 이것이 없으면 FastRPC의 apps_std_fopen_with_env가 libQnnHtpV68Skel.so를 찾지 못합니다.
+    std::string adspPath = nativeLibDir + ";/vendor/lib/rfsa/adsp;/system/lib/rfsa/adsp;/dsp";
+    setenv("ADSP_LIBRARY_PATH", adspPath.c_str(), 1); // 1 = overwrite
+    LOGI("ADSP_LIBRARY_PATH set to: %s", adspPath.c_str());
+
     if (m_backendHandle != nullptr && m_backend != nullptr) {
         LOGI("QNN System already initialized with %s", m_activeBackendName.c_str());
         return true;

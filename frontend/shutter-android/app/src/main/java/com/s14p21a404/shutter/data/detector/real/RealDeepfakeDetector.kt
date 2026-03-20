@@ -89,7 +89,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
             return
         }
 
-        if (!bridge!!.isQnnInitialized) {
+        if (!bridge!!.isModelReady) {
             Log.d(TAG, "⏳ 메모리에 AI 모델 적재 중입니다... 프레임 추론 건너뜀")
             // 화면 쪽으로 로딩 상태를 전달하기 위해 가짜 결과 발행
             callback(DeepfakeDetectionResult(detected = false, rawResultJson = "AI 모델 빌드 및 적재 중입니다..."))
