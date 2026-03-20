@@ -82,9 +82,13 @@ class LocationViewModel(application: Application) : AndroidViewModel(application
 
                     _uiState.value = LocationUiState.Success(wardLocations)
 
-                    // WebSocket 연결 및 구독
-                    val wardIds = wards.map { it.wardId }
-                    gpsWebSocketClient.connect(wardIds)
+                    // isSharing: true인 피보호자가 있을 때만 WebSocket 연결
+                    val sharingWardIds = wardLocations
+                        .filter { it.isSharing }
+                        .map { it.wardId }
+                    if (sharingWardIds.isNotEmpty()) {
+                        gpsWebSocketClient.connect(sharingWardIds)
+                    }
                 }
         }
     }
@@ -112,6 +116,13 @@ class LocationViewModel(application: Application) : AndroidViewModel(application
                             updatedAt = null,
                             isSharing = false,
                         )
+                        // 공유 중인 피보호자가 더 이상 없으면 WebSocket 닫기
+                        val current = _uiState.value as? LocationUiState.Success
+                        val stillSharing = current?.wards?.any { it.wardId != event.wardId && it.isSharing } ?: false
+                        if (!stillSharing) {
+                            Log.d(TAG, "모든 위치 공유 종료 — WebSocket 연결 해제")
+                            gpsWebSocketClient.disconnect()
+                        }
                     }
                     else -> {}
                 }

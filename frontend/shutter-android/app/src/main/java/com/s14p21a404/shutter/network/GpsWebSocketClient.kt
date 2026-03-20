@@ -82,12 +82,17 @@ class GpsWebSocketClient(private val tokenManager: TokenManager) {
     private val okHttpClient = OkHttpClient()
     private var webSocket: WebSocket? = null
     private var pendingWardIds: List<Long> = emptyList()
+    private var isConnected = false
 
     private val _events = MutableSharedFlow<GpsWebSocketEvent>(extraBufferCapacity = 64)
     val events: SharedFlow<GpsWebSocketEvent> = _events.asSharedFlow()
 
     fun connect(wardIds: List<Long>) {
         if (wardIds.isEmpty()) return
+        if (isConnected) {
+            Log.d(TAG, "이미 연결됨 — 중복 연결 무시")
+            return
+        }
 
         val token = tokenManager.getAccessToken() ?: run {
             Log.w(TAG, "액세스 토큰 없음 — WebSocket 연결 취소")
@@ -123,6 +128,7 @@ class GpsWebSocketClient(private val tokenManager: TokenManager) {
                 when (command) {
                     "CONNECTED" -> {
                         Log.d(TAG, "STOMP CONNECTED — 구독 시작")
+                        isConnected = true
                         _events.tryEmit(GpsWebSocketEvent.Connected)
                         // 각 피보호자 위치 토픽 구독
                         pendingWardIds.forEachIndexed { index, wardId ->
@@ -176,11 +182,13 @@ class GpsWebSocketClient(private val tokenManager: TokenManager) {
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.e(TAG, "WebSocket 오류", t)
+                isConnected = false
                 _events.tryEmit(GpsWebSocketEvent.Disconnected)
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d(TAG, "WebSocket 닫힘: $code $reason")
+                isConnected = false
                 _events.tryEmit(GpsWebSocketEvent.Disconnected)
             }
         })
@@ -189,6 +197,7 @@ class GpsWebSocketClient(private val tokenManager: TokenManager) {
     fun disconnect() {
         webSocket?.close(1000, "정상 종료")
         webSocket = null
+        isConnected = false
     }
 
     companion object {
