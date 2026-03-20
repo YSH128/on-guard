@@ -10,8 +10,8 @@ import com.shutter.api.gps.dto.response.GpsLocationResponse;
 import com.shutter.api.gps.dto.response.GpsResponse;
 import com.shutter.api.gps.dto.response.GpsSharingToggleResponse;
 import com.shutter.api.gps.dto.response.LocationExpiredDto;
+import com.shutter.api.gps.dto.response.LocationSharingOnDto;
 import com.shutter.api.gps.dto.response.LocationUpdateDto;
-import com.shutter.api.user.domain.Role;
 import com.shutter.api.user.domain.User;
 import com.shutter.api.user.domain.UserRelationship;
 import com.shutter.api.user.repository.UserRelationshipRepository;
@@ -62,7 +62,7 @@ public class GpsService {
 
             String value = objectMapper.writeValueAsString(locationData);
 
-            // Redis 저장 (TTL: 30분)
+            // Redis 저장 (TTL 적용)
             redisTemplate.opsForValue().set(redisKey, value, GPS_TTL_SECONDS, TimeUnit.SECONDS);
 
             log.debug("Saved GPS location for user {}: {}", userId, value);
@@ -155,7 +155,7 @@ public class GpsService {
             redisTemplate.delete(redisKey);
             log.debug("Deleted GPS location from Redis for user {} due to sharing toggle OFF", userId);
 
-            // 동일하게 LOCATION_EXPIRED 푸시
+            // LOCATION_EXPIRED 이벤트 발송
             LocationExpiredDto expiredDto = LocationExpiredDto.builder()
                     .wardId(userId)
                     .isSharing(false)
@@ -164,6 +164,19 @@ public class GpsService {
             String destination = "/topic/location/" + userId;
             messagingTemplate.convertAndSend(destination, expiredDto);
             log.debug("Published LOCATION_EXPIRED to {} on toggle OFF", destination);
+
+        } else {
+            // 5. 공유 ON 재전환 시 보호자들에게 LOCATION_SHARING_ON 이벤트 발송
+            List<UserRelationship> relationships = userRelationshipRepository.findByWardIdWithGuardian(userId);
+            if (!relationships.isEmpty()) {
+                LocationSharingOnDto sharingOnDto = LocationSharingOnDto.builder()
+                        .wardId(userId)
+                        .build();
+
+                String destination = "/topic/location/" + userId;
+                messagingTemplate.convertAndSend(destination, sharingOnDto);
+                log.debug("Published LOCATION_SHARING_ON to {} on toggle ON", destination);
+            }
         }
 
         return new GpsSharingToggleResponse(user.getGpsSharing());
