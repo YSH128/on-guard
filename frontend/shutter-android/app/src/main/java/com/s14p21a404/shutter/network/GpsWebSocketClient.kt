@@ -83,14 +83,33 @@ class GpsWebSocketClient(private val tokenManager: TokenManager) {
     private var webSocket: WebSocket? = null
     private var pendingWardIds: List<Long> = emptyList()
     private var isConnected = false
+    private val subscribedWardIds = mutableSetOf<Long>()
 
     private val _events = MutableSharedFlow<GpsWebSocketEvent>(extraBufferCapacity = 64)
     val events: SharedFlow<GpsWebSocketEvent> = _events.asSharedFlow()
 
     fun connect(wardIds: List<Long>) {
         if (wardIds.isEmpty()) return
+
+        // 이미 연결된 경우: 새로 추가된 wardId만 구독
         if (isConnected) {
-            Log.d(TAG, "이미 연결됨 — 중복 연결 무시")
+            val newWardIds = wardIds.filter { it !in subscribedWardIds }
+            if (newWardIds.isEmpty()) {
+                Log.d(TAG, "이미 모두 구독 중 — 무시")
+                return
+            }
+            newWardIds.forEachIndexed { index, wardId ->
+                val subscribeFrame = stompFrame(
+                    "SUBSCRIBE",
+                    mapOf(
+                        "id" to "sub-${subscribedWardIds.size + index}",
+                        "destination" to "/topic/location/$wardId",
+                    )
+                )
+                webSocket?.send(subscribeFrame)
+                subscribedWardIds.add(wardId)
+                Log.d(TAG, "추가 구독: /topic/location/$wardId")
+            }
             return
         }
 
@@ -140,6 +159,7 @@ class GpsWebSocketClient(private val tokenManager: TokenManager) {
                                 )
                             )
                             webSocket.send(subscribeFrame)
+                            subscribedWardIds.add(wardId)
                             Log.d(TAG, "구독: /topic/location/$wardId")
                         }
                     }
@@ -183,12 +203,14 @@ class GpsWebSocketClient(private val tokenManager: TokenManager) {
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.e(TAG, "WebSocket 오류", t)
                 isConnected = false
+                subscribedWardIds.clear()
                 _events.tryEmit(GpsWebSocketEvent.Disconnected)
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d(TAG, "WebSocket 닫힘: $code $reason")
                 isConnected = false
+                subscribedWardIds.clear()
                 _events.tryEmit(GpsWebSocketEvent.Disconnected)
             }
         })
@@ -198,6 +220,7 @@ class GpsWebSocketClient(private val tokenManager: TokenManager) {
         webSocket?.close(1000, "정상 종료")
         webSocket = null
         isConnected = false
+        subscribedWardIds.clear()
     }
 
     companion object {
