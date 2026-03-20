@@ -30,6 +30,7 @@ import com.s14p21a404.shutter.domain.usecase.MonitorVideoCallUseCase
 import com.s14p21a404.shutter.network.RetrofitClient
 import com.s14p21a404.shutter.presentation.overlay.FinancialBlockOverlayManager
 import com.s14p21a404.shutter.presentation.overlay.WarningOverlayManager
+import com.s14p21a404.shutter.presentation.service.AlertSoundManager
 
 /**
  * 수동 DI 컨테이너
@@ -99,6 +100,7 @@ class ServiceLocator private constructor(context: Context) {
 
     val warningOverlayManager = WarningOverlayManager(context)
     val financialBlockOverlayManager = FinancialBlockOverlayManager(context)
+    val alertSoundManager = AlertSoundManager(context)
 
 
     companion object {

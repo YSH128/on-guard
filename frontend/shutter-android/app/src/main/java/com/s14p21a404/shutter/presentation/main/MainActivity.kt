@@ -193,6 +193,9 @@ class MainActivity : ComponentActivity() {
      * 화면 캡처 동의 후 서비스 시작
      */
     private fun startServiceWithProjection(resultCode: Int, data: Intent) {
+        // 추가: 캡처 권한 취득 직후 AI 모델 사전 빌드 및 로드를 백그라운드에서 진행 (콜드 스타트 지연 방지)
+        com.s14p21a404.shutter.di.ServiceLocator.getInstance(this).detector.prepare()
+        
         val intent = Intent(this, VideoCallDetectService::class.java).apply {
             putExtra(VideoCallDetectService.EXTRA_RESULT_CODE, resultCode)
             putExtra(VideoCallDetectService.EXTRA_PROJECTION_DATA, data)

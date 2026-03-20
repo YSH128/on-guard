@@ -51,6 +51,7 @@ class VideoCallDetectService : Service() {
     private lateinit var detectUseCase: DetectDeepfakeUseCase
     private lateinit var warningOverlayManager: WarningOverlayManager
     private lateinit var financialBlockOverlayManager: FinancialBlockOverlayManager
+    private lateinit var alertSoundManager: AlertSoundManager
     private lateinit var videoCallRepository: VideoCallRepository
     private lateinit var detectionRepository: DeepfakeDetectionRepository
     private lateinit var gpsRepository: GpsRepository
@@ -91,6 +92,7 @@ class VideoCallDetectService : Service() {
         detectUseCase = locator.detectDeepfakeUseCase
         warningOverlayManager = locator.warningOverlayManager
         financialBlockOverlayManager = locator.financialBlockOverlayManager
+        alertSoundManager = locator.alertSoundManager
         videoCallRepository = locator.videoCallRepository
         detectionRepository = locator.detectionRepository
         gpsRepository = locator.gpsRepository
@@ -112,6 +114,7 @@ class VideoCallDetectService : Service() {
                 } else {
                     stopForegroundAppMonitoring()
                     stopFinancialAppMonitoring()
+                    alertSoundManager.stopAlert()
                     warningOverlayManager.setEnabled(false)
                     financialBlockOverlayManager.setEnabled(false)
                     monitorUseCase.stopDetection()
@@ -132,14 +135,16 @@ class VideoCallDetectService : Service() {
                 } else null
                 warningOverlayManager.onDetectionResult(result, roiBitmap)
 
-                // 딥페이크 감지 상태에 따라 금융 앱 차단 오버레이 제어
+                // 딥페이크 감지 상태에 따라 경고음 + 금융 앱 차단 오버레이 제어
                 if (result.detected) {
                     isDeepfakeDetected = true
+                    alertSoundManager.startAlert()
                     financialBlockOverlayManager.setEnabled(true)
                     startFinancialAppMonitoring()
                     startGpsSendingIfEligible()
                 } else {
                     isDeepfakeDetected = false
+                    alertSoundManager.stopAlert()
                     financialBlockOverlayManager.setEnabled(false)
                     financialBlockOverlayManager.dismiss()
                     stopFinancialAppMonitoring()
@@ -261,6 +266,7 @@ class VideoCallDetectService : Service() {
         stopFinancialAppMonitoring()
         gpsSendingJob?.cancel()
 
+        alertSoundManager.stopAlert()
         serviceScope.cancel()
         detectionRepository.stopDetection()
         videoCallRepository.stopMonitoring()
