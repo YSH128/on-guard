@@ -23,6 +23,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import java.time.LocalDateTime
 
 /**
  * 영상통화 감지 Foreground Service (얇은 껍데기)
@@ -44,6 +45,7 @@ class VideoCallDetectService : Service() {
     private lateinit var alertSoundManager: AlertSoundManager
     private lateinit var videoCallRepository: VideoCallRepository
     private lateinit var detectionRepository: DeepfakeDetectionRepository
+    private lateinit var deepfakeAlertSender: DeepfakeAlertSender
 
     /** 포그라운드 앱 모니터링 Job — 영상통화 감지 시 시작, 종료 시 취소 */
     private var foregroundMonitorJob: Job? = null
@@ -57,6 +59,10 @@ class VideoCallDetectService : Service() {
      */
     @Volatile
     private var isDeepfakeDetected = false
+
+    /** 현재 통화 세션에서 보호자 카카오톡 알림을 이미 발송했는지 여부. */
+    @Volatile
+    private var alertSentForCurrentSession = false
 
     /**
      * 오버레이가 표시 중이었는지 여부.
@@ -79,6 +85,7 @@ class VideoCallDetectService : Service() {
         alertSoundManager = locator.alertSoundManager
         videoCallRepository = locator.videoCallRepository
         detectionRepository = locator.detectionRepository
+        deepfakeAlertSender = locator.deepfakeAlertSender
 
         startAsForeground()
 
@@ -104,6 +111,7 @@ class VideoCallDetectService : Service() {
                     financialBlockOverlayManager.dismiss()
                     wasOverlayShowing = false
                     isDeepfakeDetected = false
+                    alertSentForCurrentSession = false
                 }
             }
         }
@@ -123,6 +131,13 @@ class VideoCallDetectService : Service() {
                     alertSoundManager.startAlert()
                     financialBlockOverlayManager.setEnabled(true)
                     startFinancialAppMonitoring()
+                    if (!alertSentForCurrentSession) {
+                        alertSentForCurrentSession = true
+                        serviceScope.launch(Dispatchers.Main) {
+                            Log.d(TAG, "딥페이크 최초 감지 — 보호자 카카오톡 알림 발송 시작")
+                            deepfakeAlertSender.sendAlert(LocalDateTime.now())
+                        }
+                    }
                 } else {
                     isDeepfakeDetected = false
                     alertSoundManager.stopAlert()

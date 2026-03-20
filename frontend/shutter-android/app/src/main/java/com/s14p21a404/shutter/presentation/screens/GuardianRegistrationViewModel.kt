@@ -37,6 +37,7 @@ data class GuardianRegistrationUiState(
 class GuardianRegistrationViewModel(application: Application) : AndroidViewModel(application) {
 
     private val addGuardianUseCase = ServiceLocator.getInstance(application).addGuardianUseCase
+    private val guardianUuidStore = ServiceLocator.getInstance(application).guardianUuidStore
 
     private val _uiState = MutableStateFlow(GuardianRegistrationUiState())
     val uiState: StateFlow<GuardianRegistrationUiState> = _uiState.asStateFlow()
@@ -96,7 +97,10 @@ class GuardianRegistrationViewModel(application: Application) : AndroidViewModel
             var lastError: String? = null
             for (friend in selectedFriends) {
                 addGuardianUseCase(friend.id)
-                    .onSuccess { sendGuardianMessage(wardName, friend) }
+                    .onSuccess { guardian ->
+                        guardianUuidStore.saveUuid(guardian.guardianId, friend.uuid)
+                        sendGuardianMessage(wardName, friend)
+                    }
                     .onFailure { e -> lastError = e.message }
             }
 
