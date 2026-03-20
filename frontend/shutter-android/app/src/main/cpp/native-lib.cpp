@@ -163,3 +163,57 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_releaseQnn
         g_qnnLoader.reset();
     }
 }
+
+// ---------------------------------------------------------
+// ONNX Runtime Fallback JNI (Non-Qualcomm)
+// ---------------------------------------------------------
+
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_preprocessFrameForOnnx(
+        JNIEnv* env,
+        jobject,
+        jbyteArray buffer,
+        jint width,
+        jint height,
+        jint stride) {
+
+    jbyte* data = env->GetByteArrayElements(buffer, nullptr);
+    cv::Mat frame(height, width, CV_8UC4, (void*)data, stride);
+
+    if (frame.empty()) {
+        env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
+        return env->NewFloatArray(0);
+    }
+
+    const int W = 224, H = 224;
+    cv::Mat resized, rgb, floatMat;
+    cv::resize(frame, resized, cv::Size(W, H));
+    cv::cvtColor(resized, rgb, cv::COLOR_RGBA2RGB); 
+    rgb.convertTo(floatMat, CV_32F, 1.0f / 255.0f);
+
+    // Apply normalization properly using OpenCV split
+    std::vector<cv::Mat> channels(3);
+    cv::split(floatMat, channels);
+    channels[0] = (channels[0] - 0.485f) / 0.229f; // R
+    channels[1] = (channels[1] - 0.456f) / 0.224f; // G
+    channels[2] = (channels[2] - 0.406f) / 0.225f; // B
+
+    // Convert to NCHW flat array [1, 3, 224, 224] for ONNX Runtime PyTorch models.
+    // Since cv::split separates channels into planar mats, we directly copy them memory-aligned.
+    int numPixels = W * H;
+    jfloatArray result = env->NewFloatArray(3 * numPixels);
+    if (!result) {
+        env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
+        return nullptr;
+    }
+
+    for (int i = 0; i < 3; ++i) {
+        if (!channels[i].isContinuous()) {
+            channels[i] = channels[i].clone();
+        }
+        env->SetFloatArrayRegion(result, i * numPixels, numPixels, (const jfloat*)channels[i].datastart);
+    }
+
+    env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
+    return result;
+}
