@@ -83,7 +83,7 @@ public class KakaoPushRequest {
     @Getter
     @NoArgsConstructor(access = AccessLevel.PROTECTED)
     public static class FcmNotification {
-        private String title = "셔터 긴급 알림";
+        private String title = "SHUTTER 긴급 알림";
         private String body;
 
         public FcmNotification(String body) {

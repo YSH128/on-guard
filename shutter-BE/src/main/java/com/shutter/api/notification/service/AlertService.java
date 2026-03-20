@@ -36,9 +36,9 @@ public class AlertService {
     /**
      * 알림 전송 및 로그 저장
      *
-     * @param wardId 피보호자 ID (JWT 추출)
+     * @param wardId     피보호자 ID (JWT 추출)
      * @param guardianId 보호자 ID (PathVariable)
-     * @param request 알림 요청 정보 (이벤트 타입, 발신자 등)
+     * @param request    알림 요청 정보 (이벤트 타입, 발신자 등)
      * @return 저장된 알림 로그 정보
      */
     @Transactional
@@ -57,7 +57,11 @@ public class AlertService {
         }
 
         // 4. 카카오 푸시 발송 (WebClient 호출)
-        String pushMessage = String.format("[%s] 피싱 위험 상황이 감지되었습니다.", request.getEventType());
+        String pushMessage = switch (request.getEventType()) {
+            case DEEPFAKE -> String.format("%s님이 딥페이크 의심 통화 중입니다.", ward.getName());
+            case LOCATION -> String.format("%s님의 위치 정보 공유가 시작되었습니다.", ward.getName());
+            default -> String.format("%s님에게 알림이 발생했습니다.", ward.getName());
+        };
         boolean pushSuccess = kakaoPushClient.sendPush(guardian.getKakaoId(), request.getEventType(), pushMessage);
 
         // 5. 알림 로그 생성 및 저장
