@@ -99,7 +99,7 @@ public class GuardianService {
     }
 
     private GpsLocation getGpsLocation(Long wardId) {
-        return tokenRepository.find("gps:" + wardId)
+        return tokenRepository.find("location:" + wardId)
                 .map(json -> {
                     try {
                         return objectMapper.readValue(json, GpsLocation.class);
