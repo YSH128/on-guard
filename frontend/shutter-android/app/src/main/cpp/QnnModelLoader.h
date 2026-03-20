@@ -21,7 +21,7 @@ public:
     ~QnnModelLoader();
 
     // Initialize the QNN system (Backend, Device)
-    bool InitSystem(const std::string& cacheDir);
+    bool InitSystem(const std::string& cacheDir, const std::string& nativeLibDir);
 
     // Compile the graph only and save to cache (no model holding in memory)
     bool BuildModelCache(const std::string& assetsPath);
