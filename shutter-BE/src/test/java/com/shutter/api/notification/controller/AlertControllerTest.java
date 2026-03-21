@@ -8,6 +8,7 @@ import com.shutter.api.notification.domain.NotificationEventType;
 import com.shutter.api.notification.domain.NotificationStatus;
 import com.shutter.api.notification.dto.request.AlertRequest;
 import com.shutter.api.notification.dto.response.AlertLogResponse;
+import com.shutter.api.notification.dto.response.AlertLogsResponse;
 import com.shutter.api.notification.service.AlertService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -65,22 +66,23 @@ class AlertControllerTest {
         // given
         AlertLogResponse logResponse = AlertLogResponse.builder()
                 .id(1L)
-                .wardName("피보호자")
+                .wardId(1L)
+                .guardianId(2L)
                 .guardianName("보호자")
                 .eventType("DEEPFAKE")
                 .status(NotificationStatus.SUCCESS)
                 .sentAt(LocalDateTime.now())
                 .build();
 
-        given(alertService.getAlertLogs(anyLong())).willReturn(List.of(logResponse));
+        given(alertService.getAlertLogs(anyLong())).willReturn(AlertLogsResponse.from(List.of(logResponse)));
 
         // when & then
         mockMvc.perform(get("/api/v1/alerts/logs/1")
                         .with(authentication(new UsernamePasswordAuthenticationToken(userId, null, Collections.emptyList()))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data[0].id").value(1L))
-                .andExpect(jsonPath("$.data[0].ward_name").value("피보호자"));
+                .andExpect(jsonPath("$.data.notifications[0].id").value(1L))
+                .andExpect(jsonPath("$.data.notifications[0].ward_id").value(1L));
     }
 
     @Test

@@ -18,7 +18,8 @@ import java.time.LocalDateTime;
 public class AlertLogResponse {
 
     private Long id;
-    private String wardName;
+    private Long wardId;
+    private Long guardianId;
     private String guardianName;
     private String eventType;
     private String caller;
@@ -30,7 +31,8 @@ public class AlertLogResponse {
     public static AlertLogResponse from(NotificationLog log) {
         return AlertLogResponse.builder()
                 .id(log.getId())
-                .wardName(log.getWard().getName())
+                .wardId(log.getWard().getId())
+                .guardianId(log.getGuardian().getId())
                 .guardianName(log.getGuardian().getName())
                 .eventType(log.getEventType().name())
                 .caller(log.getCaller())

@@ -3,6 +3,7 @@ package com.shutter.api.notification.controller;
 import com.shutter.api.global.common.ApiResponse;
 import com.shutter.api.notification.dto.request.AlertRequest;
 import com.shutter.api.notification.dto.response.AlertLogResponse;
+import com.shutter.api.notification.dto.response.AlertLogsResponse;
 import com.shutter.api.notification.service.AlertService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -29,11 +30,11 @@ public class AlertController {
      * @return 알림 로그 목록 (최신순)
      */
     @GetMapping("/logs/{wardId}")
-    public ResponseEntity<ApiResponse<List<AlertLogResponse>>> getAlertLogs(
+    public ResponseEntity<ApiResponse<AlertLogsResponse>> getAlertLogs(
             @AuthenticationPrincipal Long userId,
             @PathVariable("wardId") Long wardId) {
         
-        List<AlertLogResponse> responses = alertService.getAlertLogs(wardId);
+        AlertLogsResponse responses = alertService.getAlertLogs(wardId);
         return ResponseEntity.ok(ApiResponse.of("알림 로그 조회 성공", responses));
     }
 

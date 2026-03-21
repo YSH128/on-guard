@@ -8,6 +8,7 @@ import com.shutter.api.notification.domain.NotificationLog;
 import com.shutter.api.notification.domain.NotificationStatus;
 import com.shutter.api.notification.dto.request.AlertRequest;
 import com.shutter.api.notification.dto.response.AlertLogResponse;
+import com.shutter.api.notification.dto.response.AlertLogsResponse;
 import com.shutter.api.notification.repository.NotificationLogRepository;
 import com.shutter.api.user.domain.User;
 import com.shutter.api.user.domain.UserRelationship;
@@ -104,7 +105,7 @@ public class AlertService {
      * @return 알림 로그 목록 (최신순)
      */
     @Transactional(readOnly = true)
-    public List<AlertLogResponse> getAlertLogs(Long wardId) {
+    public AlertLogsResponse getAlertLogs(Long wardId) {
         // 1. 피보호자 존재 여부 확인
         if (!userRepository.existsById(wardId)) {
             throw new BusinessException(ErrorCode.WARD_NOT_FOUND);
@@ -113,9 +114,11 @@ public class AlertService {
         // 2. 알림 로그 조회 (Repo에서 @EntityGraph를 사용하여 JOIN 처리됨)
         List<NotificationLog> logs = notificationLogRepository.findAllByWardIdOrderBySentAtDesc(wardId);
 
-        // 3. DTO 변환 후 반환
-        return logs.stream()
+        // 3. DTO 변환 후 래퍼로 감싸서 반환
+        List<AlertLogResponse> responses = logs.stream()
                 .map(AlertLogResponse::from)
                 .collect(Collectors.toList());
+        
+        return AlertLogsResponse.from(responses);
     }
 }
