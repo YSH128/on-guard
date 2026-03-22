@@ -75,13 +75,27 @@ fun VideoCallScreen(channelId: String) {
             mAppId = appId
             mEventHandler = object : IRtcEngineEventHandler() {
                 override fun onUserJoined(uid: Int, elapsed: Int) {
-                    remoteUid = uid
+                    android.util.Log.d("Agora", "상대방 입장: $uid")
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        remoteUid = uid
+                    }
                 }
                 override fun onUserOffline(uid: Int, reason: Int) {
-                    remoteUid = null
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        remoteUid = null
+                    }
+                }
+                override fun onRemoteVideoStateChanged(uid: Int, state: Int, reason: Int, elapsed: Int) {
+                    android.util.Log.d("Agora", "상대방 영상 상태: uid=$uid state=$state")
+                    if (state == 2) {
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            remoteUid = uid
+                        }
+                    }
                 }
             }
         }
+
         val engine = RtcEngine.create(config)
         engine.enableVideo()
         engine.enableAudio()
@@ -89,6 +103,7 @@ fun VideoCallScreen(channelId: String) {
         engine.adjustRecordingSignalVolume(300)
         engine.adjustPlaybackSignalVolume(200)
         engine.registerAudioFrameObserver(audioFrameObserver)
+        rtcEngine = engine
 
         val file = File(context.getExternalFilesDir(null), "remote_only.pcm")
         recordingFile = file
@@ -102,7 +117,6 @@ fun VideoCallScreen(channelId: String) {
             autoSubscribeAudio = true
         }
         engine.joinChannel(null, channelId, 0, options)
-        rtcEngine = engine
     }
 
     DisposableEffect(Unit) {
@@ -128,37 +142,41 @@ fun VideoCallScreen(channelId: String) {
 
     Box(modifier = Modifier.fillMaxSize()) {
         remoteUid?.let { uid ->
+            key(uid) {
+                AndroidView(
+                    factory = { ctx ->
+                        SurfaceView(ctx).also { view ->
+                            view.layoutParams = ViewGroup.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                            rtcEngine?.setupRemoteVideo(
+                                VideoCanvas(view, VideoCanvas.RENDER_MODE_HIDDEN, uid)
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+
+        key(rtcEngine) {
             AndroidView(
                 factory = { ctx ->
                     SurfaceView(ctx).also { view ->
-                        view.layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
+                        rtcEngine?.setupLocalVideo(
+                            VideoCanvas(view, VideoCanvas.RENDER_MODE_HIDDEN, 0)
                         )
-                        rtcEngine?.setupRemoteVideo(
-                            VideoCanvas(view, VideoCanvas.RENDER_MODE_HIDDEN, uid)
-                        )
+                        rtcEngine?.startPreview()
                     }
                 },
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .width(120.dp)
+                    .height(160.dp)
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp)
             )
         }
-
-        AndroidView(
-            factory = { ctx ->
-                SurfaceView(ctx).also { view ->
-                    rtcEngine?.setupLocalVideo(
-                        VideoCanvas(view, VideoCanvas.RENDER_MODE_HIDDEN, 0)
-                    )
-                    rtcEngine?.startPreview()
-                }
-            },
-            modifier = Modifier
-                .width(120.dp)
-                .height(160.dp)
-                .align(Alignment.BottomEnd)
-                .padding(16.dp)
-        )
     }
 }
 
