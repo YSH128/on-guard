@@ -15,5 +15,10 @@ sealed class Screen(val route: String) {
 
     /** 보호자 등록 – 설정에서 보호자 추가 시 진입 */
     object GuardianRegistration : Screen("guardian_registration")
+
+    /** 영상 통화 */
+    object VideoCall : Screen("video_call/{channelId}") {
+        fun createRoute(channelId: String) = "video_call/$channelId"
+    }
 }
 
