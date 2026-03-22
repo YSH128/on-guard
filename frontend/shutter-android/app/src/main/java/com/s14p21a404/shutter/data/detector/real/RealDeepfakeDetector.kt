@@ -165,7 +165,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
             try {
                 val obj = org.json.JSONObject(text)
                 val detected = obj.optInt("detected", 0) == 1
-                val fakeProb = obj.optDouble("fakeprob", 0.0).toFloat()
+                val fakeProb = obj.optDouble("fakeProb", 0.0).toFloat()
                 Log.w(TAG, "fakeProb : ${fakeProb}")
 
                 val roiArray = obj.optJSONArray("roi")
