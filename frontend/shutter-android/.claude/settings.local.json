@@ -2,10 +2,7 @@
   "permissions": {
     "allow": [
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" --max-time 5 https://j14a404.p.ssafy.io/)",
-      "Bash(keytool -exportcert -alias androiddebugkey -keystore \"$USERPROFILE/.android/debug.keystore\" -storepass android -keypass android)",
-      "Bash(openssl sha1:*)",
-      "Bash(openssl base64:*)",
-      "Bash(keytool -exportcert -alias androiddebugkey -keystore ~/.android/debug.keystore -storepass android -keypass android)"
+      "Bash(\"/c/Program Files/Android/Android Studio/jbr/bin/keytool\" -exportcert -alias androiddebugkey -keystore \"/c/Users/SSAFY/.android/debug.keystore\" -storepass android -keypass android | openssl sha1 -binary | openssl base64)"
     ]
   }
 }
