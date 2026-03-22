@@ -8,6 +8,7 @@ private const val KEY_ACCESS_TOKEN = "access_token"
 private const val KEY_REFRESH_TOKEN = "refresh_token"
 private const val KEY_USER_ID = "user_id"
 private const val KEY_DEVICE_UUID = "device_uuid"
+private const val KEY_GPS_SHARING = "gps_sharing"
 
 class TokenManager(context: Context) {
 
@@ -43,6 +44,12 @@ class TokenManager(context: Context) {
         prefs.edit().putString(KEY_DEVICE_UUID, newUuid).apply()
         return newUuid
     }
+
+    fun saveGpsSharing(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_GPS_SHARING, enabled).apply()
+    }
+
+    fun getGpsSharing(): Boolean = prefs.getBoolean(KEY_GPS_SHARING, false)
 
     fun clearTokens() {
         prefs.edit()

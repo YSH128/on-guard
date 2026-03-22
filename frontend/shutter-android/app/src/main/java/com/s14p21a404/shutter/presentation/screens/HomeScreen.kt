@@ -130,6 +130,11 @@ fun HomeScreen(
     val scrollState = rememberScrollState()
     val homeUiState by homeViewModel.uiState.collectAsState()
 
+    // 화면 진입마다 피보호자 목록 새로고침
+    LaunchedEffect(Unit) {
+        homeViewModel.loadWards()
+    }
+
     // 권한 요청 다이얼로그 표시 여부
     var showPermissionDialog by remember { mutableStateOf(false) }
     var showOverlayDialog by remember { mutableStateOf(false) }

@@ -60,6 +60,7 @@ android {
         }
         jniLibs {
             pickFirsts += "**/libc++_shared.so"
+            useLegacyPackaging = true // [필수] DSP가 APK 내부 .so를 직접 읽을 수 없으므로 압축 해제 강제
         }
     }
 
@@ -126,6 +127,9 @@ dependencies {
     implementation(libs.androidx.constraintlayout)
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    
+    // ONNX Runtime for non-Qualcomm fallback
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.16.1")
 }
 
 

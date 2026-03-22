@@ -10,10 +10,14 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.s14p21a404.shutter.domain.repository.VideoCallRepository
 import com.s14p21a404.shutter.presentation.service.ForegroundAppMonitorService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 /**
  * 영상통화 상태 Repository 구현체
@@ -71,6 +75,12 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
         }
     }
 
+    // ── 포그라운드 앱 변경 관찰 (VoIP 영상통화 감지용) ──
+    private var foregroundObserverJob: kotlinx.coroutines.Job? = null
+    private val observerScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Main.immediate
+    )
+
     override fun observeVideoCallState(): Flow<Boolean> = _videoCallState.asStateFlow()
 
     override fun observeForegroundIsVideoCallApp(): Flow<Boolean> {
@@ -116,6 +126,9 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
 
         cameraManager.registerAvailabilityCallback(cameraCallback, null)
         Log.d(TAG, "CameraCallback 등록")
+
+        // VoIP 영상통화 앱 감지를 위한 포그라운드 앱 관찰 시작
+        startForegroundObserver()
     }
 
     override fun stopMonitoring() {
@@ -129,18 +142,25 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
         } catch (e: Exception) {
             Log.e(TAG, "CameraCallback 해제 실패", e)
         }
+        stopForegroundObserver()
         _videoCallState.value = false
         videoCallPackage = null
     }
 
     private fun evaluate() {
         val isOffhook = callState == TelephonyManager.CALL_STATE_OFFHOOK
-        val isVideoCall = isOffhook && isCameraBusy
+        // 1) 통신사 영상통화: 통화 중 + 카메라 사용
+        val isCarrierVideoCall = isOffhook && isCameraBusy
+
+        // 2) VoIP 영상통화: VoIP 앱이 포그라운드 + 카메라 사용 (통화 상태 무관)
+        val currentFg = ForegroundAppMonitorService.foregroundPackage.value
+        val isVoipVideoCall = !isOffhook && isCameraBusy && currentFg in VOIP_VIDEO_CALL_PACKAGES
+
+        val isVideoCall = isCarrierVideoCall || isVoipVideoCall
         _videoCallState.value = isVideoCall
 
         // 영상통화 감지 시 현재 포그라운드 앱을 영상통화 패키지로 기록
         if (isVideoCall && videoCallPackage == null) {
-            val currentFg = ForegroundAppMonitorService.foregroundPackage.value
             if (currentFg.isNotEmpty()) {
                 videoCallPackage = currentFg
                 Log.d(TAG, "영상통화 시작 시 포그라운드 패키지 자동 기록: $currentFg")
@@ -149,20 +169,49 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
             videoCallPackage = null
         }
 
-        Log.d(TAG, "영상통화 판단: offhook=$isOffhook, camera=$isCameraBusy → videoCall=$isVideoCall")
+        Log.d(TAG, "영상통화 판단: offhook=$isOffhook, camera=$isCameraBusy, fg=$currentFg, " +
+                "carrier=$isCarrierVideoCall, voip=$isVoipVideoCall → videoCall=$isVideoCall")
+    }
+
+    // ── VoIP 영상통화 앱 포그라운드 관찰 ──
+
+    /**
+     * 포그라운드 앱 변경을 관찰하여, VoIP 영상통화 앱이
+     * 포그라운드에 오거나 벗어날 때 evaluate()를 재호출한다.
+     */
+    private fun startForegroundObserver() {
+        if (foregroundObserverJob?.isActive == true) return
+        foregroundObserverJob = observerScope.launch {
+            ForegroundAppMonitorService.foregroundPackage.collect { pkg ->
+                Log.d(TAG, "VoIP 감지용 포그라운드 변경: $pkg")
+                evaluate()
+            }
+        }
+        Log.d(TAG, "VoIP 포그라운드 관찰 시작")
+    }
+
+    private fun stopForegroundObserver() {
+        foregroundObserverJob?.cancel()
+        foregroundObserverJob = null
+        Log.d(TAG, "VoIP 포그라운드 관찰 중단")
     }
 
     companion object {
         private const val TAG = "VideoCallRepo"
 
         /**
-         * 시스템 전화 UI 패키지들.
-         * 영상통화 중 시스템 InCallUI가 포그라운드인 경우에도
+         * VoIP 영상통화 앱 패키지 목록.
+         * 이 앱이 포그라운드 + 카메라 사용 중이면 VoIP 영상통화로 간주한다.
+         * (통신사 통화 상태와 무관하게 감지)
+         */
+        private val VOIP_VIDEO_CALL_PACKAGES = setOf(
+            "com.kakao.talk",                        // 카카오톡 (페이스톡)
+        )
+
+        /**
+         * 시스템 전화 UI 패키지들 + VoIP 영상통화 앱.
+         * 영상통화 중 이 패키지가 포그라운드인 경우에도
          * 영상통화 화면으로 간주한다.
-         *
-         * 주의: 카카오톡, WhatsApp 등 일반 앱은 여기에 넣지 않는다.
-         * 영상통화를 건 앱은 evaluate() 시점에 videoCallPackage로 자동 기록되므로
-         * 별도 등록 불필요. 여기에 넣으면 일반 채팅할 때도 오버레이가 뜬다.
          */
         private val VIDEO_CALL_RELATED_PACKAGES = setOf(
             "com.samsung.android.incallui",         // 삼성 전화 UI
@@ -171,6 +220,7 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
             "com.samsung.android.dialer",            // 삼성 전화 앱
             "com.android.dialer",                    // AOSP 전화 앱
             "com.samsung.android.vtcallplugin",      // 삼성 영상통화 플러그인
+            "com.kakao.talk",                        // 카카오톡 (페이스톡)
         )
 
         /**
