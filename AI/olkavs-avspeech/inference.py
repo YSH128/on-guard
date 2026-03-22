@@ -88,7 +88,7 @@ def infer(config, model, vocab, dataset, scores, sampler=None, device='cpu'):
 
     # define a criterion
     metric_ger = get_metric(vocab, config['script_path'], unit=config['tokenize_unit'], error_type='ger')
-    metric_cer = get_metric(vocab, config['script_path'], unit=config['tokenize_unit'], error_type='cer')
+    metric_cer = get_metric(vocab, 'output_korean.txt', unit=config['tokenize_unit'], error_type='cer')
     metric_wer = get_metric(vocab, config['script_path'], unit=config['tokenize_unit'], error_type='wer')
     metric_swer = get_metric(vocab, config['script_path'], unit=config['tokenize_unit'], error_type='swer')
     metrics = [metric_ger, metric_cer, metric_wer, metric_swer]
@@ -194,6 +194,7 @@ def main(args, loop=None):
     dataset = prepare_dataset(
         transcripts_path = config['transcripts_path_test'],
         vocab = vocab,
+        use_audio = False,   # 추가
         use_video = config['use_video'],
         raw_video = config['raw_video'],
         audio_transform_method = config['audio_transform_method'],
