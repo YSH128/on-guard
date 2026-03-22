@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" --max-time 5 https://j14a404.p.ssafy.io/)",
-      "Bash(\"/c/Program Files/Android/Android Studio/jbr/bin/keytool\" -exportcert -alias androiddebugkey -keystore \"/c/Users/SSAFY/.android/debug.keystore\" -storepass android -keypass android | openssl sha1 -binary | openssl base64)"
-    ]
-  }
-}
