@@ -121,8 +121,9 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
     private fun averageResults(results: List<DeepfakeDetectionResult>): DeepfakeDetectionResult {
         // detected: 과반수(5개 이상)가 true면 true
-        val avgFakeProb = results.map{ it.fakeProb }.average().toFloat()
+        val avgFakeProb = results.map { it.fakeProb }.average().toFloat()
         val detected = avgFakeProb > 0.5f
+
         // roi: null 아닌 것들의 평균
         val roiList = results.mapNotNull { it.roi }
         val avgRoi = if (roiList.isNotEmpty()) {
@@ -171,7 +172,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
                 val roi = if (roiArray != null && roiArray.length() == 4) {
                     FloatArray(4) { roiArray.getDouble(it).toFloat() }
                 } else null
-                return DeepfakeDetectionResult(detected = detected, roi = roi, rawResultJson = text)
+                return DeepfakeDetectionResult(detected = detected, fakeProb = fakeProb, roi = roi, rawResultJson = text)
             } catch (e: Exception) {
                 Log.w(TAG, "JSON 파싱 실패, 단순 텍스트로 시도: $text", e)
             }
