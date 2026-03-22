@@ -29,6 +29,7 @@ class BroadcastTriggerDetector(private val context: Context) : DeepfakeDetector 
 
     override fun startDetection(
         onResult: (DeepfakeDetectionResult) -> Unit,
+        onFrameResult: (DeepfakeDetectionResult) ->  Unit,
         onReady: () -> Unit
     ) {
         if (receiver != null) {

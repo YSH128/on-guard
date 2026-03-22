@@ -26,6 +26,7 @@ interface DeepfakeDetector {
      */
     fun startDetection(
         onResult: (DeepfakeDetectionResult) -> Unit,
+        onFrameResult: (DeepfakeDetectionResult) -> Unit = {},
         onReady: () -> Unit = {}
     )
 
