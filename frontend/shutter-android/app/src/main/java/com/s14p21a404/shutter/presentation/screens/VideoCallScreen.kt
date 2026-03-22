@@ -17,6 +17,12 @@ import androidx.core.content.ContextCompat
 import io.agora.rtc2.*
 import io.agora.rtc2.audio.AudioParams
 import io.agora.rtc2.video.VideoCanvas
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
+import okio.ByteString
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
@@ -131,6 +137,8 @@ fun VideoCallScreen(channelId: String) {
                     val wavFile = File(context.getExternalFilesDir(null), "remote_only.wav")
                     convertPcmToWav(pcmFile, wavFile, 44100, 1, 16)
                     pcmFile.delete()
+                    // WAV 파일 Jetson으로 전송
+                    sendWavToJetson(wavFile)
                 }
             }
 
@@ -178,6 +186,48 @@ fun VideoCallScreen(channelId: String) {
             )
         }
     }
+}
+
+private fun sendWavToJetson(wavFile: File) {
+    Thread {
+        try {
+            val client = OkHttpClient()
+            val request = Request.Builder()
+                .url("ws://116.43.199.143:8000/ws/stt")
+                .build()
+
+            val listener = object : WebSocketListener() {
+                override fun onOpen(webSocket: WebSocket, response: Response) {
+                    android.util.Log.d("WS", "✅ WebSocket 연결됨")
+                }
+
+                override fun onMessage(webSocket: WebSocket, text: String) {
+                    android.util.Log.d("WS", "서버 메시지 수신: $text")
+                    // 서버에서 첫 메시지 받으면 WAV 파일 전송
+                    val audioBytes = wavFile.readBytes()
+                    webSocket.send(ByteString.of(*audioBytes))
+                    android.util.Log.d("WS", "✅ WAV 전송 완료: ${audioBytes.size} bytes")
+                }
+
+                override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+                    android.util.Log.d("WS", "서버 바이너리 수신: ${bytes.size} bytes")
+                }
+
+                override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                    android.util.Log.e("WS", "❌ WebSocket 오류: ${t.message}")
+                }
+
+                override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                    android.util.Log.d("WS", "WebSocket 닫힘: $reason")
+                }
+            }
+
+            client.newWebSocket(request, listener)
+
+        } catch (e: Exception) {
+            android.util.Log.e("WS", "❌ 전송 실패: ${e.message}")
+        }
+    }.start()
 }
 
 private fun convertPcmToWav(pcmFile: File, wavFile: File, sampleRate: Int, channels: Int, bitDepth: Int) {
