@@ -9,5 +9,7 @@ interface AlertRepository {
         callStartedAt: String,
     ): Result<List<AlertSendItem>>
 
+    suspend fun sendLocationAlert(): Result<List<AlertSendItem>>
+
     suspend fun getTimeline(wardId: Long): Result<List<TimelineItem>>
 }

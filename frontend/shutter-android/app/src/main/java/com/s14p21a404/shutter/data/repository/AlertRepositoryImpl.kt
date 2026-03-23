@@ -21,6 +21,12 @@ class AlertRepositoryImpl(private val apiService: ApiService) : AlertRepository 
         response.data
     }
 
+    override suspend fun sendLocationAlert(): Result<List<AlertSendItem>> = runCatching {
+        val response = apiService.sendAlert(AlertSendRequest(eventType = "LOCATION"))
+        check(response.success) { response.message }
+        response.data
+    }
+
     override suspend fun getTimeline(wardId: Long): Result<List<TimelineItem>> = runCatching {
         val response = apiService.getTimeline(wardId)
         check(response.success) { response.message }
