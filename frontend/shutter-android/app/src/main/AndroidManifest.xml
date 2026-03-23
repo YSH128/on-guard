@@ -25,6 +25,12 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
 
+    <!-- 영상통화 관련 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
     
     <application
         android:name=".ShutterApplication"
