@@ -52,6 +52,11 @@ class ForegroundAppMonitorService : AccessibilityService() {
 
     private fun handleWindowStateChanged(event: AccessibilityEvent) {
         val pkg = event.packageName?.toString() ?: return
+
+        // 시스템 UI(볼륨 패널, 알림바, 네비게이션 바 등)는 포그라운드 앱 변경으로 취급하지 않는다.
+        // 볼륨 버튼, 알림 풀다운 등에 의해 영상통화 상태가 리셋되는 것을 방지.
+        if (pkg in IGNORED_SYSTEM_PACKAGES) return
+
         // Activity 전환만 추적 (팝업, 토스트 등 제외)
         val className = event.className?.toString() ?: return
         if (!className.contains("Activity", ignoreCase = true)
@@ -244,6 +249,22 @@ class ForegroundAppMonitorService : AccessibilityService() {
             "com.samsung.android.dialer",             // 삼성 전화 앱
             "com.android.dialer",                     // AOSP 전화 앱
             "com.samsung.android.vtcallplugin",       // 삼성 영상통화 플러그인
+        )
+
+        /**
+         * 포그라운드 앱 변경으로 취급하지 않는 시스템 패키지 목록.
+         * 볼륨 패널, 알림바, 키보드 등 시스템 오버레이 UI가 떠도
+         * 실제 앱 전환이 아니므로 영상통화 래치를 리셋하면 안 된다.
+         */
+        private val IGNORED_SYSTEM_PACKAGES = setOf(
+            "com.android.systemui",                   // 볼륨 패널, 알림바, 네비게이션 바
+            "com.samsung.android.systemui",           // 삼성 SystemUI
+            "com.samsung.android.app.cocktailbarservice", // 삼성 엣지 패널
+            "com.samsung.android.smartmirroring",     // 삼성 스마트미러링
+            "com.android.inputmethod.latin",          // AOSP 키보드
+            "com.samsung.android.honeyboard",         // 삼성 키보드
+            "com.google.android.inputmethod.latin",   // Gboard
+            "com.sec.android.inputmethod",            // 삼성 구 키보드
         )
     }
 }

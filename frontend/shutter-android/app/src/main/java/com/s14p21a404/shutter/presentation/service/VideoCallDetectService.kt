@@ -112,12 +112,32 @@ class VideoCallDetectService : Service() {
         // 영상통화 모니터링 시작
         videoCallRepository.startMonitoring()
 
+        // 오버레이 콜백 설정
+        warningOverlayManager.onEndCall = {
+            Log.d(TAG, "📞 전화 종료 요청 (오버레이)")
+            // 통화 종료 시도 — AccessibilityService 등으로 확장 가능
+            warningOverlayManager.dismissAll()
+            alertSoundManager.stopAlert()
+        }
+        warningOverlayManager.onRescan = {
+            Log.d(TAG, "🔄 재탐지 요청 (오버레이)")
+            warningOverlayManager.dismissAll()
+            isDeepfakeDetected = false
+            alertSoundManager.stopAlert()
+            financialBlockOverlayManager.setEnabled(false)
+            financialBlockOverlayManager.dismiss()
+            // 스캐닝 pill 다시 표시 + 감지 재시작
+            warningOverlayManager.showScanningPill()
+            monitorUseCase.startDetection()
+        }
+
         // 영상통화 상태 관찰 → 캡처·감지 자동 시작/중단 + 오버레이 enabled 제어
         serviceScope.launch {
             monitorUseCase.observeAndControl().collect { isVideoCall ->
                 Log.d(TAG, "영상통화 상태: $isVideoCall")
                 if (isVideoCall) {
                     warningOverlayManager.setEnabled(true)
+                    warningOverlayManager.showScanningPill() // 스캐닝 pill 표시
                     monitorUseCase.startDetection()
                     startForegroundAppMonitoring()
                 } else {
@@ -140,12 +160,19 @@ class VideoCallDetectService : Service() {
         serviceScope.launch {
             detectUseCase.observeResults().collect { result ->
                 Log.d(TAG, "📊 감지 결과: $result")
+
+                // 이미 딥페이크 감지된 세션이면 ROI box 위치만 갱신
+                if (isDeepfakeDetected) {
+                    warningOverlayManager.onDetectionResult(result)
+                    return@collect
+                }
+
                 val roiBitmap = if (result.detected && result.hasRoi) {
                     cropRoiBitmap(result)
                 } else null
                 warningOverlayManager.onDetectionResult(result, roiBitmap)
 
-                // 딥페이크 감지 상태에 따라 경고음 + 금융 앱 차단 오버레이 제어
+                // 딥페이크 최초 감지 시에만 경고음 + 금융 앱 차단 오버레이 제어
                 if (result.detected) {
                     isDeepfakeDetected = true
                     alertSoundManager.startAlert()
@@ -159,12 +186,6 @@ class VideoCallDetectService : Service() {
                         }
                     }
                     startGpsSendingIfEligible()
-                } else {
-                    isDeepfakeDetected = false
-                    alertSoundManager.stopAlert()
-                    financialBlockOverlayManager.setEnabled(false)
-                    financialBlockOverlayManager.dismiss()
-                    stopFinancialAppMonitoring()
                 }
             }
         }
