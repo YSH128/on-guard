@@ -38,9 +38,6 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
     private val _videoCallState = MutableStateFlow(false)
 
     @Volatile
-    private var callState: Int = TelephonyManager.CALL_STATE_IDLE
-
-    @Volatile
     private var isCameraBusy: Boolean = false
 
     /**
@@ -50,13 +47,14 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
     @Volatile
     private var videoCallPackage: String? = null
 
-    // ── 통화 상태 콜백 ──
+    // ── 통화 상태 콜백 (IDLE 감지 → 래치 리셋 전용) ──
     private val callStateCallback = object : TelephonyCallback(),
         TelephonyCallback.CallStateListener {
         override fun onCallStateChanged(state: Int) {
             Log.d(TAG, "통화 상태 변경: $state")
-            callState = state
-            evaluate()
+            if (state == TelephonyManager.CALL_STATE_IDLE) {
+                ForegroundAppMonitorService.resetCallConnected()
+            }
         }
     }
 
@@ -65,6 +63,8 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
         override fun onCameraAvailable(cameraId: String) {
             Log.d(TAG, "카메라 사용 가능: $cameraId")
             isCameraBusy = false
+            // 카메라 해제 = 영상통화 종료 가능성 → 래치 리셋
+            ForegroundAppMonitorService.resetCallConnected()
             evaluate()
         }
 
@@ -93,7 +93,7 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
                 // 포그라운드 패키지가 영상통화 패키지와 같거나,
                 // 시스템 전화 UI 패키지인 경우 true
                 val isOnVideoCallScreen = currentPkg == targetPkg
-                        || currentPkg in VIDEO_CALL_RELATED_PACKAGES
+                        || currentPkg in ForegroundAppMonitorService.CALL_UI_PACKAGES
                         || currentPkg.isEmpty()  // 아직 감지 전
                 Log.d(TAG, "포그라운드=$currentPkg, 영상통화앱=$targetPkg → onScreen=$isOnVideoCallScreen")
                 isOnVideoCallScreen
@@ -148,15 +148,16 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
     }
 
     private fun evaluate() {
-        val isOffhook = callState == TelephonyManager.CALL_STATE_OFFHOOK
-        // 1) 통신사 영상통화: 통화 중 + 카메라 사용
-        val isCarrierVideoCall = isOffhook && isCameraBusy
-
-        // 2) VoIP 영상통화: VoIP 앱이 포그라운드 + 카메라 사용 (통화 상태 무관)
         val currentFg = ForegroundAppMonitorService.foregroundPackage.value
-        val isVoipVideoCall = !isOffhook && isCameraBusy && currentFg in VOIP_VIDEO_CALL_PACKAGES
+        val isCallTimerVisible = ForegroundAppMonitorService.isCallConnected.value
 
-        val isVideoCall = isCarrierVideoCall || isVoipVideoCall
+        // 영상통화 판단: 카메라 사용 + 통화 UI 앱 포그라운드 + 타이머 텍스트 감지
+        // 통신사/VoIP 구분 없이 동일한 조건 사용.
+        // - 카메라: CameraManager.AvailabilityCallback
+        // - 통화 UI 앱: CALL_UI_PACKAGES에 포함된 앱이 포그라운드
+        // - 타이머: AccessibilityService가 View hierarchy에서 MM:SS 텍스트 감지 (래치)
+        val isOnCallScreen = currentFg in ForegroundAppMonitorService.CALL_UI_PACKAGES
+        val isVideoCall = isCameraBusy && isOnCallScreen && isCallTimerVisible
         _videoCallState.value = isVideoCall
 
         // 영상통화 감지 시 현재 포그라운드 앱을 영상통화 패키지로 기록
@@ -169,25 +170,38 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
             videoCallPackage = null
         }
 
-        Log.d(TAG, "영상통화 판단: offhook=$isOffhook, camera=$isCameraBusy, fg=$currentFg, " +
-                "carrier=$isCarrierVideoCall, voip=$isVoipVideoCall → videoCall=$isVideoCall")
+        Log.d(TAG, "영상통화 판단: camera=$isCameraBusy, fg=$currentFg, " +
+                "onCallScreen=$isOnCallScreen, timerVisible=$isCallTimerVisible → videoCall=$isVideoCall")
     }
 
     // ── VoIP 영상통화 앱 포그라운드 관찰 ──
 
     /**
-     * 포그라운드 앱 변경을 관찰하여, VoIP 영상통화 앱이
-     * 포그라운드에 오거나 벗어날 때 evaluate()를 재호출한다.
+     * 포그라운드 앱 변경 및 통화 연결 상태 변경을 관찰하여,
+     * VoIP 영상통화 앱이 포그라운드에 오거나 벗어날 때,
+     * 또는 통화가 실제 연결/해제될 때 evaluate()를 재호출한다.
      */
     private fun startForegroundObserver() {
         if (foregroundObserverJob?.isActive == true) return
         foregroundObserverJob = observerScope.launch {
-            ForegroundAppMonitorService.foregroundPackage.collect { pkg ->
-                Log.d(TAG, "VoIP 감지용 포그라운드 변경: $pkg")
-                evaluate()
+            // 포그라운드 앱 변경 관찰
+            // (StateFlow는 자체적으로 distinctUntilChanged를 보장하므로 중복 emit 없음)
+            launch {
+                ForegroundAppMonitorService.foregroundPackage.collect { pkg ->
+                    Log.d(TAG, "VoIP 감지용 포그라운드 변경: $pkg")
+                    evaluate()
+                }
+            }
+            // AccessibilityService의 통화 연결 상태 관찰
+            // (StateFlow — 값이 실제로 바뀔 때만 collect 콜백 호출)
+            launch {
+                ForegroundAppMonitorService.isCallConnected.collect { connected ->
+                    Log.d(TAG, "VoIP 감지용 통화 연결 상태 변경: $connected")
+                    evaluate()
+                }
             }
         }
-        Log.d(TAG, "VoIP 포그라운드 관찰 시작")
+        Log.d(TAG, "VoIP 포그라운드 + 통화 연결 관찰 시작")
     }
 
     private fun stopForegroundObserver() {
@@ -198,30 +212,6 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
 
     companion object {
         private const val TAG = "VideoCallRepo"
-
-        /**
-         * VoIP 영상통화 앱 패키지 목록.
-         * 이 앱이 포그라운드 + 카메라 사용 중이면 VoIP 영상통화로 간주한다.
-         * (통신사 통화 상태와 무관하게 감지)
-         */
-        private val VOIP_VIDEO_CALL_PACKAGES = setOf(
-            "com.kakao.talk",                        // 카카오톡 (페이스톡)
-        )
-
-        /**
-         * 시스템 전화 UI 패키지들 + VoIP 영상통화 앱.
-         * 영상통화 중 이 패키지가 포그라운드인 경우에도
-         * 영상통화 화면으로 간주한다.
-         */
-        private val VIDEO_CALL_RELATED_PACKAGES = setOf(
-            "com.samsung.android.incallui",         // 삼성 전화 UI
-            "com.android.incallui",                  // AOSP 전화 UI
-            "com.google.android.dialer",             // Google 전화 앱
-            "com.samsung.android.dialer",            // 삼성 전화 앱
-            "com.android.dialer",                    // AOSP 전화 앱
-            "com.samsung.android.vtcallplugin",      // 삼성 영상통화 플러그인
-            "com.kakao.talk",                        // 카카오톡 (페이스톡)
-        )
 
         /**
          * 금융 앱 패키지 목록.
