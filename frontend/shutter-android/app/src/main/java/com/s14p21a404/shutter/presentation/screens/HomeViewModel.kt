@@ -50,7 +50,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         Log.w(TAG, "내 프로필 조회 실패", error)
                         cont.resume(Unit)
                     } else {
-                        _myName.value = user?.kakaoAccount?.profile?.nickname ?: ""
+                        _myName.value = user?.id?.toString() ?: ""
                         Log.d(TAG, "내 이름: ${_myName.value}")
                         cont.resume(Unit)
                     }

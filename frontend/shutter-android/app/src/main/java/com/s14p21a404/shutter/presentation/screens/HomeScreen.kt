@@ -144,7 +144,12 @@ fun HomeScreen(
                         FriendItem(
                             name = friend.name,
                             onVideoCall = {
-                                onNavigateToVideoCall("testchannel123")  // 임시로 고정
+                                val myName = homeViewModel.getMyName()
+                                val channelId = listOf(myName, friend.id.toString())
+                                    .sorted()
+                                    .joinToString("_")
+                                android.util.Log.d("Channel", "채널명: $channelId")
+                                onNavigateToVideoCall(channelId)
                             }
                         )
                     }
