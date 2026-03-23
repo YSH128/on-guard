@@ -33,7 +33,9 @@ public enum ErrorCode {
     INVALID_REQUEST(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "잘못된 요청입니다."),
 
     // 알림 관련
-    FCM_SEND_FAILED(HttpStatus.BAD_GATEWAY, "FCM_SEND_FAILED", "푸시 알림 전송에 실패했습니다."),
+    FCM_SEND_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "FCM_SEND_FAILED", "푸시 알림 전송에 실패했습니다."),
+    NO_GUARDIANS_REGISTERED(HttpStatus.NOT_FOUND, "NO_GUARDIANS_REGISTERED", "알림을 보낼 보호자가 등록되어 있지 않습니다."),
+    KAKAO_PUSH_CONFIG_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "KAKAO_PUSH_CONFIG_ERROR", "카카오 푸시 설정이 올바르지 않습니다."),
 
     // 서버 관련
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "서버 오류가 발생했습니다.");
