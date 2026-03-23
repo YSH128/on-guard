@@ -38,9 +38,6 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
     private val _videoCallState = MutableStateFlow(false)
 
     @Volatile
-    private var callState: Int = TelephonyManager.CALL_STATE_IDLE
-
-    @Volatile
     private var isCameraBusy: Boolean = false
 
     /**
@@ -50,17 +47,14 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
     @Volatile
     private var videoCallPackage: String? = null
 
-    // ── 통화 상태 콜백 ──
+    // ── 통화 상태 콜백 (IDLE 감지 → 래치 리셋 전용) ──
     private val callStateCallback = object : TelephonyCallback(),
         TelephonyCallback.CallStateListener {
         override fun onCallStateChanged(state: Int) {
             Log.d(TAG, "통화 상태 변경: $state")
-            callState = state
-            // 통화 종료(IDLE) 시 통화 연결 래치 리셋
             if (state == TelephonyManager.CALL_STATE_IDLE) {
                 ForegroundAppMonitorService.resetCallConnected()
             }
-            evaluate()
         }
     }
 
@@ -99,7 +93,7 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
                 // 포그라운드 패키지가 영상통화 패키지와 같거나,
                 // 시스템 전화 UI 패키지인 경우 true
                 val isOnVideoCallScreen = currentPkg == targetPkg
-                        || currentPkg in VIDEO_CALL_RELATED_PACKAGES
+                        || currentPkg in ALL_VIDEO_CALL_PACKAGES
                         || currentPkg.isEmpty()  // 아직 감지 전
                 Log.d(TAG, "포그라운드=$currentPkg, 영상통화앱=$targetPkg → onScreen=$isOnVideoCallScreen")
                 isOnVideoCallScreen
@@ -154,20 +148,16 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
     }
 
     private fun evaluate() {
-        val isOffhook = callState == TelephonyManager.CALL_STATE_OFFHOOK
         val currentFg = ForegroundAppMonitorService.foregroundPackage.value
-        val isAccessibilityCallConnected = ForegroundAppMonitorService.isCallConnected.value
+        val isCallTimerVisible = ForegroundAppMonitorService.isCallConnected.value
 
-        // 1) 통신사 영상통화: 통화 중 + 카메라 사용 + UI에서 통화 연결 확인
-        //    OFFHOOK은 발신 즉시 발생하므로, AccessibilityService의 타이머/텍스트 감지로
-        //    상대방이 실제로 수신한 뒤(통화 시간 표시)에만 영상통화로 확정한다.
-        val isCarrierVideoCall = isOffhook && isCameraBusy && isAccessibilityCallConnected
-
-        // 2) VoIP 영상통화: VoIP 앱이 포그라운드 + 카메라 사용 + UI에서 통화 연결 확인
-        val isVoipApp = currentFg in VOIP_VIDEO_CALL_PACKAGES
-        val isVoipVideoCall = !isOffhook && isCameraBusy && isVoipApp && isAccessibilityCallConnected
-
-        val isVideoCall = isCarrierVideoCall || isVoipVideoCall
+        // 영상통화 판단: 카메라 사용 + 통화 UI 앱 포그라운드 + 타이머 텍스트 감지
+        // 통신사/VoIP 구분 없이 동일한 조건 사용.
+        // - 카메라: CameraManager.AvailabilityCallback
+        // - 통화 UI 앱: CALL_UI_PACKAGES에 포함된 앱이 포그라운드
+        // - 타이머: AccessibilityService가 View hierarchy에서 MM:SS 텍스트 감지 (래치)
+        val isOnCallScreen = currentFg in ALL_VIDEO_CALL_PACKAGES
+        val isVideoCall = isCameraBusy && isOnCallScreen && isCallTimerVisible
         _videoCallState.value = isVideoCall
 
         // 영상통화 감지 시 현재 포그라운드 앱을 영상통화 패키지로 기록
@@ -180,9 +170,8 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
             videoCallPackage = null
         }
 
-        Log.d(TAG, "영상통화 판단: offhook=$isOffhook, camera=$isCameraBusy, fg=$currentFg, " +
-                "callConnected=$isAccessibilityCallConnected, " +
-                "carrier=$isCarrierVideoCall, voip=$isVoipVideoCall → videoCall=$isVideoCall")
+        Log.d(TAG, "영상통화 판단: camera=$isCameraBusy, fg=$currentFg, " +
+                "onCallScreen=$isOnCallScreen, timerVisible=$isCallTimerVisible → videoCall=$isVideoCall")
     }
 
     // ── VoIP 영상통화 앱 포그라운드 관찰 ──
@@ -225,27 +214,30 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
         private const val TAG = "VideoCallRepo"
 
         /**
-         * VoIP 영상통화 앱 패키지 목록.
-         * 이 앱이 포그라운드 + 카메라 사용 중이면 VoIP 영상통화로 간주한다.
-         * (통신사 통화 상태와 무관하게 감지)
+         * 영상통화 관련 패키지 목록 (통신사 + VoIP 통합).
+         * 이 패키지가 포그라운드 + 카메라 사용 + 타이머 감지 시 영상통화로 판단한다.
+         * 오버레이 표시 여부 판단에도 사용된다.
          */
-        private val VOIP_VIDEO_CALL_PACKAGES = setOf(
+        private val ALL_VIDEO_CALL_PACKAGES = setOf(
+            // ── VoIP 영상통화 앱 ──
             "com.kakao.talk",                        // 카카오톡 (페이스톡)
-        )
-
-        /**
-         * 시스템 전화 UI 패키지들 + VoIP 영상통화 앱.
-         * 영상통화 중 이 패키지가 포그라운드인 경우에도
-         * 영상통화 화면으로 간주한다.
-         */
-        private val VIDEO_CALL_RELATED_PACKAGES = setOf(
-            "com.samsung.android.incallui",         // 삼성 전화 UI
-            "com.android.incallui",                  // AOSP 전화 UI
-            "com.google.android.dialer",             // Google 전화 앱
-            "com.samsung.android.dialer",            // 삼성 전화 앱
-            "com.android.dialer",                    // AOSP 전화 앱
-            "com.samsung.android.vtcallplugin",      // 삼성 영상통화 플러그인
-            "com.kakao.talk",                        // 카카오톡 (페이스톡)
+            "jp.naver.line.android",                  // 라인
+            "com.whatsapp",                           // WhatsApp
+            "org.telegram.messenger",                 // 텔레그램
+            "com.facebook.orca",                      // 페이스북 메신저
+            "com.google.android.apps.tachyon",        // Google Duo/Meet
+            "com.google.android.apps.meetings",       // Google Meet
+            "us.zoom.videomeetings",                  // Zoom
+            "com.microsoft.teams",                    // Microsoft Teams
+            "com.discord",                            // Discord
+            "com.skype.raider",                       // Skype
+            // ── 시스템 전화 UI ──
+            "com.samsung.android.incallui",           // 삼성 전화 UI
+            "com.android.incallui",                   // AOSP 전화 UI
+            "com.google.android.dialer",              // Google 전화 앱
+            "com.samsung.android.dialer",             // 삼성 전화 앱
+            "com.android.dialer",                     // AOSP 전화 앱
+            "com.samsung.android.vtcallplugin",       // 삼성 영상통화 플러그인
         )
 
         /**
