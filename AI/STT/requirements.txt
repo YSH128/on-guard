@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+websockets
+python-dotenv
+httpx
+numpy<2
+sherpa-onnx
