@@ -35,15 +35,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// ── 타임라인 UI 모델 ──
+// ── 타임라인 데이터 모델 ──
 
-private data class TimelineUiItem(
+private data class TimelineItem(
     val id: Int,
     val time: String,
     val badge: String,
     val badgeColor: Color,
-    val type: String,           // "message" | "location"
-    val personLabel: String? = null,
+    val type: String, // "message", "alert", "location"
+    val personLabel: String? = null, // "to. 김철수" or "from. 정민수"
     val isLatest: Boolean = false,
     val title: String? = null,
     val description: String,
@@ -52,44 +52,45 @@ private data class TimelineUiItem(
     val status: String? = null,
 )
 
-// ── API → UI 모델 변환 ──
-
-private fun TimelineEntry.toUiItem(index: Int, isLatest: Boolean): TimelineUiItem {
-    val time = item.timestamp.take(16).drop(11) // "HH:mm"
-    return when (item.type) {
-        "MESSAGE" -> TimelineUiItem(
-            id = index,
-            time = time,
-            badge = item.tag,
-            badgeColor = Color(0xFF4A6CF7),
-            type = "message",
-            personLabel = item.toName?.let { "to. $it" },
-            isLatest = isLatest,
-            title = "[SHUTTER 긴급알림]",
-            description = "${wardName}님이 딥페이크 의심 통화 중입니다.",
-            details = buildList {
-                item.callStartedAt?.let {
-                    add("• 통화 시작시각: ${it.take(16).drop(11)}")
-                }
-                item.caller?.let {
-                    add("• 발신자: $it")
-                }
-            }.ifEmpty { null },
-            footer = "즉시 연락해 주세요.",
-            status = if (item.status == "SUCCESS") "문자 발송 완료" else "문자 발송 실패",
-        )
-        else -> TimelineUiItem( // LOCATION
-            id = index,
-            time = time,
-            badge = item.tag,
-            badgeColor = Color(0xFF22C55E),
-            type = "location",
-            personLabel = "from. $wardName",
-            isLatest = isLatest,
-            description = "AI 딥페이크 감지로 위치 정보를 공유합니다.",
-        )
-    }
-}
+private val sampleTimeline = listOf(
+    TimelineItem(
+        id = 1,
+        time = "14:34",
+        badge = "자동 발송",
+        badgeColor = Color(0xFF4A6CF7),
+        type = "message",
+        personLabel = "to. 김철수",
+        isLatest = true,
+        title = "[Shutter 긴급알림]",
+        description = "김싸피님이 딥페이크 의심 통화 중입니다.",
+        details = listOf(
+            "• 통화 시작시각: 14:32",
+            "• 발신자: 알 수 없음 (발신자 제한 번호)",
+        ),
+        footer = "즉시 연락해 주세요.",
+        status = "문자 발송 완료",
+    ),
+    TimelineItem(
+        id = 2,
+        time = "14:33",
+        badge = "위험 감지",
+        badgeColor = Color(0xFFEF4444),
+        type = "alert",
+        isLatest = false,
+        title = "높은 위험 감지",
+        description = "AI 딥페이크 감지로 자동 알림이 발송되었습니다.",
+    ),
+    TimelineItem(
+        id = 3,
+        time = "14:33",
+        badge = "위치 공유",
+        badgeColor = Color(0xFF22C55E),
+        type = "location",
+        personLabel = "from. 정민수",
+        isLatest = false,
+        description = "AI 딥페이크 감지로 위치 정보를 공유합니다.",
+    ),
+)
 
 // ── 색상 상수 ──
 
@@ -110,10 +111,6 @@ private val ChipUnselectedBg = Color.White
 private val ChipUnselectedText = Color(0xFF9CA3AF)
 
 
-/**
- * 홈 화면 — 참고 프로젝트 디자인 1:1 구현.
- * 첫 접속 시 권한이 없으면 권한 요청 다이얼로그를 표시한다.
- */
 @Composable
 fun HomeScreen(
     isServiceRunning: Boolean,
@@ -124,37 +121,32 @@ fun HomeScreen(
     onRequestPermissions: () -> Unit = {},
     onRequestOverlayPermission: () -> Unit = {},
     onRequestAccessibilityPermission: () -> Unit = {},
+    onNavigateToVideoCall: (String) -> Unit = {},  // ← 추가
     homeViewModel: HomeViewModel = viewModel(),
 ) {
     val scrollState = rememberScrollState()
     val homeUiState by homeViewModel.uiState.collectAsState()
 
-    // 화면 진입마다 피보호자 목록 새로고침
     LaunchedEffect(Unit) {
         homeViewModel.loadWards()
     }
 
-    // 권한 요청 다이얼로그 표시 여부
     var showPermissionDialog by remember { mutableStateOf(false) }
     var showOverlayDialog by remember { mutableStateOf(false) }
     var showAccessibilityDialog by remember { mutableStateOf(false) }
 
-    // 순서: 런타임 권한 → 오버레이 → MediaProjection(서비스 시작) → 접근성
     LaunchedEffect(allPermissionsGranted, overlayPermissionGranted, accessibilityServiceEnabled, isServiceRunning) {
         if (!allPermissionsGranted) {
             showPermissionDialog = true
         } else if (!overlayPermissionGranted) {
             showOverlayDialog = true
         } else if (!isServiceRunning) {
-            // 런타임 + 오버레이 충족 → MediaProjection 동의 (서비스 시작)
             onToggleService()
         } else if (!accessibilityServiceEnabled) {
-            // 서비스 실행 후 접근성 미활성 → 접근성 다이얼로그
             showAccessibilityDialog = true
         }
     }
 
-    // ── 런타임 권한 요청 다이얼로그 (전화 상태, 알림, 위치) ──
     if (showPermissionDialog) {
         AlertDialog(
             onDismissRequest = { /* 닫기 방지 */ },
@@ -173,7 +165,6 @@ fun HomeScreen(
         )
     }
 
-    // ── 오버레이 권한 요청 다이얼로그 ──
     if (showOverlayDialog && allPermissionsGranted) {
         AlertDialog(
             onDismissRequest = { /* 닫기 방지 */ },
@@ -192,7 +183,6 @@ fun HomeScreen(
         )
     }
 
-    // ── 접근성 서비스 활성화 요청 다이얼로그 ──
     if (showAccessibilityDialog && allPermissionsGranted && overlayPermissionGranted && isServiceRunning) {
         AlertDialog(
             onDismissRequest = { /* 닫기 방지 */ },
@@ -220,13 +210,21 @@ fun HomeScreen(
         // ── 상단 그라데이션 헤더 ──
         HeaderSection(isServiceRunning = isServiceRunning, onToggleService = onToggleService)
 
+        // ── 영상통화 버튼 ──  ← 추가
+        Button(
+            onClick = { onNavigateToVideoCall("testchannel123") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+        ) {
+            Text("영상통화 시작")
+        }
+
         // ── 알림 타임라인 ──
         TimelineSection(
-            wardFilters = homeUiState.wardFilters,
+            filterNames = homeUiState.filterNames,
             selectedFilter = homeUiState.selectedFilter,
             onSelectFilter = { homeViewModel.selectFilter(it) },
-            timelineEntries = homeUiState.timelineEntries,
-            isLoading = homeUiState.isLoading,
         )
     }
 }
@@ -260,7 +258,6 @@ private fun HeaderSection(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // 로고
                 Text(
                     text = "Shutter",
                     fontSize = 20.sp,
@@ -271,7 +268,6 @@ private fun HeaderSection(
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // 방패 아이콘 원형 (표시 전용)
                 Box(
                     modifier = Modifier
                         .size(144.dp)
@@ -284,7 +280,6 @@ private fun HeaderSection(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    // 안쪽 원 (더 밝은 그라데이션)
                     Box(
                         modifier = Modifier
                             .size(96.dp)
@@ -307,8 +302,6 @@ private fun HeaderSection(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // 상태 뱃지 — 보호 시작/중지 기능
-                // Pulse 애니메이션 (서비스 실행 중일 때만)
                 val infiniteTransition = rememberInfiniteTransition(label = "homePulse")
                 val pulseAlpha by infiniteTransition.animateFloat(
                     initialValue = 0.55f, targetValue = 0.55f,
@@ -339,13 +332,11 @@ private fun HeaderSection(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         val dotColor = if (isServiceRunning) StatusGreen else Color(0xFFEF4444)
-                        // 고정 크기 Box로 감싸서 레이아웃 흔들림 방지
                         Box(
                             modifier = Modifier.size(16.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             if (isServiceRunning) {
-                                // Pulse ring
                                 Box(
                                     modifier = Modifier
                                         .size((8 + pulseRadius * 2).dp)
@@ -353,7 +344,6 @@ private fun HeaderSection(
                                         .background(dotColor.copy(alpha = pulseAlpha))
                                 )
                             }
-                            // Core dot
                             Box(
                                 modifier = Modifier
                                     .size(8.dp)
@@ -381,11 +371,9 @@ private fun HeaderSection(
 
 @Composable
 private fun TimelineSection(
-    wardFilters: List<WardFilter>,
+    filterNames: List<String>,
     selectedFilter: String,
     onSelectFilter: (String) -> Unit,
-    timelineEntries: List<TimelineEntry>,
-    isLoading: Boolean,
 ) {
     Column(
         modifier = Modifier
@@ -401,54 +389,29 @@ private fun TimelineSection(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // 피보호자 이름 필터 칩 가로 스크롤
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(wardFilters) { filter ->
+            items(filterNames) { name ->
                 FilterChip(
-                    text = filter.name,
-                    selected = selectedFilter == filter.name,
-                    onClick = { onSelectFilter(filter.name) }
+                    text = name,
+                    selected = selectedFilter == name,
+                    onClick = { onSelectFilter(name) }
                 )
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        when {
-            isLoading -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 40.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = ChipSelectedBg)
-                }
-            }
-            timelineEntries.isEmpty() -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 40.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "알림 내역이 없습니다.",
-                        fontSize = 14.sp,
-                        color = TextSecondary,
-                    )
-                }
-            }
-            else -> {
-                val uiItems = timelineEntries.mapIndexed { index, entry ->
-                    entry.toUiItem(index, isLatest = index == 0)
-                }
-                uiItems.forEachIndexed { index, item ->
-                    TimelineRow(item = item, isLast = index == uiItems.lastIndex)
-                }
-            }
+        // 필터링된 타임라인
+        val filtered = if (selectedFilter == "전체") {
+            sampleTimeline
+        } else {
+            sampleTimeline.filter { it.personLabel?.contains(selectedFilter) == true }
+        }
+
+        filtered.forEachIndexed { index, item ->
+            TimelineRow(item = item, isLast = index == filtered.lastIndex)
         }
     }
 }
@@ -477,19 +440,17 @@ private fun FilterChip(
 }
 
 @Composable
-private fun TimelineRow(item: TimelineUiItem, isLast: Boolean) {
+private fun TimelineRow(item: TimelineItem, isLast: Boolean) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
     ) {
-        // 타임라인 왼쪽 (점 + 선)
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.width(28.dp)
         ) {
             Spacer(modifier = Modifier.height(6.dp))
-            // 점
             Box(
                 modifier = Modifier
                     .size(16.dp)
@@ -505,7 +466,6 @@ private fun TimelineRow(item: TimelineUiItem, isLast: Boolean) {
                         .background(if (item.isLatest) DotActive else DotInactive)
                 )
             }
-            // 세로 선 — 점 하단부터 남은 공간 끝까지 (다음 점 상단과 이어짐)
             if (!isLast) {
                 Box(
                     modifier = Modifier
@@ -518,9 +478,7 @@ private fun TimelineRow(item: TimelineUiItem, isLast: Boolean) {
 
         Spacer(modifier = Modifier.width(8.dp))
 
-        // 타임라인 오른쪽 (시간+뱃지 → 카드)
         Column(modifier = Modifier.weight(1f)) {
-            // 시간 (왼쪽) + 뱃지 (오른쪽 끝)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
@@ -536,10 +494,10 @@ private fun TimelineRow(item: TimelineUiItem, isLast: Boolean) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 카드
             when (item.type) {
                 "message" -> MessageCard(item)
-                else -> LocationCard(item)
+                "alert" -> AlertCard(item)
+                "location" -> LocationCard(item)
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -547,10 +505,8 @@ private fun TimelineRow(item: TimelineUiItem, isLast: Boolean) {
     }
 }
 
-// ── 카드: 문자 발송 ──
-
 @Composable
-private fun MessageCard(item: TimelineUiItem) {
+private fun MessageCard(item: TimelineItem) {
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = CardBg),
@@ -558,9 +514,7 @@ private fun MessageCard(item: TimelineUiItem) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Box(modifier = Modifier.padding(16.dp)) {
-
             Column {
-                // 수신자
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
@@ -591,7 +545,6 @@ private fun MessageCard(item: TimelineUiItem) {
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // 문자 내용 박스
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -614,7 +567,6 @@ private fun MessageCard(item: TimelineUiItem) {
                     }
                 }
 
-                // 상태
                 item.status?.let {
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -633,10 +585,10 @@ private fun MessageCard(item: TimelineUiItem) {
     }
 }
 
-// ── 카드: 위치 공유 ──
+// ── 카드: 위험 감지 ──
 
 @Composable
-private fun LocationCard(item: TimelineUiItem) {
+private fun AlertCard(item: TimelineItem) {
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = CardBg),
@@ -645,6 +597,61 @@ private fun LocationCard(item: TimelineUiItem) {
     ) {
         Box(modifier = Modifier.padding(16.dp)) {
 
+            Row {
+                // 경고 아이콘
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFFEE2E2)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFEF4444)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "!",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column {
+                    item.title?.let {
+                        Text(
+                            text = it,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFFEF4444)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                    Text(text = item.description, fontSize = 14.sp, color = TextPrimary)
+                }
+            }
+        }
+    }
+}
+
+// ── 카드: 위치 공유 ──
+
+@Composable
+private fun LocationCard(item: TimelineItem) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = CardBg),
+        elevation = CardDefaults.cardElevation(1.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Box(modifier = Modifier.padding(16.dp)) {
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
@@ -676,8 +683,6 @@ private fun LocationCard(item: TimelineUiItem) {
         }
     }
 }
-
-// ── 공통: 뱃지 ──
 
 @Composable
 private fun Badge(text: String, color: Color, modifier: Modifier = Modifier) {

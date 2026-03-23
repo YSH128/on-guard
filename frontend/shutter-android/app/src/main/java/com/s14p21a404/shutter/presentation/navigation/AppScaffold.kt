@@ -41,6 +41,8 @@ import com.s14p21a404.shutter.presentation.screens.HomeScreen
 import com.s14p21a404.shutter.presentation.screens.LocationScreen
 import com.s14p21a404.shutter.presentation.screens.SettingsScreen
 
+import com.s14p21a404.shutter.presentation.screens.VideoCallScreen
+
 /**
  * 하단 네비게이션 탭 정의
  */
@@ -82,7 +84,8 @@ fun AppScaffold(
     val currentDestination = navBackStackEntry?.destination
 
     // 보호자 등록 화면에서는 하단 바를 숨김
-    val showBottomBar = currentDestination?.route != Screen.GuardianRegistration.route
+    val showBottomBar = currentDestination?.route != Screen.GuardianRegistration.route 
+    && currentDestination?.route != Screen.VideoCall.route
 
     // 보호자 등록 성공 시 SettingsScreen 목록을 갱신하기 위한 키
     var settingsRefreshKey by rememberSaveable { mutableIntStateOf(0) }
@@ -106,6 +109,9 @@ fun AppScaffold(
                     onRequestPermissions = onRequestPermissions,
                     onRequestOverlayPermission = onRequestOverlayPermission,
                     onRequestAccessibilityPermission = onRequestAccessibilityPermission,
+                    onNavigateToVideoCall = { channelId ->
+            navController.navigate(Screen.VideoCall.createRoute(channelId))
+        },
                 )
             }
             composable(Screen.Location.route) {
@@ -128,6 +134,10 @@ fun AppScaffold(
                         navController.popBackStack()
                     },
                 )
+            }
+            composable(Screen.VideoCall.route) { backStackEntry ->
+                val channelId = backStackEntry.arguments?.getString("channelId") ?: ""
+                VideoCallScreen(channelId = channelId)
             }
         }
 

@@ -91,6 +91,7 @@ android {
 }
 
 dependencies {
+    implementation("io.agora.rtc:full-sdk:4.3.0")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)

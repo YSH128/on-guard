@@ -29,6 +29,7 @@ public class SecurityConfig {
                         // 인증 없이 허용
                         .requestMatchers(
                                 "/api/v1/auth/**",
+                                "/api/v1/test/**",
                                 "/api/v1/telemetry/**",
                                 "/api/v1/ws/gps",
                                 "/api/v1/ws/gps/**",

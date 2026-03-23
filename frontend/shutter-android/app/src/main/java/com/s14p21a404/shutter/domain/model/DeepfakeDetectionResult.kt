@@ -16,6 +16,7 @@ package com.s14p21a404.shutter.domain.model
  */
 data class DeepfakeDetectionResult(
     val detected: Boolean,
+    val fakeProb: Float = 0f,
     val roi: FloatArray? = null,       // [minX, minY, maxX, maxY] 상대좌표, 미검출 시 null
     val timestamp: Long = System.currentTimeMillis(),
     val rawResultJson: String? = null  // NDK로부터 받은 전체 JSON (텔레메트리용 추가 필드 포함)
@@ -31,19 +32,21 @@ data class DeepfakeDetectionResult(
         if (this === other) return true
         if (other !is DeepfakeDetectionResult) return false
         return detected == other.detected
+                && fakeProb == other.fakeProb
                 && roi.contentEqualsNullable(other.roi)
                 && timestamp == other.timestamp
     }
 
     override fun hashCode(): Int {
         var result = detected.hashCode()
+        result = 31 * result + fakeProb.hashCode()
         result = 31 * result + (roi?.contentHashCode() ?: 0)
         result = 31 * result + timestamp.hashCode()
         return result
     }
 
     override fun toString(): String {
-        return "DeepfakeDetectionResult(detected=$detected, roi=${roi?.contentToString()}, timestamp=$timestamp)"
+        return "DeepfakeDetectionResult(detected=$detected, fakeProb=$fakeProb, roi=${roi?.contentToString()}, timestamp=$timestamp)"
     }
 }
 
