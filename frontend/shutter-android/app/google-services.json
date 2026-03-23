@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "835898140511",
+    "project_id": "shutter-dce53",
+    "storage_bucket": "shutter-dce53.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:835898140511:android:fda6f7f803da80365438ea",
+        "android_client_info": {
+          "package_name": "com.s14p21a404.shutter"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD1kbONoj5hh2BuSDcRLGismX8z8kko0Og"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
