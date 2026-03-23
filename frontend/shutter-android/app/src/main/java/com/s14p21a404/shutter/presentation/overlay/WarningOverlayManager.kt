@@ -4,39 +4,57 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.PixelFormat
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
-import android.widget.*
 import com.s14p21a404.shutter.domain.model.DeepfakeDetectionResult
-import kotlin.math.roundToInt
 
+/**
+ * 딥페이크 감지 경고 오버레이 매니저.
+ *
+ * 3가지 독립 오버레이를 관리한다:
+ * 1) **Scanning Pill** — "Shutter 감지 중•••" 스캐닝 상태 pill 배지 (터치 통과)
+ * 2) **ROI Bounding Box** — 감지된 얼굴 ROI에 노란 border + 스캔 라인 + confidence 배지 (터치 통과)
+ * 3) **Warning Bottom Sheet** — 흰색 바텀시트 모달 (전화 종료 / 재탐지 버튼, 터치 가능)
+ */
 class WarningOverlayManager(private val context: Context) {
 
     private val windowManager =
         context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    private val handler = Handler(Looper.getMainLooper())
 
-    /** 관리 중인 모든 윈도우 */
-    private val overlayViews = mutableListOf<View>()
+    // ── 오버레이 뷰 참조 ──
+    private var scanningPillView: ScanningPillView? = null
+    private var roiBoundingBoxView: RoiBoundingBoxView? = null
+    private var bottomSheetView: WarningBottomSheetView? = null
 
-    private var facePreviewImageView: ImageView? = null
+    // 바텀시트 뒤 반투명 dim
+    private var dimBackgroundView: View? = null
 
-    /** 오버레이 활성화 여부 — false이면 show() 호출을 무시한다. */
+    /** 오버레이 활성화 여부 — false이면 show 호출을 무시한다. */
     @Volatile
     private var enabled = false
 
-    /** 상단 오버레이 높이 비율 */
-    private val topRatio = 0.78f
+    /** 현재 감지 결과 (복원용) */
+    private var lastResult: DeepfakeDetectionResult? = null
 
-    /** 하단 hole 위치/크기 (하단 윈도우 내 비율) */
-    private val holeCenterXRatio = 0.5f
-    private val holeCenterYRatio = 0.55f
-    private val holeRadiusRatio = 0.1f
+    /**
+     * 현재 세션에서 바텀시트가 이미 한 번 표시되었는지 여부.
+     * true이면 이후 감지 결과에서 바텀시트를 다시 표시하지 않고, ROI box만 업데이트한다.
+     */
+    @Volatile
+    private var bottomSheetShownForSession = false
+
+    /** 콜백: 전화 종료 */
+    var onEndCall: (() -> Unit)? = null
+
+    /** 콜백: 재탐지 */
+    var onRescan: (() -> Unit)? = null
 
     // ─────────────────────────────────────────────
     // Public API
@@ -44,15 +62,31 @@ class WarningOverlayManager(private val context: Context) {
 
     /**
      * 감지 결과에 따라 오버레이를 표시하거나 숨긴다.
+     *
+     * - 최초 detected=true: 스캐닝 pill 제거 → ROI box + dim + 바텀시트 표시
+     * - 이미 바텀시트가 한 번 표시된 후: ROI box 위치만 업데이트 (바텀시트 재표시 안 함)
+     * - detected=false: ROI box만 제거 (바텀시트는 사용자가 닫을 때까지 유지)
+     *
      * @param result     딥페이크 감지 결과
-     * @param roiBitmap  ROI 영역을 crop한 Bitmap (탐지 근거 이미지)
+     * @param roiBitmap  ROI 영역을 crop한 Bitmap — 현재 미사용
      */
     fun onDetectionResult(result: DeepfakeDetectionResult, roiBitmap: Bitmap? = null) {
+        lastResult = result
         if (result.detected) {
-            showWarning()
-            updateFacePreview(roiBitmap)
+            // 스캐닝 pill 제거
+            dismissScanningPill()
+
+            if (bottomSheetShownForSession) {
+                // 이미 바텀시트가 표시된 적 있음 → ROI box 위치만 갱신
+                updateRoiBoxOnly(result)
+            } else {
+                // 최초 감지 → ROI box + dim + 바텀시트 모두 표시
+                showDetectionOverlays(result)
+                bottomSheetShownForSession = true
+            }
         } else {
-            dismissWarning()
+            // detected=false → ROI box만 업데이트 (없으면 제거)
+            updateRoiBoxOnly(result)
         }
     }
 
@@ -65,11 +99,11 @@ class WarningOverlayManager(private val context: Context) {
             Log.w(TAG, "오버레이 권한 없음 — 경고 표시 불가")
             return
         }
-        show()
+        lastResult?.let { showDetectionOverlays(it) }
     }
 
     fun dismissWarning() {
-        dismiss()
+        dismissAll()
     }
 
     /**
@@ -81,147 +115,239 @@ class WarningOverlayManager(private val context: Context) {
         enabled = value
     }
 
+    /** 하위 호환용 show() — 기존 코드가 호출하는 경우 대비 */
     fun show() {
-        if (overlayViews.isNotEmpty()) {
-            Log.d(TAG, "overlay already showing")
-            return
-        }
-
-        val dm = context.resources.displayMetrics
-        val screenW = dm.widthPixels
-        val screenH = dm.heightPixels
-        val topHeight = (screenH * topRatio).roundToInt()
-        val bottomHeight = screenH - topHeight
-
-        // hole의 절대 좌표 (하단 윈도우 내)
-        val holeCx = (screenW * holeCenterXRatio).roundToInt()
-        val holeCy = (bottomHeight * holeCenterYRatio).roundToInt()
-        val holeR = (screenW * holeRadiusRatio).roundToInt()
-
-        // ────────────────────────────────────
-        // 1) 상단 윈도우: 카드 + dim (터치 차단)
-        // ────────────────────────────────────
-        addOverlay(
-            view = buildTopOverlay(),
-            width = WindowManager.LayoutParams.MATCH_PARENT,
-            height = topHeight,
-            gravity = Gravity.TOP,
-            touchable = true
-        )
-
-        // ────────────────────────────────────
-        // 2) 하단 시각 레이어: hole 뚫린 dim (터치 통과)
-        // ────────────────────────────────────
-        addOverlay(
-            view = HoledOverlayView(
-                context = context,
-                holeCenterXRatio = holeCenterXRatio,
-                holeCenterYRatio = holeCenterYRatio,
-                holeRadiusRatio = holeRadiusRatio,
-                dimColor = Color.parseColor("#CC000000"),
-                fadeWidth = dpToPx(20).toFloat()
-            ),
-            width = WindowManager.LayoutParams.MATCH_PARENT,
-            height = bottomHeight,
-            gravity = Gravity.BOTTOM,
-            touchable = false   // FLAG_NOT_TOUCHABLE — 시각 전용
-        )
-
-        // ────────────────────────────────────
-        // 3) 터치 차단 윈도우: hole 밖 영역 (투명, 터치만 차단)
-        // ────────────────────────────────────
-        val holeTop = holeCy - holeR
-        val holeBottom = holeCy + holeR
-        val holeLeft = holeCx - holeR
-        val holeRight = holeCx + holeR
-        val holeDiameter = holeR * 2
-
-        // 위쪽 strip
-        if (holeTop > 0) {
-            addOverlay(
-                view = transparentBlockView(),
-                width = screenW,
-                height = holeTop,
-                gravity = Gravity.BOTTOM or Gravity.START,
-                touchable = true,
-                yOffset = bottomHeight - holeTop
-            )
-        }
-
-        // 좌측 strip
-        if (holeLeft > 0) {
-            addOverlay(
-                view = transparentBlockView(),
-                width = holeLeft,
-                height = holeDiameter,
-                gravity = Gravity.BOTTOM or Gravity.START,
-                touchable = true,
-                yOffset = bottomHeight - holeBottom
-            )
-        }
-
-        // 우측 strip
-        val rightWidth = screenW - holeRight
-        if (rightWidth > 0) {
-            addOverlay(
-                view = transparentBlockView(),
-                width = rightWidth,
-                height = holeDiameter,
-                gravity = Gravity.BOTTOM or Gravity.END,
-                touchable = true,
-                yOffset = bottomHeight - holeBottom
-            )
-        }
-
-        // 아래쪽 strip
-        val belowHeight = bottomHeight - holeBottom
-        if (belowHeight > 0) {
-            addOverlay(
-                view = transparentBlockView(),
-                width = screenW,
-                height = belowHeight,
-                gravity = Gravity.BOTTOM or Gravity.START,
-                touchable = true,
-                yOffset = 0
-            )
-        }
+        lastResult?.let { showDetectionOverlays(it) } ?: showScanningPill()
     }
 
     fun dismiss() {
-        overlayViews.forEach { view ->
-            try {
-                windowManager.removeView(view)
-            } catch (e: Exception) {
-                Log.e(TAG, "overlay remove error", e)
-            }
-        }
-        overlayViews.clear()
-        facePreviewImageView = null
+        dismissAll()
     }
 
-    fun isShowing(): Boolean = overlayViews.isNotEmpty()
+    fun isShowing(): Boolean =
+        scanningPillView != null || roiBoundingBoxView != null || bottomSheetView != null
 
+    /** 기존 API 호환용. 새 UI에서는 face preview를 바텀시트 내에 포함하지 않으므로 no-op. */
     fun updateFacePreview(bitmap: Bitmap?) {
-        facePreviewImageView?.post {
-            if (bitmap == null) {
-                facePreviewImageView?.visibility = View.GONE
-                return@post
-            }
-            facePreviewImageView?.setImageBitmap(bitmap)
-            facePreviewImageView?.visibility = View.VISIBLE
+        // 새 디자인에서는 face preview 미사용 (ROI box로 대체)
+    }
+
+    // ─────────────────────────────────────────────
+    // 1) Scanning Pill
+    // ─────────────────────────────────────────────
+
+    /**
+     * "Shutter 감지 중" pill을 화면 좌상단에 표시한다.
+     */
+    fun showScanningPill() {
+        if (!enabled) return
+        if (!Settings.canDrawOverlays(context)) return
+        if (scanningPillView != null) return // 이미 표시 중
+
+        val pill = ScanningPillView(context)
+        addOverlayView(
+            view = pill,
+            width = WindowManager.LayoutParams.WRAP_CONTENT,
+            height = WindowManager.LayoutParams.WRAP_CONTENT,
+            gravity = Gravity.TOP or Gravity.START,
+            touchable = false, // 터치 통과
+            xOffset = dpToPx(16),
+            yOffset = dpToPx(64) // 상태바 아래
+        )
+        pill.startAnimation()
+        scanningPillView = pill
+        Log.d(TAG, "스캐닝 pill 표시")
+    }
+
+    fun dismissScanningPill() {
+        scanningPillView?.let {
+            it.stopAnimation()
+            removeOverlayView(it)
         }
+        scanningPillView = null
+    }
+
+    // ─────────────────────────────────────────────
+    // 2) ROI Bounding Box + 3) Bottom Sheet
+    // ─────────────────────────────────────────────
+
+    private fun showDetectionOverlays(result: DeepfakeDetectionResult) {
+        if (!enabled) return
+        if (!Settings.canDrawOverlays(context)) return
+
+        // 이미 표시 중이면 ROI만 업데이트
+        if (roiBoundingBoxView != null && bottomSheetView != null) {
+            if (result.hasRoi) {
+                roiBoundingBoxView?.setRoi(
+                    result.roiMinX, result.roiMinY,
+                    result.roiMaxX, result.roiMaxY,
+                    result.fakeProb * 100f
+                )
+            }
+            return
+        }
+
+        // ── ROI Bounding Box ──
+        if (result.hasRoi) {
+            val roiView = RoiBoundingBoxView(context)
+            addOverlayView(
+                view = roiView,
+                width = WindowManager.LayoutParams.MATCH_PARENT,
+                height = WindowManager.LayoutParams.MATCH_PARENT,
+                gravity = Gravity.TOP or Gravity.START,
+                touchable = false // 터치 통과
+            )
+            roiView.setRoi(
+                result.roiMinX, result.roiMinY,
+                result.roiMaxX, result.roiMaxY,
+                result.fakeProb * 100f
+            )
+            roiView.startAnimations()
+            roiBoundingBoxView = roiView
+            Log.d(TAG, "ROI 바운딩 박스 표시: roi=${result.roi?.contentToString()}")
+        }
+
+        // ── dim 배경 (바텀시트 뒤) ──
+        val dimView = View(context).apply {
+            setBackgroundColor(Color.parseColor("#66000000")) // 40% black
+            setOnTouchListener { _, _ -> true } // 터치 차단
+        }
+        addOverlayView(
+            view = dimView,
+            width = WindowManager.LayoutParams.MATCH_PARENT,
+            height = WindowManager.LayoutParams.MATCH_PARENT,
+            gravity = Gravity.TOP or Gravity.START,
+            touchable = true
+        )
+        dimBackgroundView = dimView
+
+        // ── Warning Bottom Sheet (500ms 지연 후 표시) ──
+        handler.postDelayed({
+            if (!enabled) return@postDelayed
+            val sheet = WarningBottomSheetView(
+                context = context,
+                onEndCall = {
+                    Log.d(TAG, "전화 종료 버튼 클릭")
+                    onEndCall?.invoke()
+                },
+                onRescan = {
+                    Log.d(TAG, "재탐지 버튼 클릭")
+                    onRescan?.invoke()
+                },
+                onClose = {
+                    Log.d(TAG, "닫기 버튼 클릭 → 바텀시트+dim만 닫기, ROI box는 유지")
+                    dismissBottomSheetAndDim()
+                }
+            )
+            addOverlayView(
+                view = sheet,
+                width = WindowManager.LayoutParams.MATCH_PARENT,
+                height = WindowManager.LayoutParams.MATCH_PARENT,
+                gravity = Gravity.BOTTOM or Gravity.START,
+                touchable = true
+            )
+            sheet.startEntranceAnimation()
+            bottomSheetView = sheet
+            Log.d(TAG, "바텀시트 표시")
+        }, 500)
+    }
+
+    /**
+     * ROI bounding box만 업데이트한다.
+     * 바텀시트가 이미 표시된 뒤에 감지 결과가 갱신될 때 호출.
+     * ROI가 없는 결과(detected=false)이면 ROI box를 제거한다.
+     */
+    private fun updateRoiBoxOnly(result: DeepfakeDetectionResult) {
+        if (!enabled) return
+
+        if (result.hasRoi) {
+            if (roiBoundingBoxView != null) {
+                // 기존 ROI box 위치만 갱신
+                roiBoundingBoxView?.setRoi(
+                    result.roiMinX, result.roiMinY,
+                    result.roiMaxX, result.roiMaxY,
+                    result.fakeProb * 100f
+                )
+            } else if (Settings.canDrawOverlays(context)) {
+                // ROI box가 없으면 새로 생성 (바텀시트 닫힌 후 재표시)
+                val roiView = RoiBoundingBoxView(context)
+                addOverlayView(
+                    view = roiView,
+                    width = WindowManager.LayoutParams.MATCH_PARENT,
+                    height = WindowManager.LayoutParams.MATCH_PARENT,
+                    gravity = Gravity.TOP or Gravity.START,
+                    touchable = false
+                )
+                roiView.setRoi(
+                    result.roiMinX, result.roiMinY,
+                    result.roiMaxX, result.roiMaxY,
+                    result.fakeProb * 100f
+                )
+                roiView.startAnimations()
+                roiBoundingBoxView = roiView
+                Log.d(TAG, "ROI 바운딩 박스 재생성: roi=${result.roi?.contentToString()}")
+            }
+        } else {
+            // ROI 없는 결과 → ROI box 제거
+            roiBoundingBoxView?.let {
+                it.stopAnimations()
+                removeOverlayView(it)
+            }
+            roiBoundingBoxView = null
+        }
+    }
+
+    /**
+     * 바텀시트와 dim 배경만 닫는다. ROI bounding box는 유지.
+     * 사용자가 바텀시트의 X 버튼을 누르면 호출된다.
+     */
+    private fun dismissBottomSheetAndDim() {
+        dimBackgroundView?.let { removeOverlayView(it) }
+        dimBackgroundView = null
+
+        bottomSheetView?.let {
+            it.stopAnimations()
+            removeOverlayView(it)
+        }
+        bottomSheetView = null
+    }
+
+    private fun dismissDetectionOverlays() {
+        roiBoundingBoxView?.let {
+            it.stopAnimations()
+            removeOverlayView(it)
+        }
+        roiBoundingBoxView = null
+
+        dimBackgroundView?.let { removeOverlayView(it) }
+        dimBackgroundView = null
+
+        bottomSheetView?.let {
+            it.stopAnimations()
+            removeOverlayView(it)
+        }
+        bottomSheetView = null
+    }
+
+    fun dismissAll() {
+        dismissScanningPill()
+        dismissDetectionOverlays()
+        handler.removeCallbacksAndMessages(null)
+        lastResult = null
+        bottomSheetShownForSession = false
     }
 
     // ─────────────────────────────────────────────
     // Window 헬퍼
     // ─────────────────────────────────────────────
 
-    private fun addOverlay(
+    private fun addOverlayView(
         view: View,
         width: Int,
         height: Int,
         gravity: Int,
         touchable: Boolean,
+        xOffset: Int = 0,
         yOffset: Int = 0
     ) {
         val flags = if (touchable) {
@@ -240,242 +366,28 @@ class WarningOverlayManager(private val context: Context) {
             PixelFormat.TRANSLUCENT
         ).apply {
             this.gravity = gravity
+            this.x = xOffset
             this.y = yOffset
         }
 
         try {
             windowManager.addView(view, params)
-            overlayViews.add(view)
         } catch (e: Exception) {
             Log.e(TAG, "overlay add error", e)
         }
     }
 
-    /** 투명하지만 터치를 차단하는 빈 View */
-    private fun transparentBlockView(): View {
-        return View(context).apply {
-            setOnTouchListener { _, _ -> true }
+    private fun removeOverlayView(view: View) {
+        try {
+            windowManager.removeView(view)
+        } catch (e: Exception) {
+            Log.e(TAG, "overlay remove error", e)
         }
-    }
-
-    // ─────────────────────────────────────────────
-    // Top Overlay (카드 + dim 배경)
-    // ─────────────────────────────────────────────
-
-    private fun buildTopOverlay(): View {
-
-        val fadeHeight = dpToPx(48)
-
-        val root = FrameLayout(context).apply {
-            setOnTouchListener { _, _ -> true }
-        }
-
-        // dim 배경
-        val dimView = View(context).apply {
-            setBackgroundColor(Color.parseColor("#CC000000"))
-        }
-        root.addView(dimView, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT
-        ).apply { bottomMargin = fadeHeight })
-
-        // 하단 fade
-        val fadeView = View(context).apply {
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(Color.parseColor("#CC000000"), Color.TRANSPARENT)
-            )
-        }
-        root.addView(fadeView, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, fadeHeight, Gravity.BOTTOM
-        ))
-
-        // glass card
-        root.addView(buildGlassCard(), FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT
-        ).apply { gravity = Gravity.CENTER })
-
-        return root
-    }
-
-    // ─────────────────────────────────────────────
-    // Glass Card
-    // ─────────────────────────────────────────────
-
-    private fun buildGlassCard(): View {
-        val screenWidth = context.resources.displayMetrics.widthPixels
-        val cardWidth = (screenWidth * 0.72f).roundToInt()
-        val borderWidth = dpToPx(2)
-        val radius = dpToPx(24).toFloat()
-
-        val borderFrame = FrameLayout(context).apply {
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(
-                    Color.parseColor("#AAFFFFFF"),
-                    Color.parseColor("#44A67C5B"),
-                    Color.parseColor("#11FFFFFF")
-                )
-            ).apply { cornerRadius = radius }
-            elevation = dpToPx(6).toFloat()
-        }
-
-        val card = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dpToPx(22), dpToPx(18), dpToPx(22), dpToPx(18))
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(
-                    Color.parseColor("#CCA67C5B"),
-                    Color.parseColor("#33444444"),
-                    Color.parseColor("#22FFFFFF")
-                )
-            ).apply { cornerRadius = radius }
-        }
-
-        borderFrame.addView(card, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT
-        ).apply { setMargins(borderWidth, borderWidth, borderWidth, borderWidth) })
-
-        val wrapper = LinearLayout(context).apply { gravity = Gravity.CENTER }
-        wrapper.addView(borderFrame, LinearLayout.LayoutParams(
-            cardWidth, LinearLayout.LayoutParams.WRAP_CONTENT
-        ))
-
-        buildCardContent(card)
-        return wrapper
-    }
-
-    // ─────────────────────────────────────────────
-    // Card Content
-    // ─────────────────────────────────────────────
-
-    private fun buildCardContent(parent: LinearLayout) {
-
-        // icon
-        val iconBorderSize = dpToPx(60)
-        val iconInnerSize = dpToPx(56)
-
-        val iconRing = FrameLayout(context).apply {
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(
-                    Color.parseColor("#CCFFFFFF"),
-                    Color.parseColor("#44A67C5B"),
-                    Color.parseColor("#22FFFFFF")
-                )
-            ).apply { shape = GradientDrawable.OVAL }
-        }
-
-        val iconContainer = FrameLayout(context).apply {
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(
-                    Color.parseColor("#66FFFFFF"),
-                    Color.parseColor("#33FFFFFF"),
-                    Color.parseColor("#22FFFFFF")
-                )
-            ).apply { shape = GradientDrawable.OVAL }
-        }
-
-        val icon = TextView(context).apply {
-            text = "⚠"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-        }
-
-        iconContainer.addView(icon, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER
-        ))
-        iconRing.addView(iconContainer, FrameLayout.LayoutParams(
-            iconInnerSize, iconInnerSize, Gravity.CENTER
-        ))
-        parent.addView(iconRing, LinearLayout.LayoutParams(
-            iconBorderSize, iconBorderSize
-        ).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            topMargin = dpToPx(16); bottomMargin = dpToPx(12)
-        })
-
-        // title
-        parent.addView(TextView(context).apply {
-            text = "AI 위조 감지"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
-            setTextColor(Color.WHITE)
-            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-        }, wrapParams().apply { bottomMargin = dpToPx(16) })
-
-        // divider
-        parent.addView(View(context).apply {
-            setBackgroundColor(Color.parseColor("#33FFFFFF"))
-        }, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(2)
-        ).apply { bottomMargin = dpToPx(20) })
-
-        // preview container
-        val previewSize = dpToPx(180)
-        val previewRadius = dpToPx(12).toFloat()
-
-        val previewBox = FrameLayout(context).apply {
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#33AAAAAA"))
-                cornerRadius = previewRadius
-                setStroke(dpToPx(1), Color.parseColor("#26FFFFFF"))
-            }
-            clipToOutline = true
-            outlineProvider = object : android.view.ViewOutlineProvider() {
-                override fun getOutline(view: View, outline: android.graphics.Outline) {
-                    outline.setRoundRect(0, 0, view.width, view.height, previewRadius)
-                }
-            }
-        }
-
-        facePreviewImageView = ImageView(context).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            visibility = View.GONE
-        }
-
-        previewBox.addView(facePreviewImageView, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT
-        ))
-        parent.addView(previewBox, LinearLayout.LayoutParams(
-            previewSize, previewSize
-        ).apply {
-            gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = dpToPx(24)
-        })
-
-        // warning text
-        parent.addView(TextView(context).apply {
-            text = "딥페이크 의심 영상이 감지되었습니다"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            setTextColor(Color.parseColor("#FF8A80"))
-            gravity = Gravity.CENTER
-            typeface = Typeface.DEFAULT_BOLD
-        }, wrapParams().apply { bottomMargin = dpToPx(4) })
-
-        // guide text
-        parent.addView(TextView(context).apply {
-            text = "통화를 종료해주세요 ▼"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
-            setTextColor(Color.parseColor("#B3FFFFFF"))
-            gravity = Gravity.CENTER
-        }, wrapParams().apply { bottomMargin = dpToPx(24) })
     }
 
     // ─────────────────────────────────────────────
     // Utils
     // ─────────────────────────────────────────────
-
-    private fun wrapParams() = LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.WRAP_CONTENT,
-        LinearLayout.LayoutParams.WRAP_CONTENT
-    )
 
     private fun dpToPx(dp: Int): Int = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP, dp.toFloat(),
@@ -486,4 +398,3 @@ class WarningOverlayManager(private val context: Context) {
         private const val TAG = "WarningOverlay"
     }
 }
-
