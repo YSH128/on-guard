@@ -44,6 +44,9 @@ class MainActivity : AppCompatActivity() {
         var lastResults: FloatArray = floatArrayOf()
         var lastBitmap: Bitmap? = null
 
+        /** RoiTestActivity 에서 JNI 직접 호출을 위한 콜백 (onCreate 에서 세팅됨) */
+        var nativeInfer: ((ByteArray, Int, Int, Int) -> FloatArray)? = null
+
         init { System.loadLibrary("shutter_android_ai") }
     }
 
@@ -57,8 +60,12 @@ class MainActivity : AppCompatActivity() {
         val tvVisualResult  = findViewById<TextView>(R.id.tvVisualResult)
         val tvOpenCVStatus  = findViewById<TextView>(R.id.tvOpenCVStatus)
         val btnCamVisualize = findViewById<Button>(R.id.btnCamVisualize)
+        val btnRoiTest      = findViewById<Button>(R.id.btnRoiTest)
         val btnAudioDetect  = findViewById<Button>(R.id.btnAudioDetect)
         val tvAudioResult   = findViewById<TextView>(R.id.tvAudioResult)
+
+        // RoiTestActivity 가 JNI 를 쓸 수 있도록 콜백 등록
+        nativeInfer = { buf, w, h, s -> detectDeepfakeVisual(buf, w, h, s) }
 
         // 오디오 감지는 native-lib.cpp에 미구현
         btnAudioDetect.isEnabled = false
@@ -188,6 +195,10 @@ class MainActivity : AppCompatActivity() {
             } else {
                 Toast.makeText(this, "먼저 페이스 감지를 실행하세요", Toast.LENGTH_SHORT).show()
             }
+        }
+
+        btnRoiTest.setOnClickListener {
+            startActivity(Intent(this, RoiTestActivity::class.java))
         }
     }
 

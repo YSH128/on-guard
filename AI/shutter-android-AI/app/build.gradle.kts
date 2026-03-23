@@ -2,8 +2,7 @@ import de.undercouch.gradle.tasks.download.Download
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
-    id("de.undercouch.download") version "5.4.0"
+    id("de.undercouch.download")
 }
 
 val nativeAarDeps by configurations.creating {
@@ -29,13 +28,29 @@ dependencies {
 
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
-
-    // lifecycleScope + coroutines
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
 
 val nativeLibsDir = layout.buildDirectory.dir("native_libs").get().asFile
+
+nativeAarDeps.resolvedConfiguration.resolvedArtifacts.forEach { artifact ->
+    val aar = artifact.file
+    when {
+        aar.name.contains("pytorch_android") && !aar.name.contains("lite") -> {
+            copy {
+                from(zipTree(aar))
+                into(nativeLibsDir.resolve("pytorch"))
+                duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+            }
+        }
+        aar.name.contains("opencv") -> {
+            copy {
+                from(zipTree(aar))
+                into(nativeLibsDir.resolve("opencv"))
+                duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+            }
+        }
+    }
+}
 
 val opencvSdkZip = nativeLibsDir.resolve("opencv-sdk.zip")
 val opencvHeaderFile = nativeLibsDir.resolve("opencv/jni/include/opencv2/opencv.hpp")
@@ -65,13 +80,13 @@ val extractOpenCVHeaders by tasks.registering(Copy::class) {
 
 android {
     namespace = "com.example.shutter_android_ai"
-    compileSdk = 35
+    compileSdk = 36
     ndkVersion = "21.4.7075529"
 
     defaultConfig {
         applicationId = "com.example.shutter_android_ai"
         minSdk = 33
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
 
@@ -107,9 +122,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
-    }
-    kotlinOptions {
-        jvmTarget = "11"
     }
     externalNativeBuild {
         cmake {

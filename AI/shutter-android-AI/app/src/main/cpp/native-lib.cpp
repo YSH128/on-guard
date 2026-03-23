@@ -137,10 +137,10 @@ public:
     }
 
     struct InferResult {
-        float fakeProb, realProb;
+        float fakeProb  = 0.f, realProb = 0.f;
         std::vector<float> cam;
-        float bbox_roi[4]; // [minx, miny, maxx, maxy]
-        float bbox_score;
+        float bbox_roi[4] = {-1.f, -1.f, -1.f, -1.f};
+        float bbox_score  = -1.f;
         bool  valid = false;
     };
 
@@ -148,46 +148,72 @@ public:
         InferResult result;
         if (!isFaceLoaded) return result;
 
-        auto options = torch::TensorOptions().dtype(torch::kFloat32);
-        torch::Tensor input_tensor = torch::from_blob(
-            (void*)imageData, {1, INPUT_H, INPUT_W, INPUT_C}, options).clone();
-        input_tensor = input_tensor.permute({0, 3, 1, 2});
+        try {
+            auto options = torch::TensorOptions().dtype(torch::kFloat32);
+            torch::Tensor input_tensor = torch::from_blob(
+                    (void*)imageData, {1, INPUT_H, INPUT_W, INPUT_C}, options).clone();
+            input_tensor = input_tensor.permute({0, 3, 1, 2});
 
-        auto mean = torch::from_blob((void*)MEAN, {1, 3, 1, 1}).clone();
-        auto std  = torch::from_blob((void*)STD,  {1, 3, 1, 1}).clone();
-        input_tensor = (input_tensor - mean) / std;
+            auto mean = torch::from_blob((void*)MEAN, {1, 3, 1, 1}).clone();
+            auto std  = torch::from_blob((void*)STD,  {1, 3, 1, 1}).clone();
+            input_tensor = (input_tensor - mean) / std;
 
-        std::vector<torch::jit::IValue> inputs;
-        inputs.push_back(input_tensor);
+            std::vector<torch::jit::IValue> inputs;
+            inputs.push_back(input_tensor);
 
-        // output: tuple(logits[1,2], cam[H,W], bbox_roi[1,4], bbox_score[1])
-        auto tup      = faceModule.forward(inputs).toTuple();
-        at::Tensor logits = tup->elements()[0].toTensor();
-        at::Tensor cam    = tup->elements()[1].toTensor();
-        at::Tensor bbox_roi = tup->elements()[2].toTensor();
-        at::Tensor bbox_score = tup->elements()[3].toTensor();
+            auto output = faceModule.forward(inputs);
+            if (!output.isTuple()) { LOGE("Output is not a tuple"); return result; }
 
-        at::Tensor prob  = torch::softmax(logits, 1);
-        result.fakeProb  = prob[0][1].item<float>();
-        result.realProb  = prob[0][0].item<float>();
+            auto tup = output.toTuple();
+            size_t n = tup->elements().size();
+            LOGD("tuple size: %zu", n);
+            if (n < 4) { LOGE("Expected 4-element tuple, got %zu", n); return result; }
 
-        int cam_h = cam.size(0);
-        int cam_w = cam.size(1);
-        int cam_size = cam_h * cam_w;
-        result.cam.resize(cam_size);
+            // [0] logits
+            if (!tup->elements()[0].isTensor()) { LOGE("elements[0] not Tensor"); return result; }
+            at::Tensor logits = tup->elements()[0].toTensor();
+            at::Tensor prob   = torch::softmax(logits, 1);
+            result.fakeProb   = prob[0][1].item<float>();
+            result.realProb   = prob[0][0].item<float>();
+            LOGD("fakeProb=%.4f realProb=%.4f", result.fakeProb, result.realProb);
 
-        auto acc = cam.accessor<float, 2>();
-        for (int r = 0; r < cam_h; r++)
-            for (int c = 0; c < cam_w; c++)
-                result.cam[r * cam_w + c] = acc[r][c];
+            // [1] cam [H, W]
+            if (!tup->elements()[1].isTensor()) { LOGE("elements[1] not Tensor"); return result; }
+            at::Tensor cam = tup->elements()[1].toTensor();
+            while (cam.dim() > 2 && cam.size(0) == 1) cam = cam.squeeze(0);
+            int cam_h = (int)cam.size(0);
+            int cam_w = (int)cam.size(1);
+            LOGD("CAM: %d x %d", cam_h, cam_w);
+            result.cam.resize(cam_h * cam_w);
+            auto acc = cam.accessor<float, 2>();
+            for (int r = 0; r < cam_h; r++)
+                for (int c = 0; c < cam_w; c++)
+                    result.cam[r * cam_w + c] = acc[r][c];
 
-        result.bbox_roi[0] = bbox_roi[0][0].item<float>(); //minx
-        result.bbox_roi[1] = bbox_roi[0][1].item<float>(); //miny
-        result.bbox_roi[2] = bbox_roi[0][2].item<float>(); //maxx
-        result.bbox_roi[3] = bbox_roi[0][3].item<float>(); //maxy
-        result.bbox_score = bbox_roi[0].item<float>();
+            // [2] bbox_roi [1, 4]
+            if (!tup->elements()[2].isTensor()) { LOGE("elements[2] not Tensor"); return result; }
+            at::Tensor bbox_roi = tup->elements()[2].toTensor();
+            while (bbox_roi.dim() > 1 && bbox_roi.size(0) == 1) bbox_roi = bbox_roi.squeeze(0);
+            result.bbox_roi[0] = bbox_roi[0].item<float>(); // minx
+            result.bbox_roi[1] = bbox_roi[1].item<float>(); // miny
+            result.bbox_roi[2] = bbox_roi[2].item<float>(); // maxx
+            result.bbox_roi[3] = bbox_roi[3].item<float>(); // maxy
+            LOGD("bbox: %.1f %.1f %.1f %.1f",
+                 result.bbox_roi[0], result.bbox_roi[1], result.bbox_roi[2], result.bbox_roi[3]);
 
-        result.valid = true;
+            // [3] bbox_score [1]
+            if (!tup->elements()[3].isTensor()) { LOGE("elements[3] not Tensor"); return result; }
+            at::Tensor bbox_score_t = tup->elements()[3].toTensor();
+            result.bbox_score = bbox_score_t[0].item<float>();
+            LOGD("bbox_score: %.4f", result.bbox_score);
+
+            result.valid = true;
+
+        } catch (const c10::Error& e) {
+            LOGE("c10::Error in infer: %s", e.what());
+        } catch (const std::exception& e) {
+            LOGE("std::exception in infer: %s", e.what());
+        }
         return result;
     }
 };
@@ -216,8 +242,8 @@ Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeVisual(
         JNIEnv* env,
         jobject /* this */,
         jbyteArray buffer,
-        jint width, 
-        jint height, 
+        jint width,
+        jint height,
         jint stride) {
 
     // cam size를 모르는 상태에서 일단 실패 케이스 처리용 최소 배열 준비
@@ -244,7 +270,7 @@ Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeVisual(
     rgb.convertTo(floatMat, CV_32F, 1.0f / 255.0f);
 
     std::vector<float> frameData(
-        (float*)floatMat.datastart, (float*)floatMat.dataend);
+            (float*)floatMat.datastart, (float*)floatMat.dataend);
 
     auto start_inference = std::chrono::high_resolution_clock::now();
     auto fr = detector.infer(frameData.data());

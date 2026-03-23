@@ -13,7 +13,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Shutterandroidai">
+        android:theme="@style/Theme.ShutterandroidAI">
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -24,6 +24,7 @@
             </intent-filter>
         </activity>
         <activity android:name=".CamVisualizationActivity" />
+        <activity android:name=".RoiTestActivity" />
     </application>
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />

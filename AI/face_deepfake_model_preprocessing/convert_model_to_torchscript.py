@@ -3,7 +3,7 @@ from torchvision.models import efficientnet_b0
 
 # ─── 모델 설정 (모델 바꿀 때 수정) ──────────────────
 MODEL_PATH = r"best_model-v3.pt"
-OUTPUT_PATH = "fake_deepfake_model.pt"
+OUTPUT_PATH = "face_deepfake_model.pt"
 INPUT_SIZE_H = 224  # 입력 이미지 크기
 INPUT_SIZE_W = 224
 FEATURE_MAP_SIZE = 7  # backbone 마지막 feature map 크기 (efficientnet_b0 기준)
@@ -225,14 +225,33 @@ def convert_to_torchscript():
     print(f"   roi_score shape : {roi_score.shape}")
 
     print("5. TorchScript 저장 중...")
-    output_path = "fake_deepfake_model.pt"
+    output_path = "face_deepfake_model.pt"
     scripted.save(output_path)
     print(f"성공! TorchScript [{output_path}] 파일이 생성되었습니다.")
+
+    print()
+    print("6. 저장된 파일 재로드 후 tuple 구조 검증 중...")
+    loaded = torch.jit.load(output_path)
+    loaded.eval()
+    with torch.no_grad():
+        out = loaded(example_input)
+
+    if isinstance(out, tuple):
+        print(f"   tuple 원소 수: {len(out)}  ← C++에서 'tuple size: {len(out)}' 으로 보임")
+        for i, elem in enumerate(out):
+            if isinstance(elem, torch.Tensor):
+                print(f"   [{i}] Tensor  shape={list(elem.shape)}  dtype={elem.dtype}")
+            else:
+                print(f"   [{i}] 비Tensor 타입: {type(elem)}")
+    else:
+        print(f"   출력이 tuple이 아님: {type(out)}")
+
     print()
     print("[C++ tuple 수신 순서]")
-    print(
-        "  elements[0] = logits  → softmax → prob[0][0]=realProb, prob[0][1]=fakeProb"
-    )
+    print("  elements[0] = logits   → softmax → prob[0][0]=realProb, prob[0][1]=fakeProb")
+    print("  elements[1] = cam      → [7, 7]")
+    print("  elements[2] = bbox_roi → [1, 4]  [minx, miny, maxx, maxy]")
+    print("  elements[3] = roi_score → [1]")
 
 
 if __name__ == "__main__":
