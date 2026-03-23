@@ -1,16 +1,23 @@
 package com.shutter.api.notification.client;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.shutter.api.notification.domain.NotificationEventType;
 import com.shutter.api.notification.domain.PushResult;
 import com.shutter.api.notification.dto.request.KakaoPushRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.time.Duration;
+import java.util.Collections;
 
 /**
  * 카카오 푸시 알림 REST API 클라이언트
@@ -21,6 +28,7 @@ import java.time.Duration;
 public class KakaoPushClient {
 
     private final WebClient webClient;
+    private final ObjectMapper objectMapper;
 
     @Value("${kakao.admin-key}")
     private String adminKey;
@@ -43,16 +51,26 @@ public class KakaoPushClient {
                     .message(message)
                     .build();
 
+            // 카카오 푸시 V2 API는 application/x-www-form-urlencoded 형식을 사용하며
+            // 각 파라미터(uuids, push_message)는 JSON 문자열로 전달해야 함
+            MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+            formData.add("uuids", objectMapper.writeValueAsString(Collections.singletonList(String.valueOf(kakaoId))));
+            formData.add("push_message", objectMapper.writeValueAsString(request.getPushMessage()));
+
             webClient.post()
                     .uri(KAKAO_PUSH_SEND_URL)
                     .header("Authorization", "KakaoAK " + adminKey)
-                    .bodyValue(request)
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .body(BodyInserters.fromFormData(formData))
                     .retrieve()
                     .toBodilessEntity()
                     .block(Duration.ofSeconds(5));
 
             log.info("Successfully sent Kakao push to kakaoId: {}", kakaoId);
             return PushResult.SUCCESS;
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize push request for kakaoId: {}. Error: {}", kakaoId, e.getMessage());
+            return PushResult.UNKNOWN_ERROR;
         } catch (WebClientResponseException e) {
             log.error("Failed to send Kakao push to kakaoId: {}. Status: {}, Body: {}", 
                     kakaoId, e.getStatusCode(), e.getResponseBodyAsString());
