@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <mutex>                    // [FIX 5] 멀티스레드 보호용
 #include <torch/script.h>
 #include <opencv2/opencv.hpp>
 #include <android/log.h>
@@ -23,101 +24,18 @@ float get_ms(std::chrono::high_resolution_clock::time_point start) {
     return std::chrono::duration<float, std::milli>(end - start).count();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ROI Box 구조체 & NMS 헬퍼
-// ─────────────────────────────────────────────────────────────────────────────
-
-struct RoiBox {
-    float minx, miny, maxx, maxy;
-    float score;     // 세그먼트 내 정규화 CAM 평균값
-    int   frameIdx;
-};
-
-static float computeIoU(const RoiBox& a, const RoiBox& b) {
-    float ix1  = std::max(a.minx, b.minx);
-    float iy1  = std::max(a.miny, b.miny);
-    float ix2  = std::min(a.maxx, b.maxx);
-    float iy2  = std::min(a.maxy, b.maxy);
-    float inter = std::max(0.0f, ix2 - ix1) * std::max(0.0f, iy2 - iy1);
-    float areaA = (a.maxx - a.minx) * (a.maxy - a.miny);
-    float areaB = (b.maxx - b.minx) * (b.maxy - b.miny);
-    float uni   = areaA + areaB - inter;
-    return (uni > 1e-6f) ? inter / uni : 0.0f;
-}
-
-// Greedy NMS → score 최고인 박스 1개 반환
-static RoiBox applyNMS(std::vector<RoiBox>& boxes, float iouThresh = 0.5f) {
-    std::sort(boxes.begin(), boxes.end(),
-              [](const RoiBox& a, const RoiBox& b) { return a.score > b.score; });
-    std::vector<bool> suppressed(boxes.size(), false);
-    for (int i = 0; i < (int)boxes.size(); i++) {
-        if (suppressed[i]) continue;
-        for (int j = i + 1; j < (int)boxes.size(); j++)
-            if (!suppressed[j] && computeIoU(boxes[i], boxes[j]) > iouThresh)
-                suppressed[j] = true;
-    }
-    for (int i = 0; i < (int)boxes.size(); i++)
-        if (!suppressed[i]) return boxes[i];
-    return boxes[0];
-}
-
-static RoiBox extractRoiFromCAM(const float* camData, float threshold = 0.5f) {
-    RoiBox invalid = {-1, -1, -1, -1, -1.0f, -1};
-
-    cv::Mat cam(7, 7, CV_32F, (void*)camData);
-
-    double mn, mx;
-    cv::minMaxLoc(cam, &mn, &mx);
-    if (mx - mn < 1e-6) return invalid;
-    cv::Mat norm = (cam - (float)mn) / (float)(mx - mn);
-
-    cv::Mat binary;
-    cv::threshold(norm, binary, threshold, 1.0f, cv::THRESH_BINARY);
-    binary.convertTo(binary, CV_8U, 255);
-
-    cv::Mat labels;
-    int nLabels = cv::connectedComponents(binary, labels, 8, CV_32S);
-    if (nLabels <= 1) return invalid;
-
-    const float SCALE = 224.0f / 7.0f;
-    float bestScore = -1.0f;
-    RoiBox best = invalid;
-
-    for (int lbl = 1; lbl < nLabels; lbl++) {
-        float sumCam = 0.0f;
-        int   cnt = 0;
-        int   r0 = 7, c0 = 7, r1 = -1, c1 = -1;
-
-        for (int r = 0; r < 7; r++) {
-            for (int c = 0; c < 7; c++) {
-                if (labels.at<int>(r, c) == lbl) {
-                    sumCam += norm.at<float>(r, c);
-                    cnt++;
-                    r0 = std::min(r0, r);  c0 = std::min(c0, c);
-                    r1 = std::max(r1, r);  c1 = std::max(c1, c);
-                }
-            }
-        }
-        if (cnt == 0) continue;
-
-        float meanScore = sumCam / cnt;
-        if (meanScore > bestScore) {
-            bestScore = meanScore;
-            best = { c0 * SCALE, r0 * SCALE,
-                     (c1 + 1) * SCALE, (r1 + 1) * SCALE,
-                     meanScore, -1 };
-        }
-    }
-    return best;
-}
 
 class DeepfakeDetector {
 public:
     torch::jit::script::Module faceModule;
-    bool isFaceLoaded = false;
-    float faceLoadTime = 0.0f;
+    bool  isFaceLoaded  = false;
+    float faceLoadTime  = 0.0f;
+
+    // [FIX 5] 멀티스레드 동시 접근 방지
+    std::mutex mtx;
 
     bool loadModels(const std::string& facePath) {
+        std::lock_guard<std::mutex> lock(mtx);
 
         if (!isFaceLoaded) {
             try {
@@ -128,7 +46,7 @@ public:
                 isFaceLoaded = true;
                 LOGD("Face model loaded. Time: %.2f ms", faceLoadTime);
             } catch (const c10::Error& e) {
-                LOGE("Error loading face model");
+                LOGE("Error loading face model: %s", e.what());
                 isFaceLoaded = false;
                 return false;
             }
@@ -137,16 +55,22 @@ public:
     }
 
     struct InferResult {
-        float fakeProb  = 0.f, realProb = 0.f;
+        float fakeProb   = 0.f, realProb = 0.f;
         std::vector<float> cam;
         float bbox_roi[4] = {-1.f, -1.f, -1.f, -1.f};
         float bbox_score  = -1.f;
-        bool  valid = false;
+        float inferTimeMs = 0.f;    // [FIX 1] infer() 내부에서 직접 측정
+        bool  valid       = false;
     };
 
     InferResult infer(const float* imageData) {
         InferResult result;
+
+        std::lock_guard<std::mutex> lock(mtx);   // [FIX 5]
         if (!isFaceLoaded) return result;
+
+        // [FIX 1] infer() 안에서 추론 시간 측정 시작
+        auto start_infer = std::chrono::high_resolution_clock::now();
 
         try {
             auto options = torch::TensorOptions().dtype(torch::kFloat32);
@@ -154,9 +78,12 @@ public:
                     (void*)imageData, {1, INPUT_H, INPUT_W, INPUT_C}, options).clone();
             input_tensor = input_tensor.permute({0, 3, 1, 2});
 
-            auto mean = torch::from_blob((void*)MEAN, {1, 3, 1, 1}).clone();
-            auto std  = torch::from_blob((void*)STD,  {1, 3, 1, 1}).clone();
-            input_tensor = (input_tensor - mean) / std;
+            // [FIX 6] const float[] → 임시 배열로 복사해 const 제거 없이 from_blob 사용
+            float mean_buf[3] = {MEAN[0], MEAN[1], MEAN[2]};
+            float std_buf[3]  = {STD[0],  STD[1],  STD[2]};
+            auto mean_t = torch::from_blob(mean_buf, {1, 3, 1, 1}).clone();
+            auto std_t  = torch::from_blob(std_buf,  {1, 3, 1, 1}).clone();
+            input_tensor = (input_tensor - mean_t) / std_t;
 
             std::vector<torch::jit::IValue> inputs;
             inputs.push_back(input_tensor);
@@ -164,12 +91,12 @@ public:
             auto output = faceModule.forward(inputs);
             if (!output.isTuple()) { LOGE("Output is not a tuple"); return result; }
 
-            auto tup = output.toTuple();
-            size_t n = tup->elements().size();
+            auto   tup = output.toTuple();
+            size_t n   = tup->elements().size();
             LOGD("tuple size: %zu", n);
             if (n < 4) { LOGE("Expected 4-element tuple, got %zu", n); return result; }
 
-            // [0] logits
+            // ── [0] logits ──────────────────────────────────────────────────
             if (!tup->elements()[0].isTensor()) { LOGE("elements[0] not Tensor"); return result; }
             at::Tensor logits = tup->elements()[0].toTensor();
             at::Tensor prob   = torch::softmax(logits, 1);
@@ -177,10 +104,16 @@ public:
             result.realProb   = prob[0][0].item<float>();
             LOGD("fakeProb=%.4f realProb=%.4f", result.fakeProb, result.realProb);
 
-            // [1] cam [H, W]
+            // ── [1] cam [H, W] ───────────────────────────────────────────────
             if (!tup->elements()[1].isTensor()) { LOGE("elements[1] not Tensor"); return result; }
             at::Tensor cam = tup->elements()[1].toTensor();
             while (cam.dim() > 2 && cam.size(0) == 1) cam = cam.squeeze(0);
+
+            // [FIX 3] CAM 차원 검증
+            if (cam.dim() != 2) {
+                LOGE("Unexpected CAM dim: %lld (expected 2)", (long long)cam.dim());
+                return result;
+            }
             int cam_h = (int)cam.size(0);
             int cam_w = (int)cam.size(1);
             LOGD("CAM: %d x %d", cam_h, cam_w);
@@ -190,23 +123,34 @@ public:
                 for (int c = 0; c < cam_w; c++)
                     result.cam[r * cam_w + c] = acc[r][c];
 
-            // [2] bbox_roi [1, 4]
+            // ── [2] bbox_roi ─────────────────────────────────────────────────
             if (!tup->elements()[2].isTensor()) { LOGE("elements[2] not Tensor"); return result; }
             at::Tensor bbox_roi = tup->elements()[2].toTensor();
             while (bbox_roi.dim() > 1 && bbox_roi.size(0) == 1) bbox_roi = bbox_roi.squeeze(0);
+
+            // [FIX 4] bbox 크기 검증 (최소 4개 원소 필요)
+            if (bbox_roi.dim() != 1 || bbox_roi.size(0) < 4) {
+                LOGE("Unexpected bbox_roi shape: dim=%lld size=%lld",
+                     (long long)bbox_roi.dim(),
+                     bbox_roi.dim() > 0 ? (long long)bbox_roi.size(0) : -1LL);
+                return result;
+            }
             result.bbox_roi[0] = bbox_roi[0].item<float>(); // minx
             result.bbox_roi[1] = bbox_roi[1].item<float>(); // miny
             result.bbox_roi[2] = bbox_roi[2].item<float>(); // maxx
             result.bbox_roi[3] = bbox_roi[3].item<float>(); // maxy
             LOGD("bbox: %.1f %.1f %.1f %.1f",
-                 result.bbox_roi[0], result.bbox_roi[1], result.bbox_roi[2], result.bbox_roi[3]);
+                 result.bbox_roi[0], result.bbox_roi[1],
+                 result.bbox_roi[2], result.bbox_roi[3]);
 
-            // [3] bbox_score [1]
+            // ── [3] bbox_score ───────────────────────────────────────────────
             if (!tup->elements()[3].isTensor()) { LOGE("elements[3] not Tensor"); return result; }
             at::Tensor bbox_score_t = tup->elements()[3].toTensor();
             result.bbox_score = bbox_score_t[0].item<float>();
             LOGD("bbox_score: %.4f", result.bbox_score);
 
+            // [FIX 1] 추론 시간 저장
+            result.inferTimeMs = get_ms(start_infer);
             result.valid = true;
 
         } catch (const c10::Error& e) {
@@ -227,13 +171,12 @@ Java_com_example_shutter_1android_1ai_MainActivity_loadModels(
         jstring faceModelPath) {
 
     const char* fPath = env->GetStringUTFChars(faceModelPath, nullptr);
-    bool loadSuccess = detector.loadModels(fPath);
+    bool loadSuccess  = detector.loadModels(fPath);
     env->ReleaseStringUTFChars(faceModelPath, fPath);
 
     float results[2] = { loadSuccess ? 1.0f : 0.0f, detector.faceLoadTime };
     jfloatArray resultMap = env->NewFloatArray(2);
     env->SetFloatArrayRegion(resultMap, 0, 2, results);
-
     return resultMap;
 }
 
@@ -246,7 +189,6 @@ Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeVisual(
         jint height,
         jint stride) {
 
-    // cam size를 모르는 상태에서 일단 실패 케이스 처리용 최소 배열 준비
     auto makeErrorResult = [&](float code) -> jfloatArray {
         jfloatArray out = env->NewFloatArray(4);
         float err[4] = { code, -1.0f, -1.0f, -1.0f };
@@ -254,9 +196,12 @@ Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeVisual(
         return out;
     };
 
+    // [FIX 7] isFaceLoaded 확인은 GetByteArrayElements 이전에 수행 → data 누수 없음 (기존 구조 유지)
     if (!detector.isFaceLoaded) return makeErrorResult(-1.0f);
 
     jbyte* data = env->GetByteArrayElements(buffer, nullptr);
+    if (!data) return makeErrorResult(-2.0f);   // null 체크 추가
+
     cv::Mat frame(height, width, CV_8UC4, (void*)data, stride);
 
     if (frame.empty()) {
@@ -272,28 +217,25 @@ Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeVisual(
     std::vector<float> frameData(
             (float*)floatMat.datastart, (float*)floatMat.dataend);
 
-    auto start_inference = std::chrono::high_resolution_clock::now();
     auto fr = detector.infer(frameData.data());
-    float inferTime = get_ms(start_inference);
 
     env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
 
     if (!fr.valid) return makeErrorResult(-3.0f);
 
-    // cam size 기반으로 결과 배열 크기 동적 계산
     // [fakeProb, realProb, loadTime, inferTime, cam×N, minx, miny, maxx, maxy, bbox_score]
-    int cam_size   = (int)fr.cam.size();
+    int cam_size    = (int)fr.cam.size();
     int RESULT_SIZE = 4 + cam_size + 5;
     std::vector<float> results(RESULT_SIZE, -1.0f);
 
     results[0] = fr.fakeProb;
     results[1] = fr.realProb;
     results[2] = detector.faceLoadTime;
-    results[3] = inferTime;  // inferTime은 infer() 밖에서 측정 불가 → 필요시 infer()에 타이머 추가
+    results[3] = fr.inferTimeMs;    // [FIX 1] infer() 내부에서 측정한 정확한 추론 시간
 
     std::copy(fr.cam.begin(), fr.cam.end(), results.data() + 4);
 
-    int bbox_offset    = 4 + cam_size;
+    int bbox_offset          = 4 + cam_size;
     results[bbox_offset]     = fr.bbox_roi[0]; // minx
     results[bbox_offset + 1] = fr.bbox_roi[1]; // miny
     results[bbox_offset + 2] = fr.bbox_roi[2]; // maxx

@@ -265,11 +265,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun getAssetFilePath(assetName: String): String {
+        val prefs = getSharedPreferences("model_cache", MODE_PRIVATE)
+        val currentVersion = packageManager.getPackageInfo(packageName, 0).longVersionCode
+        val cachedVersion = prefs.getLong("version_$assetName", -1L)
+
         val file = File(filesDir, assetName)
-        if (file.exists() && file.length() > 0) return file.absolutePath
+        if (file.exists() && cachedVersion == currentVersion) return file.absolutePath
+
         assets.open(assetName).use { input ->
             FileOutputStream(file).use { output -> input.copyTo(output) }
         }
+        prefs.edit().putLong("version_$assetName", currentVersion).apply()
         return file.absolutePath
     }
 }
