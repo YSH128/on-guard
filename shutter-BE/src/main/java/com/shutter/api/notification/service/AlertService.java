@@ -9,6 +9,8 @@ import com.shutter.api.notification.domain.NotificationStatus;
 import com.shutter.api.notification.dto.request.AlertRequest;
 import com.shutter.api.notification.dto.response.AlertLogResponse;
 import com.shutter.api.notification.dto.response.AlertLogsResponse;
+import com.shutter.api.notification.dto.response.TimelineItemResponse;
+import com.shutter.api.notification.dto.response.TimelineListResponse;
 import com.shutter.api.notification.repository.NotificationLogRepository;
 import com.shutter.api.user.domain.User;
 import com.shutter.api.user.domain.UserRelationship;
@@ -55,15 +57,11 @@ public class AlertService {
             throw new AlertException(ErrorCode.RELATIONSHIP_NOT_FOUND);
         }
 
-        // 3. 알림 메시지 생성
-        String pushMessage = switch (request.getEventType()) {
-            case DEEPFAKE -> String.format("%s님이 딥페이크 의심 통화 중입니다.", ward.getName());
-            case LOCATION -> String.format("%s님의 위치 정보 공유가 시작되었습니다.", ward.getName());
-            default -> String.format("%s님에게 알림이 발생했습니다.", ward.getName());
-        };
+        // 3. 알림 메시지 생성 (Enum 활용)
+        String pushMessage = request.getEventType().getPushMessage(ward.getName());
 
         boolean hasFailure = false;
-        java.util.List<NotificationLog> savedLogs = new java.util.ArrayList<>();
+        List<NotificationLog> savedLogs = new java.util.ArrayList<>();
 
         // 4. 각 보호자에게 푸시 발송 및 로그 저장
         for (UserRelationship rel : relationships) {
@@ -90,7 +88,7 @@ public class AlertService {
             log.info("Alert sent from ward {} to guardian {}. Status: {}", wardId, guardian.getId(), savedLog.getStatus());
         }
 
-        // 5. 하나라도 실패했다면 최종적으로 에러 반환 (선택적 정책)
+        // 5. 하나라도 실패했다면 최종적으로 에러 반환
         if (hasFailure) {
             throw new AlertException(ErrorCode.FCM_SEND_FAILED);
         }
@@ -99,26 +97,40 @@ public class AlertService {
     }
 
     /**
-     * 피보호자의 알림 로그 목록 조회
-     *
-     * @param wardId 피보호자 ID
-     * @return 알림 로그 목록 (최신순)
+     * 피보호자의 알림 로그 목록 조회 (기존 API용)
      */
     @Transactional(readOnly = true)
     public AlertLogsResponse getAlertLogs(Long wardId) {
-        // 1. 피보호자 존재 여부 확인
-        if (!userRepository.existsById(wardId)) {
-            throw new BusinessException(ErrorCode.WARD_NOT_FOUND);
-        }
-
-        // 2. 알림 로그 조회 (Repo에서 @EntityGraph를 사용하여 JOIN 처리됨)
-        List<NotificationLog> logs = notificationLogRepository.findAllByWardIdOrderBySentAtDesc(wardId);
-
-        // 3. DTO 변환 후 래퍼로 감싸서 반환
+        List<NotificationLog> logs = getLogsByWardId(wardId);
+        
         List<AlertLogResponse> responses = logs.stream()
                 .map(AlertLogResponse::from)
                 .collect(Collectors.toList());
         
         return AlertLogsResponse.from(responses);
+    }
+
+    /**
+     * 피보호자의 타임라인 조회 (프론트 규격)
+     */
+    @Transactional(readOnly = true)
+    public TimelineListResponse getTimeline(Long wardId) {
+        List<NotificationLog> logs = getLogsByWardId(wardId);
+
+        List<TimelineItemResponse> timelineItems = logs.stream()
+                .map(TimelineItemResponse::from)
+                .collect(Collectors.toList());
+
+        return TimelineListResponse.of(timelineItems);
+    }
+
+    /**
+     * 공통 로그 조회 메서드 (중복 제거용)
+     */
+    private List<NotificationLog> getLogsByWardId(Long wardId) {
+        if (!userRepository.existsById(wardId)) {
+            throw new BusinessException(ErrorCode.WARD_NOT_FOUND);
+        }
+        return notificationLogRepository.findAllByWardIdOrderBySentAtDesc(wardId);
     }
 }
