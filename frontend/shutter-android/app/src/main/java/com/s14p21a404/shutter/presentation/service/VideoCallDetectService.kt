@@ -56,6 +56,7 @@ class VideoCallDetectService : Service() {
     private lateinit var videoCallRepository: VideoCallRepository
     private lateinit var detectionRepository: DeepfakeDetectionRepository
     private lateinit var deepfakeAlertSender: DeepfakeAlertSender
+    private lateinit var alertRepository: com.s14p21a404.shutter.domain.repository.AlertRepository
     private lateinit var gpsRepository: GpsRepository
     private lateinit var tokenManager: TokenManager
 
@@ -102,6 +103,7 @@ class VideoCallDetectService : Service() {
         videoCallRepository = locator.videoCallRepository
         detectionRepository = locator.detectionRepository
         deepfakeAlertSender = locator.deepfakeAlertSender
+        alertRepository = locator.alertRepository
         gpsRepository = locator.gpsRepository
         tokenManager = locator.tokenManager
 
@@ -321,6 +323,11 @@ class VideoCallDetectService : Service() {
         gpsSendingJob?.cancel()
 
         Log.d(TAG, "GPS 전송 세션 시작")
+        serviceScope.launch {
+            alertRepository.sendLocationAlert()
+                .onSuccess { Log.d(TAG, "위치 공유 알림 전송 성공") }
+                .onFailure { Log.e(TAG, "위치 공유 알림 전송 실패", it) }
+        }
 
         gpsSendingJob = serviceScope.launch {
             val endTime = now + GPS_SHARING_DURATION_MS
