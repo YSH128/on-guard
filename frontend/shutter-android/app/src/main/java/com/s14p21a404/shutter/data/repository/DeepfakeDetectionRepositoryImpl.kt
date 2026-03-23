@@ -56,7 +56,9 @@ class DeepfakeDetectionRepositoryImpl(
             onResult = { result ->
                 Log.d(TAG, "📊 감지 결과: $result")
                 _results.tryEmit(result)
-                
+            },
+            onFrameResult = {result ->
+                Log.d(TAG, "📊 Frame 별 감지 결과: $result")
                 // 텔레메트리 비동기 전송
                 sendTelemetry(result)
             },

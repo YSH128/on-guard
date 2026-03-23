@@ -26,6 +26,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
     private var bridge: NativeDeepfakeBridge? = null
     private var onResultCallback: ((DeepfakeDetectionResult) -> Unit)? = null
+    private var onFrameResultCallback: ((DeepfakeDetectionResult) -> Unit)? = null
     private var nativeAvailable = false
 
     /** NDK 결과를 받을 더미 TextView (NDK 쪽에서 setText로 결과를 써줄 예정) -> 폐기: 직관적인 String Return 사용 */
@@ -46,9 +47,11 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
     override fun startDetection(
         onResult: (DeepfakeDetectionResult) -> Unit,
+        onFrameResult: (DeepfakeDetectionResult) -> Unit,
         onReady: () -> Unit
     ) {
         onResultCallback = onResult
+        onFrameResultCallback = onFrameResult
         resultBuffer.clear()  // 시작 시 초기화
         
         if (bridge == null) {
@@ -104,6 +107,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
             Log.d(TAG, "JNI 결과: $resultText")
 
             val result = parseResult(resultText)
+            onFrameResultCallback?.invoke(result)
             resultBuffer.add(result)
             Log.d(TAG, "결과 누적 ${resultBuffer.size}/$BUFFER_SIZE")
 
