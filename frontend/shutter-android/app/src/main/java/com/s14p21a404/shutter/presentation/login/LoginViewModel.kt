@@ -17,6 +17,7 @@ import com.s14p21a404.shutter.domain.usecase.LoginUseCase
 import com.s14p21a404.shutter.push.ShutterFirebaseMessagingService
 import com.s14p21a404.shutter.domain.usecase.LogoutUseCase
 import com.s14p21a404.shutter.domain.usecase.RegisterUseCase
+import com.s14p21a404.shutter.network.AuthEventBus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -49,6 +50,20 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         checkLoginState()
+        collectLogoutEvents()
+    }
+
+    /**
+     * 세션 만료(401/403 갱신 실패) 시 강제 로그아웃 이벤트를 수신한다.
+     */
+    private fun collectLogoutEvents() {
+        viewModelScope.launch {
+            AuthEventBus.logoutEvent.collect {
+                Log.w(TAG, "세션 만료 — 강제 로그아웃")
+                logoutUseCase()
+                _loginUiState.value = LoginUiState.LoggedOut
+            }
+        }
     }
 
     private fun checkLoginState() {
