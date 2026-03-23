@@ -34,10 +34,13 @@ fun VideoCallScreen(channelId: String) {
 
     var rtcEngine by remember { mutableStateOf<RtcEngine?>(null) }
     var remoteUid by remember { mutableStateOf<Int?>(null) }
-
     var isRecording by remember { mutableStateOf(false) }
     var outputStream by remember { mutableStateOf<FileOutputStream?>(null) }
     var recordingFile by remember { mutableStateOf<File?>(null) }
+
+    // 로컬/리모트 SurfaceView를 remember로 보관
+    val localView = remember { mutableStateOf<SurfaceView?>(null) }
+    val remoteView = remember { mutableStateOf<SurfaceView?>(null) }
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -67,6 +70,23 @@ fun VideoCallScreen(channelId: String) {
             override fun getMixedAudioParams(): AudioParams = AudioParams(44100, 1, 0, 1024)
             override fun getEarMonitoringAudioParams(): AudioParams = AudioParams(44100, 1, 0, 1024)
         }
+    }
+
+    // rtcEngine이 세팅되면 로컬 비디오 세팅
+    LaunchedEffect(rtcEngine) {
+        val engine = rtcEngine ?: return@LaunchedEffect
+        val view = localView.value ?: return@LaunchedEffect
+        engine.setupLocalVideo(VideoCanvas(view, VideoCanvas.RENDER_MODE_HIDDEN, 0))
+        engine.startPreview()
+    }
+
+    // remoteUid가 바뀌면 리모트 비디오 세팅
+    LaunchedEffect(remoteUid, rtcEngine) {
+        val engine = rtcEngine ?: return@LaunchedEffect
+        val uid = remoteUid ?: return@LaunchedEffect
+        val view = remoteView.value ?: return@LaunchedEffect
+        android.util.Log.d("VIDEO", "setupRemoteVideo uid=$uid view=$view")
+        engine.setupRemoteVideo(VideoCanvas(view, VideoCanvas.RENDER_MODE_HIDDEN, uid))
     }
 
     LaunchedEffect(Unit) {
@@ -109,7 +129,6 @@ fun VideoCallScreen(channelId: String) {
         engine.adjustRecordingSignalVolume(300)
         engine.adjustPlaybackSignalVolume(200)
         engine.registerAudioFrameObserver(audioFrameObserver)
-        rtcEngine = engine
 
         val file = File(context.getExternalFilesDir(null), "remote_only.pcm")
         recordingFile = file
@@ -123,6 +142,7 @@ fun VideoCallScreen(channelId: String) {
             autoSubscribeAudio = true
         }
         engine.joinChannel(null, channelId, 0, options)
+        rtcEngine = engine  // 마지막에 세팅
     }
 
     DisposableEffect(Unit) {
@@ -137,7 +157,6 @@ fun VideoCallScreen(channelId: String) {
                     val wavFile = File(context.getExternalFilesDir(null), "remote_only.wav")
                     convertPcmToWav(pcmFile, wavFile, 44100, 1, 16)
                     pcmFile.delete()
-                    // WAV 파일 Jetson으로 전송
                     sendWavToJetson(wavFile)
                 }
             }
@@ -149,42 +168,38 @@ fun VideoCallScreen(channelId: String) {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        remoteUid?.let { uid ->
-            key(uid) {
-                AndroidView(
-                    factory = { ctx ->
-                        SurfaceView(ctx).also { view ->
-                            view.layoutParams = ViewGroup.LayoutParams(
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.MATCH_PARENT
-                            )
-                            rtcEngine?.setupRemoteVideo(
-                                VideoCanvas(view, VideoCanvas.RENDER_MODE_HIDDEN, uid)
-                            )
-                        }
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        }
 
-        key(rtcEngine) {
-            AndroidView(
-                factory = { ctx ->
-                    SurfaceView(ctx).also { view ->
-                        rtcEngine?.setupLocalVideo(
-                            VideoCanvas(view, VideoCanvas.RENDER_MODE_HIDDEN, 0)
-                        )
-                        rtcEngine?.startPreview()
-                    }
-                },
-                modifier = Modifier
-                    .width(120.dp)
-                    .height(160.dp)
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp)
-            )
-        }
+        // 상대방 화면 (전체)
+        AndroidView(
+            factory = { ctx ->
+                SurfaceView(ctx).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    remoteView.value = this
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        // 내 화면 (우측 하단)
+        AndroidView(
+            factory = { ctx ->
+                SurfaceView(ctx).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    localView.value = this
+                }
+            },
+            modifier = Modifier
+                .width(120.dp)
+                .height(160.dp)
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+        )
     }
 }
 
@@ -200,23 +215,18 @@ private fun sendWavToJetson(wavFile: File) {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
                     android.util.Log.d("WS", "✅ WebSocket 연결됨")
                 }
-
                 override fun onMessage(webSocket: WebSocket, text: String) {
                     android.util.Log.d("WS", "서버 메시지 수신: $text")
-                    // 서버에서 첫 메시지 받으면 WAV 파일 전송
                     val audioBytes = wavFile.readBytes()
                     webSocket.send(ByteString.of(*audioBytes))
                     android.util.Log.d("WS", "✅ WAV 전송 완료: ${audioBytes.size} bytes")
                 }
-
                 override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
                     android.util.Log.d("WS", "서버 바이너리 수신: ${bytes.size} bytes")
                 }
-
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                     android.util.Log.e("WS", "❌ WebSocket 오류: ${t.message}")
                 }
-
                 override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                     android.util.Log.d("WS", "WebSocket 닫힘: $reason")
                 }

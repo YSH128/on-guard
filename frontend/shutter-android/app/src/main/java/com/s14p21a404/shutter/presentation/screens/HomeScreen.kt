@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,18 +49,20 @@ fun HomeScreen(
 ) {
     val uiState by homeViewModel.uiState.collectAsState()
 
-    LaunchedEffect(Unit) { homeViewModel.loadFriends() }
+    LaunchedEffect(Unit) {
+        homeViewModel.loadFriends()
+        homeViewModel.loadMyProfile()
+    }
 
-    // ── 권한 다이얼로그 ──
     var showPermissionDialog    by remember { mutableStateOf(false) }
     var showOverlayDialog       by remember { mutableStateOf(false) }
     var showAccessibilityDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(allPermissionsGranted, overlayPermissionGranted, accessibilityServiceEnabled, isServiceRunning) {
         when {
-            !allPermissionsGranted      -> showPermissionDialog = true
-            !overlayPermissionGranted   -> showOverlayDialog = true
-            !isServiceRunning           -> onToggleService()
+            !allPermissionsGranted       -> showPermissionDialog = true
+            !overlayPermissionGranted    -> showOverlayDialog = true
+            !isServiceRunning            -> onToggleService()
             !accessibilityServiceEnabled -> showAccessibilityDialog = true
         }
     }
@@ -106,26 +109,14 @@ fun HomeScreen(
             .fillMaxSize()
             .background(BgColor)
     ) {
-        // ── 상단 그라데이션 헤더 ──
         HeaderSection(isServiceRunning = isServiceRunning, onToggleService = onToggleService)
 
-        // ── 영상통화 테스트 버튼 ──
-        Button(
-            onClick = { onNavigateToVideoCall("testchannel123") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp)
-        ) {
-            Text("영상통화 시작")
-        }
-
-        // ── 연락처 (카카오 친구 목록) ──
         Text(
             text = "연락처",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             color = TextPrimary,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
         )
 
         when {
@@ -150,7 +141,17 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(uiState.friends) { friend ->
-                        FriendItem(name = friend.name)
+                        FriendItem(
+                            name = friend.name,
+                            onVideoCall = {
+                                val myName = homeViewModel.getMyName()
+                                val channelId = listOf(myName, friend.id.toString())
+                                    .sorted()
+                                    .joinToString("_")
+                                android.util.Log.d("Channel", "채널명: $channelId")
+                                onNavigateToVideoCall(channelId)
+                            }
+                        )
                     }
                 }
             }
@@ -159,7 +160,10 @@ fun HomeScreen(
 }
 
 @Composable
-private fun FriendItem(name: String) {
+private fun FriendItem(
+    name: String,
+    onVideoCall: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -168,6 +172,7 @@ private fun FriendItem(name: String) {
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // 프로필 아이콘
         Box(
             modifier = Modifier
                 .size(40.dp)
@@ -182,19 +187,29 @@ private fun FriendItem(name: String) {
                 tint = Color(0xFF5B7FD6)
             )
         }
+
         Spacer(Modifier.width(12.dp))
+
+        // 이름
         Text(
             text = name,
             fontSize = 15.sp,
             fontWeight = FontWeight.Medium,
-            color = TextPrimary
+            color = TextPrimary,
+            modifier = Modifier.weight(1f)
         )
+
+        // 영상통화 버튼
+        IconButton(onClick = onVideoCall) {
+            Icon(
+                imageVector = Icons.Outlined.Videocam,
+                contentDescription = "영상통화",
+                tint = Color(0xFF5B7FD6),
+                modifier = Modifier.size(24.dp)
+            )
+        }
     }
 }
-
-// ════════════════════════════════════════════════════════════
-// 상단 헤더
-// ════════════════════════════════════════════════════════════
 
 @Composable
 private fun HeaderSection(isServiceRunning: Boolean, onToggleService: () -> Unit) {
