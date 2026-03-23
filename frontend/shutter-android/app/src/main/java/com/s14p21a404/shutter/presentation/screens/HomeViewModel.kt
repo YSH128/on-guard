@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.kakao.sdk.talk.TalkApiClient
+import com.kakao.sdk.user.UserApiClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +25,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(ContactsUiState())
     val uiState: StateFlow<ContactsUiState> = _uiState.asStateFlow()
 
+    private val _myName = MutableStateFlow("")
+    val myName: StateFlow<String> = _myName.asStateFlow()
+
     fun loadFriends() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
@@ -37,6 +41,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 }
         }
     }
+
+    fun loadMyProfile() {
+        viewModelScope.launch {
+            suspendCancellableCoroutine { cont ->
+                UserApiClient.instance.me { user, error ->
+                    if (error != null) {
+                        Log.w(TAG, "내 프로필 조회 실패", error)
+                        cont.resume(Unit)
+                    } else {
+                        _myName.value = user?.kakaoAccount?.profile?.nickname ?: ""
+                        Log.d(TAG, "내 이름: ${_myName.value}")
+                        cont.resume(Unit)
+                    }
+                }
+            }
+        }
+    }
+
+    fun getMyName(): String = _myName.value
 
     private suspend fun loadKakaoFriends(): Result<List<KakaoFriendItem>> =
         suspendCancellableCoroutine { cont ->
