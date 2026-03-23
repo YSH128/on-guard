@@ -221,9 +221,10 @@ class ForegroundAppMonitorService : AccessibilityService() {
 
         /**
          * 통화 UI 관련 패키지 목록.
-         * 이 패키지가 포그라운드일 때만 View hierarchy 분석을 수행한다.
+         * - ForegroundAppMonitorService: 이 패키지일 때만 View hierarchy 분석
+         * - VideoCallRepositoryImpl: 이 패키지가 포그라운드일 때 영상통화 판단
          */
-        private val CALL_UI_PACKAGES = setOf(
+        val CALL_UI_PACKAGES = setOf(
             // VoIP 영상통화 앱
             "com.kakao.talk",                        // 카카오톡 (페이스톡)
             "jp.naver.line.android",                  // 라인

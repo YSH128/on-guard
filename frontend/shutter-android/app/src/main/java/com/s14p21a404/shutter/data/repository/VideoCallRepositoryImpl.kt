@@ -93,7 +93,7 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
                 // 포그라운드 패키지가 영상통화 패키지와 같거나,
                 // 시스템 전화 UI 패키지인 경우 true
                 val isOnVideoCallScreen = currentPkg == targetPkg
-                        || currentPkg in ALL_VIDEO_CALL_PACKAGES
+                        || currentPkg in ForegroundAppMonitorService.CALL_UI_PACKAGES
                         || currentPkg.isEmpty()  // 아직 감지 전
                 Log.d(TAG, "포그라운드=$currentPkg, 영상통화앱=$targetPkg → onScreen=$isOnVideoCallScreen")
                 isOnVideoCallScreen
@@ -156,7 +156,7 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
         // - 카메라: CameraManager.AvailabilityCallback
         // - 통화 UI 앱: CALL_UI_PACKAGES에 포함된 앱이 포그라운드
         // - 타이머: AccessibilityService가 View hierarchy에서 MM:SS 텍스트 감지 (래치)
-        val isOnCallScreen = currentFg in ALL_VIDEO_CALL_PACKAGES
+        val isOnCallScreen = currentFg in ForegroundAppMonitorService.CALL_UI_PACKAGES
         val isVideoCall = isCameraBusy && isOnCallScreen && isCallTimerVisible
         _videoCallState.value = isVideoCall
 
@@ -212,33 +212,6 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
 
     companion object {
         private const val TAG = "VideoCallRepo"
-
-        /**
-         * 영상통화 관련 패키지 목록 (통신사 + VoIP 통합).
-         * 이 패키지가 포그라운드 + 카메라 사용 + 타이머 감지 시 영상통화로 판단한다.
-         * 오버레이 표시 여부 판단에도 사용된다.
-         */
-        private val ALL_VIDEO_CALL_PACKAGES = setOf(
-            // ── VoIP 영상통화 앱 ──
-            "com.kakao.talk",                        // 카카오톡 (페이스톡)
-            "jp.naver.line.android",                  // 라인
-            "com.whatsapp",                           // WhatsApp
-            "org.telegram.messenger",                 // 텔레그램
-            "com.facebook.orca",                      // 페이스북 메신저
-            "com.google.android.apps.tachyon",        // Google Duo/Meet
-            "com.google.android.apps.meetings",       // Google Meet
-            "us.zoom.videomeetings",                  // Zoom
-            "com.microsoft.teams",                    // Microsoft Teams
-            "com.discord",                            // Discord
-            "com.skype.raider",                       // Skype
-            // ── 시스템 전화 UI ──
-            "com.samsung.android.incallui",           // 삼성 전화 UI
-            "com.android.incallui",                   // AOSP 전화 UI
-            "com.google.android.dialer",              // Google 전화 앱
-            "com.samsung.android.dialer",             // 삼성 전화 앱
-            "com.android.dialer",                     // AOSP 전화 앱
-            "com.samsung.android.vtcallplugin",       // 삼성 영상통화 플러그인
-        )
 
         /**
          * 금융 앱 패키지 목록.
