@@ -6,6 +6,7 @@ import com.shutter.api.global.exception.ErrorCode;
 import com.shutter.api.notification.client.KakaoPushClient;
 import com.shutter.api.notification.domain.NotificationLog;
 import com.shutter.api.notification.domain.NotificationStatus;
+import com.shutter.api.notification.domain.PushResult;
 import com.shutter.api.notification.dto.request.AlertRequest;
 import com.shutter.api.notification.dto.response.AlertLogResponse;
 import com.shutter.api.notification.dto.response.AlertLogsResponse;
@@ -54,7 +55,7 @@ public class AlertService {
         List<UserRelationship> relationships = userRelationshipRepository.findByWardIdWithGuardian(wardId);
         
         if (relationships.isEmpty()) {
-            throw new AlertException(ErrorCode.RELATIONSHIP_NOT_FOUND);
+            throw new AlertException(ErrorCode.NO_GUARDIANS_REGISTERED);
         }
 
         // 3. 알림 메시지 생성 (Enum 활용)
@@ -66,7 +67,8 @@ public class AlertService {
         // 4. 각 보호자에게 푸시 발송 및 로그 저장
         for (UserRelationship rel : relationships) {
             User guardian = rel.getGuardian();
-            boolean pushSuccess = kakaoPushClient.sendPush(guardian.getKakaoId(), request.getEventType(), pushMessage);
+            PushResult pushResult = kakaoPushClient.sendPush(guardian.getKakaoId(), request.getEventType(), pushMessage);
+            boolean pushSuccess = (pushResult == PushResult.SUCCESS);
 
             NotificationLog notificationLog = NotificationLog.builder()
                     .ward(ward)
@@ -75,12 +77,17 @@ public class AlertService {
                     .eventType(request.getEventType())
                     .callStartedAt(request.getCallStartedAt())
                     .status(pushSuccess ? NotificationStatus.SUCCESS : NotificationStatus.FAIL)
-                    .failReason(pushSuccess ? null : "Kakao Push API 호출 실패")
+                    .failReason(pushSuccess ? null : "Kakao Push API 호출 실패 (" + pushResult.name() + ")")
                     .build();
 
             NotificationLog savedLog = notificationLogRepository.save(notificationLog);
             savedLogs.add(savedLog);
             
+            if (pushResult == PushResult.CONFIG_ERROR) {
+                log.error("CRITICAL: Kakao Push configuration error detected.");
+                throw new AlertException(ErrorCode.KAKAO_PUSH_CONFIG_ERROR);
+            }
+
             if (!pushSuccess) {
                 hasFailure = true;
             }
