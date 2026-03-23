@@ -1,90 +1,61 @@
 package com.s14p21a404.shutter.presentation.screens
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.s14p21a404.shutter.di.ServiceLocator
-import com.s14p21a404.shutter.network.TimelineItem
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
+import com.kakao.sdk.talk.TalkApiClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
-data class WardFilter(
-    val name: String,
-    val wardId: Long?,  // null = 전체
-)
-
-/** 타임라인 항목 + 소속 피보호자 이름 */
-data class TimelineEntry(
-    val wardName: String,
-    val item: TimelineItem,
-)
-
-data class HomeUiState(
-    val wardFilters: List<WardFilter> = listOf(WardFilter("전체", null)),
-    val selectedFilter: String = "전체",
-    val timelineEntries: List<TimelineEntry> = emptyList(),
+data class ContactsUiState(
+    val friends: List<KakaoFriendItem> = emptyList(),
     val isLoading: Boolean = false,
+    val error: String? = null,
 )
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val locator = ServiceLocator.getInstance(application)
-    private val getMyWardsUseCase = locator.getMyWardsUseCase
-    private val alertRepository = locator.alertRepository
+    private val _uiState = MutableStateFlow(ContactsUiState())
+    val uiState: StateFlow<ContactsUiState> = _uiState.asStateFlow()
 
-    private val _uiState = MutableStateFlow(HomeUiState())
-    val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
-
-    init {
-        loadWards()
-    }
-
-    fun loadWards() {
+    fun loadFriends() {
         viewModelScope.launch {
-            getMyWardsUseCase()
-                .onSuccess { wards ->
-                    val filters = listOf(WardFilter("전체", null)) +
-                            wards.map { WardFilter(it.name, it.wardId) }
-                    _uiState.update { it.copy(wardFilters = filters) }
-                    loadTimeline()
+            _uiState.update { it.copy(isLoading = true, error = null) }
+            loadKakaoFriends()
+                .onSuccess { friends ->
+                    _uiState.update { it.copy(friends = friends, isLoading = false) }
+                }
+                .onFailure { e ->
+                    Log.w(TAG, "카카오 친구 목록 조회 실패", e)
+                    _uiState.update { it.copy(isLoading = false, error = "친구 목록을 불러오지 못했습니다.") }
                 }
         }
     }
 
-    fun selectFilter(name: String) {
-        _uiState.update { it.copy(selectedFilter = name) }
-        loadTimeline()
-    }
-
-    private fun loadTimeline() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-
-            val state = _uiState.value
-            val wardsToFetch = if (state.selectedFilter == "전체") {
-                state.wardFilters.filter { it.wardId != null }
-            } else {
-                state.wardFilters.filter { it.name == state.selectedFilter && it.wardId != null }
+    private suspend fun loadKakaoFriends(): Result<List<KakaoFriendItem>> =
+        suspendCancellableCoroutine { cont ->
+            TalkApiClient.instance.friends { friends, error ->
+                if (error != null) {
+                    cont.resume(Result.failure(error))
+                } else {
+                    val items = friends?.elements
+                        ?.mapNotNull { friend ->
+                            val id = friend.id ?: return@mapNotNull null
+                            val name = friend.profileNickname ?: return@mapNotNull null
+                            KakaoFriendItem(id = id, uuid = friend.uuid, name = name)
+                        } ?: emptyList()
+                    cont.resume(Result.success(items))
+                }
             }
-
-            val entries = wardsToFetch
-                .map { ward ->
-                    async {
-                        alertRepository.getTimeline(ward.wardId!!)
-                            .getOrDefault(emptyList())
-                            .map { item -> TimelineEntry(wardName = ward.name, item = item) }
-                    }
-                }
-                .awaitAll()
-                .flatten()
-                .sortedByDescending { it.item.timestamp }
-
-            _uiState.update { it.copy(timelineEntries = entries, isLoading = false) }
         }
+
+    companion object {
+        private const val TAG = "HomeViewModel"
     }
 }
