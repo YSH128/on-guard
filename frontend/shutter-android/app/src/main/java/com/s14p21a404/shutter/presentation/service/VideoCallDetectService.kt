@@ -31,9 +31,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.time.LocalDateTime
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
-import java.time.LocalDateTime
 
 /**
  * 영상통화 감지 Foreground Service (얇은 껍데기)
@@ -149,7 +149,6 @@ class VideoCallDetectService : Service() {
                     alertSoundManager.startAlert()
                     financialBlockOverlayManager.setEnabled(true)
                     startFinancialAppMonitoring()
-                    startGpsSendingIfEligible()
                     if (!alertSentForCurrentSession) {
                         alertSentForCurrentSession = true
                         serviceScope.launch(Dispatchers.Main) {
@@ -157,6 +156,7 @@ class VideoCallDetectService : Service() {
                             deepfakeAlertSender.sendAlert(LocalDateTime.now())
                         }
                     }
+                    startGpsSendingIfEligible()
                 } else {
                     isDeepfakeDetected = false
                     alertSoundManager.stopAlert()
@@ -176,6 +176,7 @@ class VideoCallDetectService : Service() {
      * 다시 돌아오면 오버레이를 복원한다.
      */
     private fun startForegroundAppMonitoring() {
+        // 이미 모니터링 중이면 무시
         if (foregroundMonitorJob?.isActive == true) return
 
         if (!ForegroundAppMonitorService.isRunning()) {
@@ -189,12 +190,14 @@ class VideoCallDetectService : Service() {
                 Log.d(TAG, "영상통화 화면 여부: $isOnVideoCallScreen, 오버레이 표시 중: ${warningOverlayManager.isShowing()}")
 
                 if (isOnVideoCallScreen) {
+                    // 영상통화 화면으로 복귀 → 오버레이가 이전에 표시 중이었으면 복원
                     if (wasOverlayShowing && !warningOverlayManager.isShowing()) {
                         Log.d(TAG, "📱 영상통화 화면 복귀 → 오버레이 복원")
                         warningOverlayManager.setEnabled(true)
                         warningOverlayManager.showWarning()
                     }
                 } else {
+                    // 영상통화 화면 이탈 → 오버레이 숨김
                     if (warningOverlayManager.isShowing()) {
                         wasOverlayShowing = true
                         Log.d(TAG, "📱 영상통화 화면 이탈 → 오버레이 숨김")
@@ -253,6 +256,7 @@ class VideoCallDetectService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // MainActivity에서 전달한 MediaProjection 데이터로 초기화
         if (intent != null && intent.hasExtra(EXTRA_RESULT_CODE)) {
             val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0)
             val projectionData = intent.getParcelableExtra(EXTRA_PROJECTION_DATA, Intent::class.java)
@@ -263,6 +267,7 @@ class VideoCallDetectService : Service() {
                 val mediaProjection = projectionManager.getMediaProjection(resultCode, projectionData)
                 Log.d(TAG, "MediaProjection 초기화 완료")
 
+                // Data 레이어에 MediaProjection 전달 (캡처는 data layer 내부에서 관리)
                 if (mediaProjection != null) {
                     detectionRepository.setMediaProjection(this, mediaProjection)
                 } else {
@@ -279,9 +284,9 @@ class VideoCallDetectService : Service() {
 
         stopForegroundAppMonitoring()
         stopFinancialAppMonitoring()
+        alertSoundManager.stopAlert()
         gpsSendingJob?.cancel()
 
-        alertSoundManager.stopAlert()
         serviceScope.cancel()
         detectionRepository.stopDetection()
         videoCallRepository.stopMonitoring()
@@ -396,6 +401,10 @@ class VideoCallDetectService : Service() {
 
     // ── ROI 크롭 ──
 
+    /**
+     * 최신 캡처 프레임에서 ROI 영역을 잘라낸 Bitmap을 반환한다.
+     * ROI 좌표는 0.0~1.0 상대좌표이므로 실제 픽셀 좌표로 변환한다.
+     */
     private fun cropRoiBitmap(result: com.s14p21a404.shutter.domain.model.DeepfakeDetectionResult): Bitmap? {
         val source = detectionRepository.getLatestBitmap() ?: return null
         return try {
