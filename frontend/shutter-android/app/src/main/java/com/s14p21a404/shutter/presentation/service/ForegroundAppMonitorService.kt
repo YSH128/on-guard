@@ -110,48 +110,17 @@ class ForegroundAppMonitorService : AccessibilityService() {
 
         val rootNode = rootInActiveWindow ?: return
         try {
-            val connected = analyzeCallConnectionState(rootNode)
-            if (connected) {
+            if (findCallTimerInTree(rootNode, 0)) {
                 Log.d(TAG, "📞 통화 연결 확인 (래치 ON) — pkg=$pkg")
                 _isCallConnected.value = true
             }
-            // false는 무시: 래치 방식이므로, 리셋은 앱 이탈 시에만 수행
         } finally {
             rootNode.recycle()
         }
     }
 
     /**
-     * View hierarchy를 얕은 깊이(최대 6)로 순회하며 통화 연결 상태를 판단한다.
-     *
-     * 판단 우선순위:
-     * 1. 통화 시간 형식 텍스트 (MM:SS 또는 H:MM:SS) → 즉시 연결 완료 확정
-     * 2. 발신 중 / 연결 중 텍스트 발견 → 미연결
-     * 3. 연결 완료 UI 텍스트만 있고 발신 중 텍스트 없음 → 연결 완료
-     */
-    private fun analyzeCallConnectionState(rootNode: AccessibilityNodeInfo): Boolean {
-        // 1단계: 통화 타이머 찾기 (가장 확실한 신호 — 찾으면 즉시 반환)
-        if (findCallTimerInTree(rootNode, 0)) {
-            return true
-        }
-
-        // 2단계: 키워드 기반 판단 (타이머가 없는 경우 보조 수단)
-        var foundConnectedText = false
-        var foundDialingText = false
-
-        scanKeywordsInTree(rootNode, 0) { type ->
-            when (type) {
-                KeywordType.CONNECTED -> foundConnectedText = true
-                KeywordType.DIALING -> foundDialingText = true
-            }
-        }
-
-        // 연결 완료 텍스트가 있고 발신 중 텍스트가 없으면 연결 완료
-        return foundConnectedText && !foundDialingText
-    }
-
-    /**
-     * View 트리에서 통화 타이머 텍스트를 탐색한다.
+     * View 트리에서 통화 타이머 텍스트(MM:SS 또는 H:MM:SS)를 탐색한다.
      * 찾는 즉시 true를 반환하고 탐색을 종료한다 (early return).
      */
     private fun findCallTimerInTree(node: AccessibilityNodeInfo, depth: Int): Boolean {
@@ -183,42 +152,6 @@ class ForegroundAppMonitorService : AccessibilityService() {
         return false
     }
 
-    /** 키워드 탐색 결과 분류 */
-    private enum class KeywordType { CONNECTED, DIALING }
-
-    /**
-     * View 트리에서 연결 완료 / 발신 중 키워드를 탐색한다.
-     * 깊이 제한 내에서 모든 텍스트 노드를 검사한다.
-     */
-    private fun scanKeywordsInTree(
-        node: AccessibilityNodeInfo,
-        depth: Int,
-        onFound: (KeywordType) -> Unit
-    ) {
-        if (depth > MAX_TRAVERSE_DEPTH) return
-
-        val text = node.text?.toString()
-        if (text != null) {
-            val lowerText = text.lowercase()
-            if (CONNECTED_KEYWORDS.any { it in lowerText }) {
-                Log.d(TAG, "✅ 연결 완료 텍스트 발견: $text (depth=$depth)")
-                onFound(KeywordType.CONNECTED)
-            }
-            if (DIALING_KEYWORDS.any { it in lowerText }) {
-                Log.d(TAG, "📲 발신 중 텍스트 발견: $text (depth=$depth)")
-                onFound(KeywordType.DIALING)
-            }
-        }
-
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i) ?: continue
-            try {
-                scanKeywordsInTree(child, depth + 1, onFound)
-            } finally {
-                child.recycle()
-            }
-        }
-    }
 
     override fun onInterrupt() {
         Log.w(TAG, "AccessibilityService 인터럽트")
@@ -256,9 +189,7 @@ class ForegroundAppMonitorService : AccessibilityService() {
         /**
          * VoIP 통화 연결 상태 (래치 방식).
          *
-         * AccessibilityService의 View hierarchy 분석으로
-         * 통화 시간 표시(00:01 형태) 또는 연결 완료 UI 텍스트를 감지하면 true로 래치.
-         *
+         * View hierarchy에서 통화 타이머 텍스트(00:01 형태)를 감지하면 true로 래치.
          * 한 번 true가 되면, 아래 조건에서만 false로 리셋된다:
          * - 통화 앱이 포그라운드에서 이탈 (handleWindowStateChanged)
          * - 통화 상태가 IDLE로 전환 (resetCallConnected 호출)
@@ -281,42 +212,12 @@ class ForegroundAppMonitorService : AccessibilityService() {
         /** 서비스가 활성 상태인지 확인 */
         fun isRunning(): Boolean = instance != null
 
-        // ── 통화 시간 텍스트 패턴 ──
-
         /**
          * 통화 시간 형식 정규식.
          * "00:01", "12:34", "1:23:45" 등 MM:SS 또는 H:MM:SS 형태를 매칭한다.
          */
         private val CALL_TIMER_PATTERN = Regex("""^\d{1,2}:\d{2}(:\d{2})?$""")
 
-        // ── 연결 완료 판단 키워드 ──
-
-        /**
-         * 통화 연결 완료 시 화면에 나타나는 텍스트 키워드 (소문자).
-         * 다양한 VoIP 앱(카카오톡, 라인, WhatsApp 등)의 연결 완료 UI를 커버한다.
-         */
-        private val CONNECTED_KEYWORDS = listOf(
-            // 한국어
-            "통화 중", "통화중", "연결됨", "연결 됨",
-            "페이스톡", "영상통화 중", "영상통화중",
-            // 영어 (WhatsApp, Telegram, Line 등)
-            "connected", "ongoing", "in call", "video call",
-            "call in progress", "call connected",
-        )
-
-        /**
-         * 발신 중 / 연결 대기 상태 텍스트 키워드 (소문자).
-         * 이 텍스트가 보이면 아직 연결되지 않은 것으로 판단한다.
-         */
-        private val DIALING_KEYWORDS = listOf(
-            // 한국어
-            "발신", "연결 중", "연결중", "호출 중", "호출중",
-            "응답 대기", "응답 대기 중", "초대 중", "초대중",
-            "전화 거는 중", "통화 연결 중",
-            // 영어
-            "calling", "dialing", "ringing", "connecting",
-            "waiting", "inviting",
-        )
 
         /**
          * 통화 UI 관련 패키지 목록.
