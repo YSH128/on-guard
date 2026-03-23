@@ -360,9 +360,10 @@ class VideoCallDetectService : Service() {
     private suspend fun getCurrentLocation(): Location? = suspendCancellableCoroutine { cont ->
         val locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
 
+        // Network를 먼저 시도 — WiFi/셀 기반이라 실내에서도 빠르게 반환됨
         val cached = sequenceOf(
-            LocationManager.GPS_PROVIDER,
-            LocationManager.NETWORK_PROVIDER
+            LocationManager.NETWORK_PROVIDER,
+            LocationManager.GPS_PROVIDER
         ).mapNotNull { provider ->
             runCatching { locationManager.getLastKnownLocation(provider) }.getOrNull()
         }.firstOrNull { System.currentTimeMillis() - it.time < 30_000L }
@@ -373,10 +374,10 @@ class VideoCallDetectService : Service() {
         }
 
         val provider = when {
-            locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ->
-                LocationManager.GPS_PROVIDER
             locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) ->
                 LocationManager.NETWORK_PROVIDER
+            locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ->
+                LocationManager.GPS_PROVIDER
             else -> {
                 cont.resume(null)
                 return@suspendCancellableCoroutine
@@ -392,7 +393,19 @@ class VideoCallDetectService : Service() {
 
         try {
             locationManager.requestSingleUpdate(provider, listener, mainLooper)
-            cont.invokeOnCancellation { locationManager.removeUpdates(listener) }
+            // 10초 안에 위치 못 받으면 null 반환
+            val timeoutHandler = android.os.Handler(mainLooper)
+            val timeoutRunnable = Runnable {
+                if (cont.isActive) {
+                    locationManager.removeUpdates(listener)
+                    cont.resume(null)
+                }
+            }
+            timeoutHandler.postDelayed(timeoutRunnable, 10_000L)
+            cont.invokeOnCancellation {
+                locationManager.removeUpdates(listener)
+                timeoutHandler.removeCallbacks(timeoutRunnable)
+            }
         } catch (e: SecurityException) {
             Log.e(TAG, "위치 권한 없음", e)
             cont.resume(null)

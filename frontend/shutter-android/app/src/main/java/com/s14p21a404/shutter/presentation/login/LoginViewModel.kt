@@ -9,10 +9,12 @@ import com.kakao.sdk.auth.model.OAuthToken
 import com.kakao.sdk.common.model.ClientError
 import com.kakao.sdk.common.model.ClientErrorCause
 import com.kakao.sdk.user.UserApiClient
+import com.google.firebase.messaging.FirebaseMessaging
 import com.s14p21a404.shutter.di.ServiceLocator
 import com.s14p21a404.shutter.domain.model.KakaoLoginResult
 import com.s14p21a404.shutter.domain.usecase.GetAccessTokenUseCase
 import com.s14p21a404.shutter.domain.usecase.LoginUseCase
+import com.s14p21a404.shutter.push.ShutterFirebaseMessagingService
 import com.s14p21a404.shutter.domain.usecase.LogoutUseCase
 import com.s14p21a404.shutter.domain.usecase.RegisterUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -104,6 +106,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     when (result) {
                         is KakaoLoginResult.LoggedIn -> {
                             Log.d(TAG, "로그인 완료 — userId: ${result.userId}")
+                            registerFcmToken()
                             _loginUiState.value = LoginUiState.LoggedIn
                         }
                         is KakaoLoginResult.NewUser -> {
@@ -134,6 +137,23 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     Log.e(TAG, "회원가입 실패", e)
                     _loginError.value = e.message ?: "회원가입에 실패했습니다."
                 }
+        }
+    }
+
+    private fun registerFcmToken() {
+        try {
+            val deviceId = com.s14p21a404.shutter.data.token.TokenManager(getApplication())
+                .getOrCreateDeviceUuid()
+            FirebaseMessaging.getInstance().token
+                .addOnSuccessListener { token ->
+                    Log.d(TAG, "FCM 토큰 획득 성공: $token")
+                    ShutterFirebaseMessagingService.registerTokenWithKakao(token, deviceId)
+                }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "FCM 토큰 획득 실패", e)
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "FirebaseMessaging 초기화 오류", e)
         }
     }
 

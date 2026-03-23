@@ -6,11 +6,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -36,11 +38,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.s14p21a404.shutter.presentation.main.MainUiState
 import com.s14p21a404.shutter.presentation.screens.GuardianRegistrationScreen
-
 import com.s14p21a404.shutter.presentation.screens.HomeScreen
 import com.s14p21a404.shutter.presentation.screens.LocationScreen
+import com.s14p21a404.shutter.presentation.screens.RecentRecordsScreen
 import com.s14p21a404.shutter.presentation.screens.SettingsScreen
-
 import com.s14p21a404.shutter.presentation.screens.VideoCallScreen
 
 /**
@@ -54,7 +55,8 @@ data class BottomNavItem(
 )
 
 val bottomNavItems = listOf(
-    BottomNavItem(Screen.Home, "홈", Icons.Filled.Home, Icons.Outlined.Home),
+    BottomNavItem(Screen.Home, "연락처", Icons.Filled.People, Icons.Outlined.People),
+    BottomNavItem(Screen.RecentRecords, "최근기록", Icons.Filled.AccessTime, Icons.Outlined.AccessTime),
     BottomNavItem(Screen.Location, "위치", Icons.Filled.LocationOn, Icons.Outlined.LocationOn),
     BottomNavItem(Screen.Settings, "설정", Icons.Filled.Settings, Icons.Outlined.Settings),
 )
@@ -83,9 +85,9 @@ fun AppScaffold(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
-    // 보호자 등록 화면에서는 하단 바를 숨김
-    val showBottomBar = currentDestination?.route != Screen.GuardianRegistration.route 
-    && currentDestination?.route != Screen.VideoCall.route
+    // 보호자 등록·영상통화 화면에서는 하단 바를 숨김
+    val showBottomBar = currentDestination?.route != Screen.GuardianRegistration.route
+            && currentDestination?.route != Screen.VideoCall.route
 
     // 보호자 등록 성공 시 SettingsScreen 목록을 갱신하기 위한 키
     var settingsRefreshKey by rememberSaveable { mutableIntStateOf(0) }
@@ -113,6 +115,9 @@ fun AppScaffold(
             navController.navigate(Screen.VideoCall.createRoute(channelId))
         },
                 )
+            }
+            composable(Screen.RecentRecords.route) {
+                RecentRecordsScreen()
             }
             composable(Screen.Location.route) {
                 LocationScreen()

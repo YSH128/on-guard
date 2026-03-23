@@ -5,6 +5,7 @@ import de.undercouch.gradle.tasks.download.Download
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.services)
     id("de.undercouch.download") version "5.4.0"
 }
 
@@ -106,6 +107,8 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.kakao.sdk.user)
     implementation(libs.kakao.sdk.talk)
+    implementation(platform("com.google.firebase:firebase-bom:34.11.0"))
+    implementation("com.google.firebase:firebase-messaging")
     implementation(libs.kakao.map)
     implementation(libs.retrofit)
     implementation(libs.retrofit.gson)

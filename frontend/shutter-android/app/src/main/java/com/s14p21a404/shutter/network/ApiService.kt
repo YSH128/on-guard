@@ -185,6 +185,46 @@ data class GpsSharingResponse(
     val data: GpsSharingData,
 )
 
+// ── 딥페이크 알림 전송 POST /alerts/send ──────────────────────────────────────
+
+data class AlertSendRequest(
+    @SerializedName("event_type") val eventType: String,
+    @SerializedName("caller") val caller: String? = null,
+    @SerializedName("call_started_at") val callStartedAt: String? = null,
+)
+
+data class AlertSendItem(
+    @SerializedName("notification_id") val notificationId: Long,
+    @SerializedName("status") val status: String,
+    @SerializedName("sent_at") val sentAt: String,
+)
+
+data class AlertSendResponse(
+    val success: Boolean,
+    val message: String,
+    val data: List<AlertSendItem>,
+)
+
+// ── 타임라인 조회 GET /timeline/{wardId} ──────────────────────────────────────
+
+data class TimelineItem(
+    val type: String,
+    val timestamp: String,
+    val tag: String,
+    @SerializedName("to_name") val toName: String? = null,
+    val status: String? = null,
+    @SerializedName("call_started_at") val callStartedAt: String? = null,
+    val caller: String? = null,
+)
+
+data class TimelineData(val timeline: List<TimelineItem>)
+
+data class TimelineResponse(
+    val success: Boolean,
+    val message: String,
+    val data: TimelineData,
+)
+
 // ── 인터페이스 ─────────────────────────────────────────────────────────────────
 
 interface ApiService {
@@ -218,4 +258,10 @@ interface ApiService {
 
     @PUT("api/v1/gps/sharing")
     suspend fun toggleGpsSharing(@Body request: GpsSharingRequest): GpsSharingResponse
+
+    @POST("api/v1/alerts/send")
+    suspend fun sendAlert(@Body request: AlertSendRequest): AlertSendResponse
+
+    @GET("api/v1/timeline/{wardId}")
+    suspend fun getTimeline(@Path("wardId") wardId: Long): TimelineResponse
 }

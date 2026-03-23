@@ -4,8 +4,11 @@ package com.s14p21a404.shutter.presentation.navigation
  * 앱 내 화면(라우트) 정의
  */
 sealed class Screen(val route: String) {
-    /** 홈 – 방패 아이콘 + 알림 타임라인 */
+    /** 연락처 – 카카오 친구 목록 */
     object Home : Screen("home")
+
+    /** 최근 기록 – 알림 타임라인 */
+    object RecentRecords : Screen("recent_records")
 
     /** 위치 확인 – 보호자 위치 지도 */
     object Location : Screen("location")
