@@ -1,46 +1,52 @@
 package com.example.shutter_android_ai
 
 import android.content.Context
-import android.media.MediaCodec
-import android.media.MediaExtractor
-import android.media.MediaFormat
-
+import android.content.Intent
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
+import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
-
-import android.os.Bundle
-import org.opencv.android.OpenCVLoader
-
-import java.io.File
-import java.io.FileOutputStream
-import java.nio.ByteOrder
-
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-
-import kotlin.concurrent.thread
-
-import com.example.shutter_android_ai.telemetry.DeviceStatusProvider
-
 import androidx.lifecycle.lifecycleScope
 import com.example.shutter_android_ai.network.RetrofitClient
 import com.example.shutter_android_ai.network.TelemetryRequest
+import com.example.shutter_android_ai.telemetry.DeviceStatusProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.opencv.android.OpenCVLoader
+import java.io.File
+import java.io.FileOutputStream
+import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
 
-    // C++ JNI 함수 선언
-    private external fun loadModels(audioModelPath: String, faceModelPath: String): FloatArray
-    private external fun detectDeepfakeAudio(audioData: FloatArray): FloatArray
-    private external fun detectDeepfakeVisual(videoPath: String, frameCount: Int): FloatArray
+    // native-lib.cpp JNI 시그니처와 정확히 일치
+    // Java_com_example_shutter_1android_1ai_MainActivity_loadModels(faceModelPath)
+    private external fun loadModels(faceModelPath: String): FloatArray
 
-    private val deviceModel by lazy { DeviceStatusProvider.getDeviceModelName() }
+    // Java_com_example_shutter_1android_1ai_MainActivity_detectDeepfakeVisual(buffer, width, height, stride)
+    // 반환: [fakeProb, realProb, faceLoadTime, inferTime, cam×N, minx, miny, maxx, maxy, bbox_score]
+    private external fun detectDeepfakeVisual(
+        buffer: ByteArray,
+        width: Int,
+        height: Int,
+        stride: Int
+    ): FloatArray
 
     companion object {
+        var lastResults: FloatArray = floatArrayOf()
+        var lastBitmap: Bitmap? = null
+
+        /** RoiTestActivity 에서 JNI 직접 호출을 위한 콜백 (onCreate 에서 세팅됨) */
+        var nativeInfer: ((ByteArray, Int, Int, Int) -> FloatArray)? = null
+
         init { System.loadLibrary("shutter_android_ai") }
     }
 
@@ -48,16 +54,23 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // 뷰 찾기 로직
-        val btnLoadModels = findViewById<Button>(R.id.btnLoadModels)
-        val tvLoadStatus = findViewById<TextView>(R.id.tvLoadStatus)
-        val btnAudioDetect = findViewById<Button>(R.id.btnAudioDetect)
-        val tvAudioResult = findViewById<TextView>(R.id.tvAudioResult)
+        val btnLoadModels   = findViewById<Button>(R.id.btnLoadModels)
+        val tvLoadStatus    = findViewById<TextView>(R.id.tvLoadStatus)
         val btnVisualDetect = findViewById<Button>(R.id.btnVisualDetect)
-        val tvVisualResult = findViewById<TextView>(R.id.tvVisualResult)
-        val tvOpenCVStatus = findViewById<TextView>(R.id.tvOpenCVStatus)
+        val tvVisualResult  = findViewById<TextView>(R.id.tvVisualResult)
+        val tvOpenCVStatus  = findViewById<TextView>(R.id.tvOpenCVStatus)
+        val btnCamVisualize = findViewById<Button>(R.id.btnCamVisualize)
+        val btnRoiTest      = findViewById<Button>(R.id.btnRoiTest)
+        val btnAudioDetect  = findViewById<Button>(R.id.btnAudioDetect)
+        val tvAudioResult   = findViewById<TextView>(R.id.tvAudioResult)
 
-        // OpenCV 설치 및 버전 확인
+        // RoiTestActivity 가 JNI 를 쓸 수 있도록 콜백 등록
+        nativeInfer = { buf, w, h, s -> detectDeepfakeVisual(buf, w, h, s) }
+
+        // 오디오 감지는 native-lib.cpp에 미구현
+        btnAudioDetect.isEnabled = false
+        tvAudioResult.text = "오디오 감지: 현재 미지원 (native 미구현)"
+
         if (OpenCVLoader.initDebug()) {
             tvOpenCVStatus.text = "OpenCV 로드 성공 (v${org.opencv.core.Core.VERSION})"
         } else {
@@ -68,179 +81,146 @@ class MainActivity : AppCompatActivity() {
             tvLoadStatus.text = "모델 로드 중..."
             thread {
                 try {
-                    val audioPath = getAssetFilePath(this@MainActivity, "voice_deepfake_model.pt")
-                    val facePath = getAssetFilePath(this@MainActivity, "face_deepfake_model.pt")
-                    
-                    val startCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
-                    
-                    val results = loadModels(audioPath, facePath)
-                    
-                    val endCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
-                    val loadThreadCpuTime = endCpuTimeMs - startCpuTimeMs
-                    
-                    val success = results[0] > 0.0f
-                    val audioLoadTime = results[1]
-                    val faceLoadTime = results[2]
-                    
-                    // Send telemetry for Audio Load
-                    sendTelemetryData(
-                        modelType = "DEEPVOICE",
-                        isSuccess = success,
-                        failureType = if (success) null else "MODEL_LOAD_ERROR",
-                        inferenceLatencyMs = 0L,
-                        riskScore = 0.0f,
-                        modelLoadLatencyMs = audioLoadTime.toLong(),
-                        threadCpuTimeMs = loadThreadCpuTime / 2
-                    )
+                    val facePath = getAssetFilePath("face_deepfake_model.pt")
+                    val startCpu = DeviceStatusProvider.getThreadCpuTimeMs()
+                    val results  = loadModels(facePath)
+                    val cpuTime  = DeviceStatusProvider.getThreadCpuTimeMs() - startCpu
 
-                    // Send telemetry for Face Load
+                    val success      = results.getOrElse(0) { 0f } > 0f
+                    val faceLoadTime = results.getOrElse(1) { 0f }
+
                     sendTelemetryData(
                         modelType = "FACE",
                         isSuccess = success,
                         failureType = if (success) null else "MODEL_LOAD_ERROR",
                         inferenceLatencyMs = 0L,
-                        riskScore = 0.0f,
+                        riskScore = 0f,
                         modelLoadLatencyMs = faceLoadTime.toLong(),
-                        threadCpuTimeMs = loadThreadCpuTime / 2
+                        threadCpuTimeMs = cpuTime
                     )
-                    
+
                     runOnUiThread {
-                        if (success) {
-                            tvLoadStatus.text = "모델 로드 성공!\n오디오 모델: ${String.format("%.2f", audioLoadTime)} ms\n페이스 모델: ${String.format("%.2f", faceLoadTime)} ms"
-                        } else {
-                            tvLoadStatus.text = "모델 로드 실패!"
-                        }
+                        tvLoadStatus.text = if (success)
+                            "모델 로드 성공!\n페이스 모델: ${"%.2f ms".format(faceLoadTime)}"
+                        else "모델 로드 실패!"
                     }
                 } catch (e: Exception) {
-                    runOnUiThread {
-                        tvLoadStatus.text = "에러: ${e.message}"
-                    }
+                    runOnUiThread { tvLoadStatus.text = "에러: ${e.message}" }
                 }
-            }
-        }
-
-        btnAudioDetect.setOnClickListener {
-            try {
-                val audioPath = getAssetFilePath(this@MainActivity, "test.flac")
-                request_deepfake_detection("DEEPVOICE", audioPath, tvAudioResult)
-            } catch (e: Exception) {
-                tvAudioResult.text = "에러: test.flac 파일을 assets 폴더에서 찾을 수 없습니다."
             }
         }
 
         btnVisualDetect.setOnClickListener {
-            try {
-                val videoPath = getAssetFilePath(this@MainActivity, "fakeVideo.mp4")
-                request_deepfake_detection("FACE", videoPath, tvVisualResult)
-            } catch (e: Exception) {
-                tvVisualResult.text = "에러: fakeVideo.mp4 파일을 assets 폴더에서 찾을 수 없습니다."
+            tvVisualResult.text = "페이스 분석 중..."
+            thread {
+                try {
+                    val videoPath = getAssetFilePath("fakeVideo.mp4")
+
+                    // 비디오에서 첫 번째 프레임 추출
+                    val bitmap = extractFirstFrame(videoPath)
+                        ?: throw Exception("프레임 추출 실패 (비디오 파일 확인 필요)")
+                    lastBitmap = bitmap
+
+                    // Bitmap → RGBA ByteArray (native-lib.cpp는 CV_8UC4 형식 기대)
+                    val rgbaBytes = bitmapToRgba(bitmap)
+                    val stride = bitmap.width * 4
+
+                    val startCpu = DeviceStatusProvider.getThreadCpuTimeMs()
+                    val results  = detectDeepfakeVisual(rgbaBytes, bitmap.width, bitmap.height, stride)
+                    val cpuTime  = DeviceStatusProvider.getThreadCpuTimeMs() - startCpu
+
+                    lastResults = results
+
+                    // 오류 코드 확인 (native에서 음수 반환 시 실패)
+                    if (results.isEmpty() || results[0] < -0.5f) {
+                        val code = results.getOrElse(0) { -99f }
+                        runOnUiThread { tvVisualResult.text = "추론 실패 (코드: $code)" }
+                        return@thread
+                    }
+
+                    // 결과 파싱: [fakeProb(0), realProb(1), loadTime(2), inferTime(3),
+                    //             cam×N (4..4+N-1), minx, miny, maxx, maxy, bbox_score]
+                    val fakeProb  = results[0]
+                    val realProb  = results[1]
+                    val loadTime  = results[2]
+                    val inferTime = results[3]
+                    val camSize   = results.size - 9
+                    val bboxOff   = 4 + camSize
+                    val minx      = results.getOrElse(bboxOff)     { -1f }
+                    val miny      = results.getOrElse(bboxOff + 1) { -1f }
+                    val maxx      = results.getOrElse(bboxOff + 2) { -1f }
+                    val maxy      = results.getOrElse(bboxOff + 3) { -1f }
+
+                    val isSuccess = fakeProb >= 0f
+                    sendTelemetryData(
+                        modelType = "FACE",
+                        isSuccess = isSuccess,
+                        failureType = if (isSuccess) null else "INFERENCE_ERROR",
+                        inferenceLatencyMs = inferTime.toLong(),
+                        riskScore = fakeProb,
+                        modelLoadLatencyMs = loadTime.toLong(),
+                        threadCpuTimeMs = cpuTime
+                    )
+
+                    val currentTemp  = DeviceStatusProvider.getDeviceTemperature(this@MainActivity)
+                    val pssMemory    = DeviceStatusProvider.getAppPssMemory()
+                    val thermalStat  = DeviceStatusProvider.getThermalThrottlingStatus(this@MainActivity)
+                    val batteryCurr  = DeviceStatusProvider.getBatteryCurrentNow(this@MainActivity)
+
+                    runOnUiThread {
+                        tvVisualResult.text = """
+                            [페이스 추론 성공 - ${if (fakeProb > realProb) "FAKE" else "REAL"}]
+                            Fake: ${"%.2f%%".format(fakeProb * 100)}
+                            Real: ${"%.2f%%".format(realProb * 100)}
+                            Load: ${"%.2f ms".format(loadTime)}
+                            Infer: ${"%.2f ms".format(inferTime)}
+                            CAM size: $camSize (${Math.sqrt(camSize.toDouble()).toInt()}×${Math.sqrt(camSize.toDouble()).toInt()})
+                            ROI: (${"%.0f".format(minx)},${"%.0f".format(miny)})~(${"%.0f".format(maxx)},${"%.0f".format(maxy)})
+
+                            [하드웨어]
+                            Temp: ${"%.1f".format(currentTemp)}°C  RAM: $pssMemory KB
+                            CPU Time: $cpuTime ms  Current: ${"%.1f mA".format(batteryCurr)}
+                            Thermal: $thermalStat
+                        """.trimIndent()
+                    }
+                } catch (e: Exception) {
+                    runOnUiThread { tvVisualResult.text = "페이스 에러: ${e.message}" }
+                }
             }
+        }
+
+        btnCamVisualize.setOnClickListener {
+            if (lastResults.size >= 9 && lastBitmap != null) {
+                startActivity(Intent(this, CamVisualizationActivity::class.java))
+            } else {
+                Toast.makeText(this, "먼저 페이스 감지를 실행하세요", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        btnRoiTest.setOnClickListener {
+            startActivity(Intent(this, RoiTestActivity::class.java))
         }
     }
 
-    private fun request_deepfake_detection(type: String, filePath: String, resultTextView: TextView) {
-        val typeName = if (type == "DEEPVOICE") "오디오" else "페이스"
-        resultTextView.text = "$typeName 분석 중..."
-
-        thread {
-            try {
-                val startCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
-                val results: FloatArray
-                var isSuccess = false
-                var score = 0.0f
-                var loadTime = 0.0f
-                var inferenceTime = 0.0f
-                var isFake = false
-                var status = ""
-                var faceFakeProb = 0.0f
-                var faceRealProb = 0.0f
-                var frameDetails = ""
-
-                if (type == "DEEPVOICE") {
-                    val audioData = decodeAudioFromFile(filePath, 64000)
-                    results = detectDeepfakeAudio(audioData)
-                    score = results[0]
-                    loadTime = results[1]
-                    inferenceTime = results[2]
-                    isSuccess = score > -1.0f
-                } else if (type == "FACE") {
-                    results = detectDeepfakeVisual(filePath, 10)
-                    val avgFake = results[0]
-                    val avgReal = results[1]
-                    loadTime = results[2]
-                    inferenceTime = results[3]
-                    isSuccess = avgFake > -1.0f
-                    if (isSuccess) {
-                        isFake = results[0] > results[1]
-                        status = if (isFake) "FAKE" else "REAL"
-                        faceFakeProb = avgFake
-                        faceRealProb = avgReal
-                        score = avgFake
-
-                        val sb = StringBuilder()
-                        val frameCount = (results.size - 4) / 2
-                        for (i in 0 until frameCount) {
-                            val fake = results[4 + i * 2]
-                            val real = results[4 + i * 2 + 1]
-                            if (fake >= 0f) {
-                                sb.append("Frame${i+1}: Fake ${String.format("%.1f%%", fake * 100)} / Real ${String.format("%.1f%%", real * 100)}\n")
-                            }
-                        }
-                        frameDetails = sb.toString()
-                    }
-                }
-
-                val endCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
-                val inferenceThreadCpuTime = endCpuTimeMs - startCpuTimeMs
-
-                sendTelemetryData(
-                    modelType = type,
-                    isSuccess = isSuccess,
-                    failureType = if (isSuccess) null else "INFERENCE_ERROR",
-                    inferenceLatencyMs = inferenceTime.toLong(),
-                    riskScore = score,
-                    modelLoadLatencyMs = loadTime.toLong(),
-                    threadCpuTimeMs = inferenceThreadCpuTime
-                )
-
-                val currentTemp = DeviceStatusProvider.getDeviceTemperature(this@MainActivity)
-                val pssMemoryKb = DeviceStatusProvider.getAppPssMemory()
-                val thermalStatus = DeviceStatusProvider.getThermalThrottlingStatus(this@MainActivity)
-                val batteryCurrentmA = DeviceStatusProvider.getBatteryCurrentNow(this@MainActivity)
-
-                runOnUiThread {
-                    if (!isSuccess) {
-                        resultTextView.text = "에러: 모델 로드 또는 추론 실패"
-                    } else {
-                        val header = if (type == "FACE") "[$typeName 추론 성공 - $status]\nFake: ${String.format("%.2f%%", faceFakeProb * 100)}\nReal: ${String.format("%.2f%%", faceRealProb * 100)}" 
-                                     else "[$typeName 추론 성공]\nScore: ${String.format("%.4f", score)}"
-
-                        val frameSection = if (type == "FACE" && frameDetails.isNotEmpty())
-                            "\n\n[프레임별 결과]\n$frameDetails"
-                        else ""
-                        
-                        val resultText = """
-                            $header
-                            Load: ${String.format("%.2f", loadTime)} ms
-                            Infer: ${String.format("%.2f", inferenceTime)} ms
-
-                            [하드웨어 모니터링]
-                            Temp: ${String.format("%.2f", currentTemp)}°C
-                            RAM (PSS): $pssMemoryKb KB
-                            CPU Time: $inferenceThreadCpuTime ms
-                            Current: ${String.format("%.2f", batteryCurrentmA)} mA
-                            Thermal Status: $thermalStatus
-                        """.trimIndent() + frameSection
-                        
-                        resultTextView.text = resultText
-                    }
-                }
-            } catch (e: Exception) {
-                runOnUiThread {
-                    resultTextView.text = "$typeName 에러: ${e.message}"
-                }
-            }
+    /** 비디오 파일에서 첫 번째 프레임을 Bitmap으로 추출 */
+    private fun extractFirstFrame(videoPath: String): Bitmap? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(videoPath)
+            retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+        } catch (e: Exception) {
+            null
+        } finally {
+            retriever.release()
         }
+    }
+
+    /** Bitmap → RGBA ByteArray (native CV_8UC4와 동일 포맷) */
+    private fun bitmapToRgba(bitmap: Bitmap): ByteArray {
+        val rgba = bitmap.copy(Bitmap.Config.ARGB_8888, false)
+        val buffer = ByteBuffer.allocate(rgba.byteCount)
+        rgba.copyPixelsToBuffer(buffer)
+        return buffer.array()
     }
 
     private fun sendTelemetryData(
@@ -252,13 +232,11 @@ class MainActivity : AppCompatActivity() {
         modelLoadLatencyMs: Long,
         threadCpuTimeMs: Long
     ) {
-        val currentTemp = DeviceStatusProvider.getDeviceTemperature(this@MainActivity)
-        val pssMemoryKb = DeviceStatusProvider.getAppPssMemory()
-        val thermalStatus = DeviceStatusProvider.getThermalThrottlingStatus(this@MainActivity)
-        val batteryCurrentmA = DeviceStatusProvider.getBatteryCurrentNow(this@MainActivity)
-        
-        val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.getDefault())
-        val currentTimeStr = sdf.format(Date())
+        val currentTemp   = DeviceStatusProvider.getDeviceTemperature(this)
+        val pssMemory     = DeviceStatusProvider.getAppPssMemory()
+        val thermalStatus = DeviceStatusProvider.getThermalThrottlingStatus(this)
+        val batteryCurr   = DeviceStatusProvider.getBatteryCurrentNow(this)
+        val sdf           = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.getDefault())
 
         val request = TelemetryRequest(
             user_id = 1,
@@ -268,124 +246,36 @@ class MainActivity : AppCompatActivity() {
             failure_type = failureType,
             inference_latency_ms = inferenceLatencyMs,
             risk_score = riskScore,
-            timestamp = currentTimeStr,
-            device_hash = deviceModel,
+            timestamp = sdf.format(Date()),
+            device_hash = DeviceStatusProvider.getDeviceModelName(),
             session_id = UUID.randomUUID().toString(),
             device_temperature = currentTemp,
-            app_pss_memory = pssMemoryKb,
+            app_pss_memory = pssMemory,
             thermal_throttling_status = thermalStatus,
             thread_cpu_time = threadCpuTimeMs,
-            battery_current_now = batteryCurrentmA,
+            battery_current_now = batteryCurr,
             model_load_latency_ms = modelLoadLatencyMs
         )
 
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val response = RetrofitClient.api.sendTelemetry(request)
-                if (response.isSuccessful) {
-                    android.util.Log.d("Telemetry", "데이터 전송 성공 ($modelType)")
-                } else {
-                    android.util.Log.e("Telemetry", "데이터 전송 실패: ${response.code()} ($modelType)")
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("Telemetry", "네트워크 에러: ${e.message} ($modelType)")
-            }
+                RetrofitClient.api.sendTelemetry(request)
+            } catch (_: Exception) {}
         }
     }
 
-    // 오디오 디코딩 함수: Context 대신 로컬 파일 경로(filePath)를 직접 받습니다.
-    private fun decodeAudioFromFile(filePath: String, targetLength: Int): FloatArray {
-        val floatList = mutableListOf<Float>()
-        val extractor = MediaExtractor()
+    private fun getAssetFilePath(assetName: String): String {
+        val prefs = getSharedPreferences("model_cache", MODE_PRIVATE)
+        val currentVersion = packageManager.getPackageInfo(packageName, 0).longVersionCode
+        val cachedVersion = prefs.getLong("version_$assetName", -1L)
 
-        // assets.openFd 대신 일반 파일 경로를 사용하여 소스를 설정합니다. (압축 문제 해결)
-        extractor.setDataSource(filePath)
+        val file = File(filesDir, assetName)
+        if (file.exists() && cachedVersion == currentVersion) return file.absolutePath
 
-        var format: MediaFormat? = null
-        var mime: String? = null
-        for (i in 0 until extractor.trackCount) {
-            val trackFormat = extractor.getTrackFormat(i)
-            val trackMime = trackFormat.getString(MediaFormat.KEY_MIME)
-            if (trackMime?.startsWith("audio/") == true) {
-                format = trackFormat
-                mime = trackMime
-                extractor.selectTrack(i)
-                break
-            }
-        }
-
-        if (format == null || mime == null) throw IllegalArgumentException("오디오 트랙을 찾을 수 없습니다.")
-
-        val codec = MediaCodec.createDecoderByType(mime)
-        codec.configure(format, null, null, 0)
-        codec.start()
-
-        val info = MediaCodec.BufferInfo()
-        var isEOS = false
-
-        while (true) {
-            if (!isEOS) {
-                val inIndex = codec.dequeueInputBuffer(10000)
-                if (inIndex >= 0) {
-                    val buffer = codec.getInputBuffer(inIndex)
-                    val sampleSize = extractor.readSampleData(buffer!!, 0)
-                    if (sampleSize < 0) {
-                        codec.queueInputBuffer(inIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                        isEOS = true
-                    } else {
-                        codec.queueInputBuffer(inIndex, 0, sampleSize, extractor.sampleTime, 0)
-                        extractor.advance()
-                    }
-                }
-            }
-
-            val outIndex = codec.dequeueOutputBuffer(info, 10000)
-            if (outIndex >= 0) {
-                val buffer = codec.getOutputBuffer(outIndex)
-                if (buffer != null && info.size > 0) {
-                    buffer.position(info.offset)
-                    buffer.limit(info.offset + info.size)
-                    buffer.order(ByteOrder.LITTLE_ENDIAN)
-                    val shortBuffer = buffer.asShortBuffer()
-                    
-                    while (shortBuffer.hasRemaining()) {
-                        floatList.add(shortBuffer.get().toFloat() / 32768.0f)
-                    }
-                }
-                codec.releaseOutputBuffer(outIndex, false)
-            } else if (outIndex == MediaCodec.INFO_TRY_AGAIN_LATER) {
-                if (isEOS) break
-            }
-            if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) break
-        }
-
-        codec.stop()
-        codec.release()
-        extractor.release()
-
-        val result = FloatArray(targetLength)
-        val copyLength = minOf(floatList.size, targetLength)
-        for (i in 0 until copyLength) result[i] = floatList[i]
-        return result
-    }
-
-    private fun getAssetFilePath(context: Context, assetName: String): String {
-        val file = File(context.filesDir, assetName)
-        if (file.exists() && file.length() > 0) return file.absolutePath
-        context.assets.open(assetName).use { input ->
+        assets.open(assetName).use { input ->
             FileOutputStream(file).use { output -> input.copyTo(output) }
         }
+        prefs.edit().putLong("version_$assetName", currentVersion).apply()
         return file.absolutePath
-    }
-
-    // 이 함수를 MainActivity 내부 맨 아래에 추가해 주세요.
-    private fun getOrCreateDeviceHash(): String {
-        val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        var deviceHash = prefs.getString("device_hash", null)
-        if (deviceHash == null) {
-            deviceHash = UUID.randomUUID().toString()
-            prefs.edit().putString("device_hash", deviceHash).apply()
-        }
-        return deviceHash
     }
 }

@@ -15,7 +15,7 @@ object DeviceStatusProvider {
     fun getDeviceTemperature(context: Context): Float {
         val intentFilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
         val batteryStatus: Intent? = context.registerReceiver(null, intentFilter)
-        
+
         val temperatureInt = batteryStatus?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0
         return temperatureInt / 10.0f
     }
@@ -75,8 +75,8 @@ object DeviceStatusProvider {
         return if (model.lowercase().startsWith(manufacturer.lowercase())) {
             model.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
         } else {
-            val capitalizedManufacturer = manufacturer.replaceFirstChar { 
-                if (it.isLowerCase()) it.titlecase() else it.toString() 
+            val capitalizedManufacturer = manufacturer.replaceFirstChar {
+                if (it.isLowerCase()) it.titlecase() else it.toString()
             }
             "$capitalizedManufacturer $model"
         }

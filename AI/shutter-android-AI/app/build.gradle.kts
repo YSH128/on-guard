@@ -2,7 +2,7 @@ import de.undercouch.gradle.tasks.download.Download
 
 plugins {
     alias(libs.plugins.android.application)
-    id("de.undercouch.download") version "5.4.0"
+    id("de.undercouch.download")
 }
 
 val nativeAarDeps by configurations.creating {

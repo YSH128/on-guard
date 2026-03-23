@@ -22,6 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "shutter-android-ai"
+rootProject.name = "shutter-android-AI"
 include(":app")
- 
