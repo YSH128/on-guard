@@ -29,6 +29,7 @@ class TokenAuthenticator(
 
         val refreshToken = tokenManager.getRefreshToken() ?: run {
             tokenManager.clearTokens()
+            AuthEventBus.emitLogout()
             return null
         }
 
@@ -38,6 +39,7 @@ class TokenAuthenticator(
             }
             if (!refreshResponse.success) {
                 tokenManager.clearTokens()
+                AuthEventBus.emitLogout()
                 return null
             }
             val newAccessToken = refreshResponse.data
@@ -47,6 +49,7 @@ class TokenAuthenticator(
                 .build()
         } catch (e: Exception) {
             tokenManager.clearTokens()
+            AuthEventBus.emitLogout()
             null
         }
     }

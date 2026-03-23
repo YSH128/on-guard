@@ -2,6 +2,8 @@ package com.s14p21a404.shutter.presentation.service
 
 import android.util.Log
 import com.kakao.sdk.talk.TalkApiClient
+import com.kakao.sdk.talk.model.Friend
+import com.kakao.sdk.template.model.Button
 import com.kakao.sdk.template.model.Link
 import com.kakao.sdk.template.model.TextTemplate
 import com.kakao.sdk.user.UserApiClient
@@ -43,12 +45,21 @@ class DeepfakeAlertSender(
             return
         }
 
+        // UUID가 없는 보호자가 있을 경우에만 카카오 친구 목록을 한 번만 조회한다
+        val missingUuidGuardians = guardians.filter { guardianUuidStore.getUuid(it.guardianId) == null }
+        val kakaoFriends: List<Friend>? = if (missingUuidGuardians.isNotEmpty()) {
+            fetchKakaoFriends().also {
+                if (it == null) Log.w(TAG, "카카오 친구 목록 조회 실패 — fallback 불가")
+            }
+        } else null
+
         val targetUuids = guardians.mapNotNull { guardian ->
-            guardianUuidStore.getUuid(guardian.guardianId)?.also { uuid ->
-                Log.d(TAG, "보호자 ${guardian.name}(id=${guardian.guardianId}) → uuid=$uuid")
-            } ?: run {
-                Log.w(TAG, "보호자 ${guardian.name}(id=${guardian.guardianId}) — 저장된 UUID 없음")
-                null
+            val cached = guardianUuidStore.getUuid(guardian.guardianId)
+            if (cached != null) {
+                Log.d(TAG, "보호자 ${guardian.name}(id=${guardian.guardianId}) → uuid=$cached")
+                cached
+            } else {
+                recoverUuid(guardian.guardianId, guardian.name, kakaoFriends)
             }
         }
 
@@ -84,9 +95,47 @@ class DeepfakeAlertSender(
         }
     }
 
+    /**
+     * UUID가 없는 보호자의 UUID를 카카오 친구 목록에서 복구한다.
+     * 저장된 kakaoId로 친구를 찾아 UUID를 가져오고, 이후 재사용을 위해 저장한다.
+     */
+    private fun recoverUuid(guardianId: Long, name: String, friends: List<Friend>?): String? {
+        val kakaoId = guardianUuidStore.getKakaoId(guardianId) ?: run {
+            Log.w(TAG, "보호자 $name(id=$guardianId) — 저장된 카카오 ID 없음, fallback 불가")
+            return null
+        }
+        if (friends == null) {
+            Log.w(TAG, "보호자 $name(id=$guardianId) — 친구 목록 없어 UUID 복구 불가")
+            return null
+        }
+        val friend = friends.find { it.id == kakaoId } ?: run {
+            Log.w(TAG, "보호자 $name(id=$guardianId) — 카카오 친구 목록에서 찾을 수 없음")
+            return null
+        }
+        guardianUuidStore.saveUuid(guardianId, friend.uuid)
+        Log.d(TAG, "보호자 $name(id=$guardianId) — UUID 복구 성공: ${friend.uuid}")
+        return friend.uuid
+    }
+
+    private suspend fun fetchKakaoFriends(): List<Friend>? = suspendCancellableCoroutine { cont ->
+        TalkApiClient.instance.friends { friends, error ->
+            if (error != null) {
+                Log.e(TAG, "카카오 친구 목록 조회 실패", error)
+                cont.resume(null)
+            } else {
+                cont.resume(friends?.elements)
+            }
+        }
+    }
+
     private suspend fun sendKakaoMessage(uuids: List<String>, text: String) =
         suspendCancellableCoroutine { cont ->
-            val template = TextTemplate(text = text, link = Link())
+            val deeplink = Link(androidExecutionParams = emptyMap())
+            val template = TextTemplate(
+                text = text,
+                link = deeplink,
+                buttons = listOf(Button(title = "앱에서 확인하기", link = deeplink)),
+            )
             TalkApiClient.instance.sendDefaultMessage(
                 receiverUuids = uuids,
                 template = template,

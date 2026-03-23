@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.kakao.sdk.talk.TalkApiClient
+import com.kakao.sdk.template.model.Button
 import com.kakao.sdk.template.model.Link
 import com.kakao.sdk.template.model.TextTemplate
 import com.kakao.sdk.user.UserApiClient
@@ -99,6 +100,7 @@ class GuardianRegistrationViewModel(application: Application) : AndroidViewModel
                 addGuardianUseCase(friend.id)
                     .onSuccess { guardian ->
                         guardianUuidStore.saveUuid(guardian.guardianId, friend.uuid)
+                        guardianUuidStore.saveKakaoId(guardian.guardianId, friend.id)
                         sendGuardianMessage(wardName, friend)
                     }
                     .onFailure { e -> lastError = e.message }
@@ -131,7 +133,12 @@ class GuardianRegistrationViewModel(application: Application) : AndroidViewModel
             val text = "${wardName}님이 ${guardian.name}님을 보호자로 등록하였습니다." +
                     "\n\n보호자 : ${guardian.name}\n피보호자 : ${wardName}"
 
-            val template = TextTemplate(text = text, link = Link())
+            val deeplink = Link(androidExecutionParams = emptyMap())
+            val template = TextTemplate(
+                text = text,
+                link = deeplink,
+                buttons = listOf(Button(title = "Shutter 앱 열기", link = deeplink)),
+            )
 
             TalkApiClient.instance.sendDefaultMessage(
                 receiverUuids = listOf(guardian.uuid),

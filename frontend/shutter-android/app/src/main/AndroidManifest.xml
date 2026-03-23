@@ -69,6 +69,14 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- 카카오톡 메시지 딥링크 처리 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data
+                    android:scheme="@string/kakao_oauth_scheme"
+                    android:host="kakaolink" />
+            </intent-filter>
         </activity>
 
 
