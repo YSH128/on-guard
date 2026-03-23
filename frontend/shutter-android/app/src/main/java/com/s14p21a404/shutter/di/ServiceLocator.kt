@@ -3,6 +3,7 @@ package com.s14p21a404.shutter.di
 import android.content.Context
 import com.s14p21a404.shutter.data.detector.DeepfakeDetector
 import com.s14p21a404.shutter.data.detector.real.RealDeepfakeDetector
+import com.s14p21a404.shutter.data.repository.AlertRepositoryImpl
 import com.s14p21a404.shutter.data.repository.AuthRepositoryImpl
 import com.s14p21a404.shutter.data.repository.DeepfakeDetectionRepositoryImpl
 import com.s14p21a404.shutter.data.repository.GpsRepositoryImpl
@@ -10,6 +11,7 @@ import com.s14p21a404.shutter.data.repository.GuardianRepositoryImpl
 import com.s14p21a404.shutter.data.repository.GuardianUuidStore
 import com.s14p21a404.shutter.data.repository.VideoCallRepositoryImpl
 import com.s14p21a404.shutter.data.token.TokenManager
+import com.s14p21a404.shutter.domain.repository.AlertRepository
 import com.s14p21a404.shutter.domain.repository.AuthRepository
 import com.s14p21a404.shutter.domain.repository.DeepfakeDetectionRepository
 import com.s14p21a404.shutter.domain.repository.GpsRepository
@@ -58,6 +60,8 @@ class ServiceLocator private constructor(context: Context) {
 
     val gpsRepository: GpsRepository = GpsRepositoryImpl(apiService)
 
+    val alertRepository: AlertRepository = AlertRepositoryImpl(apiService)
+
     val gpsWebSocketClient = GpsWebSocketClient(tokenManager)
 
     // val detector: DeepfakeDetector = BroadcastTriggerDetector(context)       // ADB 테스트용
@@ -104,7 +108,7 @@ class ServiceLocator private constructor(context: Context) {
     val financialBlockOverlayManager = FinancialBlockOverlayManager(context)
     val alertSoundManager = AlertSoundManager(context)
     val guardianUuidStore = GuardianUuidStore(context)
-    val deepfakeAlertSender = DeepfakeAlertSender(guardianRepository, guardianUuidStore)
+    val deepfakeAlertSender = DeepfakeAlertSender(guardianRepository, guardianUuidStore, alertRepository)
 
 
     companion object {

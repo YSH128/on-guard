@@ -6,6 +6,7 @@ import com.kakao.sdk.template.model.Link
 import com.kakao.sdk.template.model.TextTemplate
 import com.kakao.sdk.user.UserApiClient
 import com.s14p21a404.shutter.data.repository.GuardianUuidStore
+import com.s14p21a404.shutter.domain.repository.AlertRepository
 import com.s14p21a404.shutter.domain.repository.GuardianRepository
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.time.LocalDateTime
@@ -25,11 +26,13 @@ import kotlin.coroutines.resume
 class DeepfakeAlertSender(
     private val guardianRepository: GuardianRepository,
     private val guardianUuidStore: GuardianUuidStore,
+    private val alertRepository: AlertRepository,
 ) {
 
     suspend fun sendAlert(detectedAt: LocalDateTime) {
         val wardName = getWardName() ?: "알 수 없음"
         val timeStr = detectedAt.format(DateTimeFormatter.ofPattern("HH시 mm분 ss초"))
+        val callStartedAt = detectedAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"))
 
         val guardians = guardianRepository.getMyGuardians().getOrElse {
             Log.e(TAG, "보호자 목록 조회 실패", it)
@@ -56,6 +59,10 @@ class DeepfakeAlertSender(
 
         val message = buildAlertMessage(wardName, timeStr)
         sendKakaoMessage(targetUuids, message)
+
+        alertRepository.sendDeepfakeAlert(callStartedAt)
+            .onSuccess { items -> Log.d(TAG, "서버 알림 전송 성공: $items") }
+            .onFailure { Log.e(TAG, "서버 알림 전송 실패", it) }
     }
 
     private fun buildAlertMessage(wardName: String, timeStr: String): String =
