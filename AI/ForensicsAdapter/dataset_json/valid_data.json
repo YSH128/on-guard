@@ -1,0 +1,1758 @@
+{
+    "valid_data": {
+        "DFDC_Fake": {
+            "test": {
+                "fake_video_0": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0000.png"
+                    ]
+                },
+                "fake_video_1": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0001.png"
+                    ]
+                },
+                "fake_video_2": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0002.png"
+                    ]
+                },
+                "fake_video_3": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0003.png"
+                    ]
+                },
+                "fake_video_4": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0004.png"
+                    ]
+                },
+                "fake_video_5": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0005.png"
+                    ]
+                },
+                "fake_video_6": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0006.png"
+                    ]
+                },
+                "fake_video_7": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0007.png"
+                    ]
+                },
+                "fake_video_8": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0008.png"
+                    ]
+                },
+                "fake_video_9": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0009.png"
+                    ]
+                },
+                "fake_video_10": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0010.png"
+                    ]
+                },
+                "fake_video_11": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0011.png"
+                    ]
+                },
+                "fake_video_12": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0012.png"
+                    ]
+                },
+                "fake_video_13": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0013.png"
+                    ]
+                },
+                "fake_video_14": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0014.png"
+                    ]
+                },
+                "fake_video_15": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0015.png"
+                    ]
+                },
+                "fake_video_16": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0016.png"
+                    ]
+                },
+                "fake_video_17": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0017.png"
+                    ]
+                },
+                "fake_video_18": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0018.png"
+                    ]
+                },
+                "fake_video_19": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0019.png"
+                    ]
+                },
+                "fake_video_20": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0020.png"
+                    ]
+                },
+                "fake_video_21": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0021.png"
+                    ]
+                },
+                "fake_video_22": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0022.png"
+                    ]
+                },
+                "fake_video_23": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0023.png"
+                    ]
+                },
+                "fake_video_24": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0024.png"
+                    ]
+                },
+                "fake_video_25": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0025.png"
+                    ]
+                },
+                "fake_video_26": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0026.png"
+                    ]
+                },
+                "fake_video_27": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0027.png"
+                    ]
+                },
+                "fake_video_28": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0028.png"
+                    ]
+                },
+                "fake_video_29": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0029.png"
+                    ]
+                },
+                "fake_video_30": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0030.png"
+                    ]
+                },
+                "fake_video_31": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0031.png"
+                    ]
+                },
+                "fake_video_32": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0032.png"
+                    ]
+                },
+                "fake_video_33": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0033.png"
+                    ]
+                },
+                "fake_video_34": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0034.png"
+                    ]
+                },
+                "fake_video_35": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0035.png"
+                    ]
+                },
+                "fake_video_36": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0036.png"
+                    ]
+                },
+                "fake_video_37": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0037.png"
+                    ]
+                },
+                "fake_video_38": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0038.png"
+                    ]
+                },
+                "fake_video_39": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0039.png"
+                    ]
+                },
+                "fake_video_40": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0040.png"
+                    ]
+                },
+                "fake_video_41": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0041.png"
+                    ]
+                },
+                "fake_video_42": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0042.png"
+                    ]
+                },
+                "fake_video_43": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0043.png"
+                    ]
+                },
+                "fake_video_44": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0044.png"
+                    ]
+                },
+                "fake_video_45": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0045.png"
+                    ]
+                },
+                "fake_video_46": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0046.png"
+                    ]
+                },
+                "fake_video_47": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0047.png"
+                    ]
+                },
+                "fake_video_48": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0048.png"
+                    ]
+                },
+                "fake_video_49": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0049.png"
+                    ]
+                },
+                "fake_video_50": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0050.png"
+                    ]
+                },
+                "fake_video_51": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0051.png"
+                    ]
+                },
+                "fake_video_52": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0052.png"
+                    ]
+                },
+                "fake_video_53": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0053.png"
+                    ]
+                },
+                "fake_video_54": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0054.png"
+                    ]
+                },
+                "fake_video_55": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0055.png"
+                    ]
+                },
+                "fake_video_56": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0056.png"
+                    ]
+                },
+                "fake_video_57": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0057.png"
+                    ]
+                },
+                "fake_video_58": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0058.png"
+                    ]
+                },
+                "fake_video_59": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0059.png"
+                    ]
+                },
+                "fake_video_60": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0060.png"
+                    ]
+                },
+                "fake_video_61": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0061.png"
+                    ]
+                },
+                "fake_video_62": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0062.png"
+                    ]
+                },
+                "fake_video_63": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0063.png"
+                    ]
+                },
+                "fake_video_64": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0064.png"
+                    ]
+                },
+                "fake_video_65": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0065.png"
+                    ]
+                },
+                "fake_video_66": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0066.png"
+                    ]
+                },
+                "fake_video_67": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0067.png"
+                    ]
+                },
+                "fake_video_68": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0068.png"
+                    ]
+                },
+                "fake_video_69": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0069.png"
+                    ]
+                },
+                "fake_video_70": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo2_frame_0070.png"
+                    ]
+                },
+                "fake_video_71": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0000.png"
+                    ]
+                },
+                "fake_video_72": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0001.png"
+                    ]
+                },
+                "fake_video_73": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0002.png"
+                    ]
+                },
+                "fake_video_74": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0003.png"
+                    ]
+                },
+                "fake_video_75": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0004.png"
+                    ]
+                },
+                "fake_video_76": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0005.png"
+                    ]
+                },
+                "fake_video_77": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0006.png"
+                    ]
+                },
+                "fake_video_78": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0007.png"
+                    ]
+                },
+                "fake_video_79": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0008.png"
+                    ]
+                },
+                "fake_video_80": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0009.png"
+                    ]
+                },
+                "fake_video_81": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0010.png"
+                    ]
+                },
+                "fake_video_82": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0011.png"
+                    ]
+                },
+                "fake_video_83": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0012.png"
+                    ]
+                },
+                "fake_video_84": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0013.png"
+                    ]
+                },
+                "fake_video_85": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0014.png"
+                    ]
+                },
+                "fake_video_86": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0015.png"
+                    ]
+                },
+                "fake_video_87": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0016.png"
+                    ]
+                },
+                "fake_video_88": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0017.png"
+                    ]
+                },
+                "fake_video_89": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0018.png"
+                    ]
+                },
+                "fake_video_90": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0019.png"
+                    ]
+                },
+                "fake_video_91": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0020.png"
+                    ]
+                },
+                "fake_video_92": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0021.png"
+                    ]
+                },
+                "fake_video_93": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0022.png"
+                    ]
+                },
+                "fake_video_94": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0023.png"
+                    ]
+                },
+                "fake_video_95": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0024.png"
+                    ]
+                },
+                "fake_video_96": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0025.png"
+                    ]
+                },
+                "fake_video_97": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0026.png"
+                    ]
+                },
+                "fake_video_98": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0027.png"
+                    ]
+                },
+                "fake_video_99": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0028.png"
+                    ]
+                },
+                "fake_video_100": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0029.png"
+                    ]
+                },
+                "fake_video_101": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0030.png"
+                    ]
+                },
+                "fake_video_102": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0031.png"
+                    ]
+                },
+                "fake_video_103": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0032.png"
+                    ]
+                },
+                "fake_video_104": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0033.png"
+                    ]
+                },
+                "fake_video_105": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0034.png"
+                    ]
+                },
+                "fake_video_106": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0035.png"
+                    ]
+                },
+                "fake_video_107": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0036.png"
+                    ]
+                },
+                "fake_video_108": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0037.png"
+                    ]
+                },
+                "fake_video_109": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0038.png"
+                    ]
+                },
+                "fake_video_110": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0039.png"
+                    ]
+                },
+                "fake_video_111": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0040.png"
+                    ]
+                },
+                "fake_video_112": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0041.png"
+                    ]
+                },
+                "fake_video_113": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0042.png"
+                    ]
+                },
+                "fake_video_114": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0043.png"
+                    ]
+                },
+                "fake_video_115": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0044.png"
+                    ]
+                },
+                "fake_video_116": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0045.png"
+                    ]
+                },
+                "fake_video_117": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0046.png"
+                    ]
+                },
+                "fake_video_118": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0047.png"
+                    ]
+                },
+                "fake_video_119": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0048.png"
+                    ]
+                },
+                "fake_video_120": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0049.png"
+                    ]
+                },
+                "fake_video_121": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0050.png"
+                    ]
+                },
+                "fake_video_122": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0051.png"
+                    ]
+                },
+                "fake_video_123": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0052.png"
+                    ]
+                },
+                "fake_video_124": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0053.png"
+                    ]
+                },
+                "fake_video_125": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0054.png"
+                    ]
+                },
+                "fake_video_126": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_fakeVideo_frame_0055.png"
+                    ]
+                },
+                "fake_video_127": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_sh1.png"
+                    ]
+                },
+                "fake_video_128": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_sh2.png"
+                    ]
+                },
+                "fake_video_129": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_sw1.png"
+                    ]
+                },
+                "fake_video_130": {
+                    "label": "DFDC_Fake",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/fake_sw2.png"
+                    ]
+                }
+            }
+        },
+        "DFDC_Real": {
+            "test": {
+                "real_video_0": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_1FA77483-6A94-465E-B20F.jpg"
+                    ]
+                },
+                "real_video_1": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0000.png"
+                    ]
+                },
+                "real_video_2": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0001.png"
+                    ]
+                },
+                "real_video_3": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0002.png"
+                    ]
+                },
+                "real_video_4": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0003.png"
+                    ]
+                },
+                "real_video_5": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0004.png"
+                    ]
+                },
+                "real_video_6": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0005.png"
+                    ]
+                },
+                "real_video_7": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0006.png"
+                    ]
+                },
+                "real_video_8": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0007.png"
+                    ]
+                },
+                "real_video_9": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0008.png"
+                    ]
+                },
+                "real_video_10": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0009.png"
+                    ]
+                },
+                "real_video_11": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0010.png"
+                    ]
+                },
+                "real_video_12": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0011.png"
+                    ]
+                },
+                "real_video_13": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0012.png"
+                    ]
+                },
+                "real_video_14": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0013.png"
+                    ]
+                },
+                "real_video_15": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0014.png"
+                    ]
+                },
+                "real_video_16": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0015.png"
+                    ]
+                },
+                "real_video_17": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0016.png"
+                    ]
+                },
+                "real_video_18": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0017.png"
+                    ]
+                },
+                "real_video_19": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0018.png"
+                    ]
+                },
+                "real_video_20": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0019.png"
+                    ]
+                },
+                "real_video_21": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0020.png"
+                    ]
+                },
+                "real_video_22": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0021.png"
+                    ]
+                },
+                "real_video_23": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0022.png"
+                    ]
+                },
+                "real_video_24": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0023.png"
+                    ]
+                },
+                "real_video_25": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0024.png"
+                    ]
+                },
+                "real_video_26": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0025.png"
+                    ]
+                },
+                "real_video_27": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0026.png"
+                    ]
+                },
+                "real_video_28": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0027.png"
+                    ]
+                },
+                "real_video_29": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0028.png"
+                    ]
+                },
+                "real_video_30": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0029.png"
+                    ]
+                },
+                "real_video_31": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0030.png"
+                    ]
+                },
+                "real_video_32": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0031.png"
+                    ]
+                },
+                "real_video_33": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0032.png"
+                    ]
+                },
+                "real_video_34": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0033.png"
+                    ]
+                },
+                "real_video_35": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0034.png"
+                    ]
+                },
+                "real_video_36": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0035.png"
+                    ]
+                },
+                "real_video_37": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0036.png"
+                    ]
+                },
+                "real_video_38": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0037.png"
+                    ]
+                },
+                "real_video_39": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0038.png"
+                    ]
+                },
+                "real_video_40": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0039.png"
+                    ]
+                },
+                "real_video_41": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0040.png"
+                    ]
+                },
+                "real_video_42": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0041.png"
+                    ]
+                },
+                "real_video_43": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0042.png"
+                    ]
+                },
+                "real_video_44": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0043.png"
+                    ]
+                },
+                "real_video_45": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0044.png"
+                    ]
+                },
+                "real_video_46": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0045.png"
+                    ]
+                },
+                "real_video_47": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0046.png"
+                    ]
+                },
+                "real_video_48": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0047.png"
+                    ]
+                },
+                "real_video_49": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0048.png"
+                    ]
+                },
+                "real_video_50": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0049.png"
+                    ]
+                },
+                "real_video_51": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0050.png"
+                    ]
+                },
+                "real_video_52": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0051.png"
+                    ]
+                },
+                "real_video_53": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0052.png"
+                    ]
+                },
+                "real_video_54": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0053.png"
+                    ]
+                },
+                "real_video_55": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0054.png"
+                    ]
+                },
+                "real_video_56": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0055.png"
+                    ]
+                },
+                "real_video_57": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0056.png"
+                    ]
+                },
+                "real_video_58": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0057.png"
+                    ]
+                },
+                "real_video_59": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0058.png"
+                    ]
+                },
+                "real_video_60": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0059.png"
+                    ]
+                },
+                "real_video_61": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0060.png"
+                    ]
+                },
+                "real_video_62": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0061.png"
+                    ]
+                },
+                "real_video_63": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0062.png"
+                    ]
+                },
+                "real_video_64": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0063.png"
+                    ]
+                },
+                "real_video_65": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0064.png"
+                    ]
+                },
+                "real_video_66": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0065.png"
+                    ]
+                },
+                "real_video_67": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0066.png"
+                    ]
+                },
+                "real_video_68": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0067.png"
+                    ]
+                },
+                "real_video_69": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0068.png"
+                    ]
+                },
+                "real_video_70": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0069.png"
+                    ]
+                },
+                "real_video_71": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0070.png"
+                    ]
+                },
+                "real_video_72": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0071.png"
+                    ]
+                },
+                "real_video_73": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0072.png"
+                    ]
+                },
+                "real_video_74": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0073.png"
+                    ]
+                },
+                "real_video_75": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0074.png"
+                    ]
+                },
+                "real_video_76": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0075.png"
+                    ]
+                },
+                "real_video_77": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0076.png"
+                    ]
+                },
+                "real_video_78": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0077.png"
+                    ]
+                },
+                "real_video_79": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0078.png"
+                    ]
+                },
+                "real_video_80": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0079.png"
+                    ]
+                },
+                "real_video_81": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0080.png"
+                    ]
+                },
+                "real_video_82": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0081.png"
+                    ]
+                },
+                "real_video_83": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0082.png"
+                    ]
+                },
+                "real_video_84": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0083.png"
+                    ]
+                },
+                "real_video_85": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0084.png"
+                    ]
+                },
+                "real_video_86": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0085.png"
+                    ]
+                },
+                "real_video_87": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0086.png"
+                    ]
+                },
+                "real_video_88": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0087.png"
+                    ]
+                },
+                "real_video_89": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0088.png"
+                    ]
+                },
+                "real_video_90": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0089.png"
+                    ]
+                },
+                "real_video_91": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0090.png"
+                    ]
+                },
+                "real_video_92": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0091.png"
+                    ]
+                },
+                "real_video_93": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0092.png"
+                    ]
+                },
+                "real_video_94": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0093.png"
+                    ]
+                },
+                "real_video_95": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0094.png"
+                    ]
+                },
+                "real_video_96": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_174152_frame_0095.png"
+                    ]
+                },
+                "real_video_97": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0000.png"
+                    ]
+                },
+                "real_video_98": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0001.png"
+                    ]
+                },
+                "real_video_99": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0002.png"
+                    ]
+                },
+                "real_video_100": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0003.png"
+                    ]
+                },
+                "real_video_101": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0004.png"
+                    ]
+                },
+                "real_video_102": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0005.png"
+                    ]
+                },
+                "real_video_103": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0006.png"
+                    ]
+                },
+                "real_video_104": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0007.png"
+                    ]
+                },
+                "real_video_105": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0008.png"
+                    ]
+                },
+                "real_video_106": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0009.png"
+                    ]
+                },
+                "real_video_107": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0010.png"
+                    ]
+                },
+                "real_video_108": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0011.png"
+                    ]
+                },
+                "real_video_109": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0012.png"
+                    ]
+                },
+                "real_video_110": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0013.png"
+                    ]
+                },
+                "real_video_111": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0014.png"
+                    ]
+                },
+                "real_video_112": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0015.png"
+                    ]
+                },
+                "real_video_113": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0016.png"
+                    ]
+                },
+                "real_video_114": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0017.png"
+                    ]
+                },
+                "real_video_115": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0018.png"
+                    ]
+                },
+                "real_video_116": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0019.png"
+                    ]
+                },
+                "real_video_117": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0020.png"
+                    ]
+                },
+                "real_video_118": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0021.png"
+                    ]
+                },
+                "real_video_119": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0022.png"
+                    ]
+                },
+                "real_video_120": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0023.png"
+                    ]
+                },
+                "real_video_121": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0024.png"
+                    ]
+                },
+                "real_video_122": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0025.png"
+                    ]
+                },
+                "real_video_123": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0026.png"
+                    ]
+                },
+                "real_video_124": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0027.png"
+                    ]
+                },
+                "real_video_125": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0028.png"
+                    ]
+                },
+                "real_video_126": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0029.png"
+                    ]
+                },
+                "real_video_127": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0030.png"
+                    ]
+                },
+                "real_video_128": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0031.png"
+                    ]
+                },
+                "real_video_129": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0032.png"
+                    ]
+                },
+                "real_video_130": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0033.png"
+                    ]
+                },
+                "real_video_131": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0034.png"
+                    ]
+                },
+                "real_video_132": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0035.png"
+                    ]
+                },
+                "real_video_133": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0036.png"
+                    ]
+                },
+                "real_video_134": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0037.png"
+                    ]
+                },
+                "real_video_135": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0038.png"
+                    ]
+                },
+                "real_video_136": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0039.png"
+                    ]
+                },
+                "real_video_137": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0040.png"
+                    ]
+                },
+                "real_video_138": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0041.png"
+                    ]
+                },
+                "real_video_139": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0042.png"
+                    ]
+                },
+                "real_video_140": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0043.png"
+                    ]
+                },
+                "real_video_141": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0044.png"
+                    ]
+                },
+                "real_video_142": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0045.png"
+                    ]
+                },
+                "real_video_143": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0046.png"
+                    ]
+                },
+                "real_video_144": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0047.png"
+                    ]
+                },
+                "real_video_145": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0048.png"
+                    ]
+                },
+                "real_video_146": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0049.png"
+                    ]
+                },
+                "real_video_147": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0050.png"
+                    ]
+                },
+                "real_video_148": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0051.png"
+                    ]
+                },
+                "real_video_149": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0052.png"
+                    ]
+                },
+                "real_video_150": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_20260323_202136_frame_0053.png"
+                    ]
+                },
+                "real_video_151": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_56991D18-69F7-439E-93AF.jpg"
+                    ]
+                },
+                "real_video_152": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_A4714455-331D-4E4A-9EAD.jpg"
+                    ]
+                },
+                "real_video_153": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_F16625DE-CBF1-4B7F-99FC.jpg"
+                    ]
+                },
+                "real_video_154": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_jh.JPG"
+                    ]
+                },
+                "real_video_155": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_jh2.JPG"
+                    ]
+                },
+                "real_video_156": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_sh.jpg"
+                    ]
+                },
+                "real_video_157": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_sm.jpg"
+                    ]
+                },
+                "real_video_158": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_sw.jpg"
+                    ]
+                },
+                "real_video_159": {
+                    "label": "DFDC_Real",
+                    "frames": [
+                        "c:/Users/SSAFY/Desktop/juhi/S14P21A404/AI/ForensicsAdapter/valid_data/real_yj_page-0001.jpg"
+                    ]
+                }
+            }
+        }
+    }
+}
