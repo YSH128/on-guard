@@ -56,6 +56,10 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
         override fun onCallStateChanged(state: Int) {
             Log.d(TAG, "통화 상태 변경: $state")
             callState = state
+            // 통화 종료(IDLE) 시 통화 연결 래치 리셋
+            if (state == TelephonyManager.CALL_STATE_IDLE) {
+                ForegroundAppMonitorService.resetCallConnected()
+            }
             evaluate()
         }
     }
@@ -65,6 +69,8 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
         override fun onCameraAvailable(cameraId: String) {
             Log.d(TAG, "카메라 사용 가능: $cameraId")
             isCameraBusy = false
+            // 카메라 해제 = 영상통화 종료 가능성 → 래치 리셋
+            ForegroundAppMonitorService.resetCallConnected()
             evaluate()
         }
 
@@ -149,12 +155,17 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
 
     private fun evaluate() {
         val isOffhook = callState == TelephonyManager.CALL_STATE_OFFHOOK
-        // 1) 통신사 영상통화: 통화 중 + 카메라 사용
-        val isCarrierVideoCall = isOffhook && isCameraBusy
-
-        // 2) VoIP 영상통화: VoIP 앱이 포그라운드 + 카메라 사용 (통화 상태 무관)
         val currentFg = ForegroundAppMonitorService.foregroundPackage.value
-        val isVoipVideoCall = !isOffhook && isCameraBusy && currentFg in VOIP_VIDEO_CALL_PACKAGES
+        val isAccessibilityCallConnected = ForegroundAppMonitorService.isCallConnected.value
+
+        // 1) 통신사 영상통화: 통화 중 + 카메라 사용 + UI에서 통화 연결 확인
+        //    OFFHOOK은 발신 즉시 발생하므로, AccessibilityService의 타이머/텍스트 감지로
+        //    상대방이 실제로 수신한 뒤(통화 시간 표시)에만 영상통화로 확정한다.
+        val isCarrierVideoCall = isOffhook && isCameraBusy && isAccessibilityCallConnected
+
+        // 2) VoIP 영상통화: VoIP 앱이 포그라운드 + 카메라 사용 + UI에서 통화 연결 확인
+        val isVoipApp = currentFg in VOIP_VIDEO_CALL_PACKAGES
+        val isVoipVideoCall = !isOffhook && isCameraBusy && isVoipApp && isAccessibilityCallConnected
 
         val isVideoCall = isCarrierVideoCall || isVoipVideoCall
         _videoCallState.value = isVideoCall
@@ -170,24 +181,38 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
         }
 
         Log.d(TAG, "영상통화 판단: offhook=$isOffhook, camera=$isCameraBusy, fg=$currentFg, " +
+                "callConnected=$isAccessibilityCallConnected, " +
                 "carrier=$isCarrierVideoCall, voip=$isVoipVideoCall → videoCall=$isVideoCall")
     }
 
     // ── VoIP 영상통화 앱 포그라운드 관찰 ──
 
     /**
-     * 포그라운드 앱 변경을 관찰하여, VoIP 영상통화 앱이
-     * 포그라운드에 오거나 벗어날 때 evaluate()를 재호출한다.
+     * 포그라운드 앱 변경 및 통화 연결 상태 변경을 관찰하여,
+     * VoIP 영상통화 앱이 포그라운드에 오거나 벗어날 때,
+     * 또는 통화가 실제 연결/해제될 때 evaluate()를 재호출한다.
      */
     private fun startForegroundObserver() {
         if (foregroundObserverJob?.isActive == true) return
         foregroundObserverJob = observerScope.launch {
-            ForegroundAppMonitorService.foregroundPackage.collect { pkg ->
-                Log.d(TAG, "VoIP 감지용 포그라운드 변경: $pkg")
-                evaluate()
+            // 포그라운드 앱 변경 관찰
+            // (StateFlow는 자체적으로 distinctUntilChanged를 보장하므로 중복 emit 없음)
+            launch {
+                ForegroundAppMonitorService.foregroundPackage.collect { pkg ->
+                    Log.d(TAG, "VoIP 감지용 포그라운드 변경: $pkg")
+                    evaluate()
+                }
+            }
+            // AccessibilityService의 통화 연결 상태 관찰
+            // (StateFlow — 값이 실제로 바뀔 때만 collect 콜백 호출)
+            launch {
+                ForegroundAppMonitorService.isCallConnected.collect { connected ->
+                    Log.d(TAG, "VoIP 감지용 통화 연결 상태 변경: $connected")
+                    evaluate()
+                }
             }
         }
-        Log.d(TAG, "VoIP 포그라운드 관찰 시작")
+        Log.d(TAG, "VoIP 포그라운드 + 통화 연결 관찰 시작")
     }
 
     private fun stopForegroundObserver() {
