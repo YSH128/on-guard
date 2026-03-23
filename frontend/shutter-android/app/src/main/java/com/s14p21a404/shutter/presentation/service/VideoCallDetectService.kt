@@ -70,6 +70,9 @@ class VideoCallDetectService : Service() {
     /** 금융 앱 포그라운드 모니터링 Job — 딥페이크 감지 시 시작, 종료 시 취소 */
     private var financialAppMonitorJob: Job? = null
 
+    /** 비딥페이크 사이클 후 20초 대기 후 재시작하는 Job */
+    private var cooldownJob: Job? = null
+
     /**
      * 딥페이크가 감지되었는지 여부.
      * 금융 앱 차단 오버레이는 딥페이크 감지 + 금융 앱 포그라운드 시에만 표시한다.
@@ -121,12 +124,14 @@ class VideoCallDetectService : Service() {
         }
         warningOverlayManager.onRescan = {
             Log.d(TAG, "🔄 재탐지 요청 (오버레이)")
+            cooldownJob?.cancel()
+            cooldownJob = null
             warningOverlayManager.dismissAll()
             isDeepfakeDetected = false
             alertSoundManager.stopAlert()
             financialBlockOverlayManager.setEnabled(false)
             financialBlockOverlayManager.dismiss()
-            // 스캐닝 pill 다시 표시 + 감지 재시작
+            // 스캐닝 pill 다시 표시 + 새 사이클 시작
             warningOverlayManager.showScanningPill()
             monitorUseCase.startDetection()
         }
@@ -156,24 +161,21 @@ class VideoCallDetectService : Service() {
             }
         }
 
-        // 감지 결과 관찰 → 오버레이 표시/숨김 + 금융 앱 차단 제어 + GPS 전송 시작
+        // 사이클(10프레임) 집계 결과 관찰 → 딥페이크 판정 + 쿨다운 제어
         serviceScope.launch {
             detectUseCase.observeResults().collect { result ->
-                Log.d(TAG, "📊 감지 결과: $result")
+                Log.d(TAG, "📊 사이클 결과: $result")
 
-                // 이미 딥페이크 감지된 세션이면 ROI box 위치만 갱신
-                if (isDeepfakeDetected) {
-                    warningOverlayManager.onDetectionResult(result)
-                    return@collect
-                }
+                // 이미 딥페이크 확정된 세션 → RoI는 프레임 결과로 실시간 갱신하므로 여기서는 스킵
+                if (isDeepfakeDetected) return@collect
 
                 val roiBitmap = if (result.detected && result.hasRoi) {
                     cropRoiBitmap(result)
                 } else null
                 warningOverlayManager.onDetectionResult(result, roiBitmap)
 
-                // 딥페이크 최초 감지 시에만 경고음 + 금융 앱 차단 오버레이 제어
                 if (result.detected) {
+                    // ── 딥페이크 최초 감지 ──
                     isDeepfakeDetected = true
                     alertSoundManager.startAlert()
                     financialBlockOverlayManager.setEnabled(true)
@@ -186,6 +188,28 @@ class VideoCallDetectService : Service() {
                         }
                     }
                     startGpsSendingIfEligible()
+                } else {
+                    // ── 비딥페이크 사이클 완료 → 20초 후 재시작 ──
+                    Log.d(TAG, "비딥페이크 사이클 완료 — 20초 후 재시작 예정")
+                    monitorUseCase.stopDetection()
+                    cooldownJob?.cancel()
+                    cooldownJob = serviceScope.launch {
+                        delay(RESCAN_COOLDOWN_MS)
+                        if (!isDeepfakeDetected) {
+                            Log.d(TAG, "쿨다운 종료 — 새 사이클 시작")
+                            warningOverlayManager.showScanningPill()
+                            monitorUseCase.startDetection()
+                        }
+                    }
+                }
+            }
+        }
+
+        // 프레임별 실시간 결과 관찰 → 딥페이크 확정 후 RoI 실시간 갱신
+        serviceScope.launch {
+            detectUseCase.observeFrameResults().collect { frameResult ->
+                if (isDeepfakeDetected) {
+                    warningOverlayManager.onDetectionResult(frameResult)
                 }
             }
         }
@@ -309,6 +333,7 @@ class VideoCallDetectService : Service() {
         stopFinancialAppMonitoring()
         alertSoundManager.stopAlert()
         gpsSendingJob?.cancel()
+        cooldownJob?.cancel()
 
         serviceScope.cancel()
         detectionRepository.stopDetection()
@@ -507,6 +532,9 @@ class VideoCallDetectService : Service() {
     companion object {
         private const val TAG = "VideoCallDetectService"
         private const val NOTIFICATION_ID = 1001
+
+        /** 비딥페이크 사이클 후 재탐지까지 대기 시간: 20초 */
+        private const val RESCAN_COOLDOWN_MS = 20_000L
 
         /** GPS 전송 주기: 10초 */
         private const val GPS_SEND_INTERVAL_MS = 10_000L
