@@ -142,9 +142,28 @@ public class AlertService {
     public TimelineListResponse getTimeline(Long wardId) {
         List<NotificationLog> logs = getLogsByWardId(wardId);
 
-        List<TimelineItemResponse> timelineItems = logs.stream()
-                .map(TimelineItemResponse::from)
-                .collect(Collectors.toList());
+        List<TimelineItemResponse> timelineItems = new java.util.ArrayList<>();
+        java.time.LocalDateTime lastLocationTime = null;
+        java.time.LocalDateTime lastDeepfakeTime = null;
+
+        for (NotificationLog log : logs) {
+            if (log.getEventType() == NotificationEventType.LOCATION) {
+                // 최근 추가된 LOCATION과 5초 이내라면 중복으로 간주하고 스킵
+                if (lastLocationTime == null || java.time.Duration.between(log.getSentAt(), lastLocationTime).abs().getSeconds() > 5) {
+                    timelineItems.add(TimelineItemResponse.from(log));
+                    lastLocationTime = log.getSentAt();
+                }
+            } else if (log.getEventType() == NotificationEventType.DEEPFAKE) {
+                // 최근 추가된 DEEPFAKE와 5초 이내라면 중복으로 간주하고 스킵
+                if (lastDeepfakeTime == null || java.time.Duration.between(log.getSentAt(), lastDeepfakeTime).abs().getSeconds() > 5) {
+                    timelineItems.add(TimelineItemResponse.from(log));
+                    lastDeepfakeTime = log.getSentAt();
+                }
+            } else {
+                // MESSAGE (자동발송) 등은 중복 제거 없이 무조건 보호자 수대로 그대로 추가
+                timelineItems.add(TimelineItemResponse.from(log));
+            }
+        }
 
         return TimelineListResponse.of(timelineItems);
     }
