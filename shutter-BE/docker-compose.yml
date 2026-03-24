@@ -42,6 +42,8 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - JWT_ACCESS_EXPIRY_MS=${JWT_ACCESS_EXPIRY_MS}
       - JWT_REFRESH_EXPIRY_MS=${JWT_REFRESH_EXPIRY_MS}
+      - AGORA_APP_ID=${AGORA_APP_ID}
+      - AGORA_APP_CERTIFICATE=${AGORA_APP_CERTIFICATE}
     depends_on:
       mysql:
         condition: service_healthy
@@ -76,6 +78,8 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - JWT_ACCESS_EXPIRY_MS=${JWT_ACCESS_EXPIRY_MS}
       - JWT_REFRESH_EXPIRY_MS=${JWT_REFRESH_EXPIRY_MS}
+      - AGORA_APP_ID=${AGORA_APP_ID}
+      - AGORA_APP_CERTIFICATE=${AGORA_APP_CERTIFICATE}
     depends_on:
       mysql:
         condition: service_healthy
