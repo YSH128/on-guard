@@ -35,6 +35,8 @@ fun MainScreen(
     onLogout: () -> Unit,
     loginError: String? = null,
     onDismissError: () -> Unit = {},
+    pendingDeepLinkScreen: String? = null,
+    onDeepLinkHandled: () -> Unit = {},
 ) {
     if (isNewUser) {
         RegistrationScreen(
@@ -54,6 +56,8 @@ fun MainScreen(
         onRequestPermissions = onRequestPermissions,
         onRequestOverlayPermission = onRequestOverlayPermission,
         onRequestAccessibilityPermission = onRequestAccessibilityPermission,
+        pendingDeepLinkScreen = pendingDeepLinkScreen,
+        onDeepLinkHandled = onDeepLinkHandled,
     )
 }
 

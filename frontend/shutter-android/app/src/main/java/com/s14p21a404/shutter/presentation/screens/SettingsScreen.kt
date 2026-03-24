@@ -3,6 +3,7 @@ package com.s14p21a404.shutter.presentation.screens
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -28,10 +29,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.rememberAsyncImagePainter
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -399,12 +402,21 @@ private fun GuardianCard(
                     .background(AvatarBg),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.Person,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp),
-                    tint = TextSecondary
-                )
+                if (guardian.profileImageUrl != null) {
+                    Image(
+                        painter = rememberAsyncImagePainter(guardian.profileImageUrl),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Outlined.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        tint = TextSecondary
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(12.dp))
@@ -483,12 +495,21 @@ private fun DeleteGuardianDialog(
                             .background(AvatarBg),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Person,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                            tint = TextSecondary
-                        )
+                        if (guardian.profileImageUrl != null) {
+                            Image(
+                                painter = rememberAsyncImagePainter(guardian.profileImageUrl),
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Outlined.Person,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                                tint = TextSecondary
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(

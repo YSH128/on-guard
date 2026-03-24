@@ -94,7 +94,7 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
 
     companion object {
         private const val TAG = "ShutterFCMService"
-        private const val CHANNEL_ID = "shutter_push_channel"
+        private const val CHANNEL_ID = "shutter_push_channel_v2"
         private const val NOTIFICATION_ID = 2001
         private const val KAKAO_PUSH_REGISTER_URL = "https://kapi.kakao.com/v1/push/register"
 

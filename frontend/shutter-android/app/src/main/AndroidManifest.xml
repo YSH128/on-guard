@@ -107,6 +107,20 @@
                 android:value="영상통화 감지를 위한 통화 상태 및 카메라 모니터링" />
         </service>
 
+        <!-- FCM 푸시 알림 서비스 -->
+        <service
+            android:name=".push.ShutterFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- FCM 기본 알림 채널 (백그라운드 수신 시 시스템이 사용) -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="shutter_push_channel_v2" />
+
         <!-- 포그라운드 앱 감지 AccessibilityService -->
         <service
             android:name=".presentation.service.ForegroundAppMonitorService"
