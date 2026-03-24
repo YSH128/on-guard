@@ -101,6 +101,7 @@ class GuardianRegistrationViewModel(application: Application) : AndroidViewModel
                     .onSuccess { guardian ->
                         guardianUuidStore.saveUuid(guardian.guardianId, friend.uuid)
                         guardianUuidStore.saveKakaoId(guardian.guardianId, friend.id)
+                        guardianUuidStore.saveKakaoName(guardian.guardianId, friend.name)
                         sendGuardianMessage(wardName, friend)
                     }
                     .onFailure { e -> lastError = e.message }

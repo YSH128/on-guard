@@ -26,6 +26,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val deleteGuardianUseCase = serviceLocator.deleteGuardianUseCase
     private val gpsRepository = serviceLocator.gpsRepository
     private val tokenManager = serviceLocator.tokenManager
+    private val guardianUuidStore = serviceLocator.guardianUuidStore
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
@@ -40,7 +41,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             _uiState.update { it.copy(isLoading = true, error = null) }
             getMyGuardiansUseCase()
                 .onSuccess { guardians ->
-                    _uiState.update { it.copy(guardians = guardians, isLoading = false) }
+                    val displayGuardians = guardians.map { guardian ->
+                        val kakaoName = guardianUuidStore.getKakaoName(guardian.guardianId)
+                        if (kakaoName != null) guardian.copy(name = kakaoName) else guardian
+                    }
+                    _uiState.update { it.copy(guardians = displayGuardians, isLoading = false) }
                 }
                 .onFailure { e ->
                     _uiState.update { it.copy(isLoading = false, error = e.message) }
