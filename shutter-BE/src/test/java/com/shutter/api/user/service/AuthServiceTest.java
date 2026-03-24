@@ -3,13 +3,10 @@ package com.shutter.api.user.service;
 import com.shutter.api.global.auth.kakao.KakaoApiClient;
 import com.shutter.api.global.auth.kakao.KakaoUserInfoResponse;
 import com.shutter.api.global.auth.token.KakaoTokenService;
-import com.shutter.api.global.exception.BusinessException;
-import com.shutter.api.global.exception.ErrorCode;
 import com.shutter.api.global.jwt.JwtProvider;
 import com.shutter.api.global.jwt.JwtRefreshTokenService;
 import com.shutter.api.user.domain.User;
 import com.shutter.api.user.dto.request.KakaoLoginRequest;
-import com.shutter.api.user.dto.request.RegisterRequest;
 import com.shutter.api.user.dto.response.LoginResponse;
 import com.shutter.api.user.repository.UserRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -24,7 +21,6 @@ import java.lang.reflect.Field;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -57,24 +53,37 @@ class AuthServiceTest {
     // ───────────────────── login() ─────────────────────
 
     @Test
-    @DisplayName("신규 유저 - 로그인 시 isNewUser 플래그와 카카오 ID를 반환한다")
-    void login_newUser_returnsIsNewUserFlag() {
+    @DisplayName("신규 유저 - 카카오 이름으로 자동 가입 후 JWT를 발급한다")
+    void login_newUser_autoRegistersAndReturnsJwt() {
         // given
         KakaoLoginRequest request = mockKakaoLoginRequest();
-        KakaoUserInfoResponse userInfo = mockKakaoUserInfo(KAKAO_ID);
+        KakaoUserInfoResponse userInfo = mockKakaoUserInfo(KAKAO_ID, USER_NAME);
         given(kakaoApiClient.getUserInfo(KAKAO_ACCESS_TOKEN)).willReturn(userInfo);
         given(userRepository.findByKakaoId(KAKAO_ID)).willReturn(Optional.empty());
+
+        // save() 호출 시 JPA @GeneratedValue처럼 ID 주입
+        given(userRepository.save(any(User.class))).willAnswer(invocation -> {
+            User u = invocation.getArgument(0);
+            setField(u, "id", USER_ID);
+            return u;
+        });
+
+        given(jwtProvider.generateAccessToken(USER_ID)).willReturn("access-token");
+        given(jwtProvider.generateRefreshToken(USER_ID)).willReturn("refresh-token");
 
         // when
         LoginResponse response = authService.login(request);
 
         // then
-        assertThat(response.getIsNewUser()).isTrue();
-        assertThat(response.getKakaoId()).isEqualTo(KAKAO_ID);
-        assertThat(response.getUserId()).isNull();
-        assertThat(response.getAccessToken()).isNull();
-        then(userRepository).should(times(0)).save(any(User.class));
-        then(kakaoTokenService).should(times(1)).saveTokens(KAKAO_ID, KAKAO_ACCESS_TOKEN, KAKAO_REFRESH_TOKEN);
+        assertThat(response.getAccessToken()).isEqualTo("access-token");
+        assertThat(response.getUserId()).isEqualTo(USER_ID);
+
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        then(userRepository).should(times(1)).save(userCaptor.capture());
+        User savedUser = userCaptor.getValue();
+        assertThat(savedUser.getKakaoId()).isEqualTo(KAKAO_ID);
+        assertThat(savedUser.getName()).isEqualTo(USER_NAME);
+        assertThat(savedUser.getDeviceUuid()).isEqualTo(DEVICE_UUID);
     }
 
     @Test
@@ -82,7 +91,7 @@ class AuthServiceTest {
     void login_existingUser_returnsJwtAndUpdatesUuid() {
         // given
         KakaoLoginRequest request = mockKakaoLoginRequest();
-        KakaoUserInfoResponse userInfo = mockKakaoUserInfo(KAKAO_ID);
+        KakaoUserInfoResponse userInfo = mockKakaoUserInfo(KAKAO_ID, USER_NAME);
         given(kakaoApiClient.getUserInfo(KAKAO_ACCESS_TOKEN)).willReturn(userInfo);
 
         User existingUser = mockUser(USER_ID, KAKAO_ID, "old-uuid");
@@ -94,58 +103,11 @@ class AuthServiceTest {
         LoginResponse response = authService.login(request);
 
         // then
-        assertThat(response.getIsNewUser()).isFalse();
         assertThat(response.getAccessToken()).isEqualTo("access-token");
         assertThat(response.getUserId()).isEqualTo(USER_ID);
         then(userRepository).should(times(0)).save(any(User.class));
-        assertThat(existingUser.getDeviceUuid()).isEqualTo(DEVICE_UUID); // verify uuid update
+        assertThat(existingUser.getDeviceUuid()).isEqualTo(DEVICE_UUID);
     }
-
-    // ───────────────────── register() ─────────────────────
-
-    @Test
-    @DisplayName("신규 유저 - 회원가입 시 유저를 생성하고 JWT를 발급한다")
-    void register_newUser_createsUserAndReturnsJwt() {
-        // given
-        RegisterRequest request = mockRegisterRequest();
-        given(userRepository.findByKakaoId(KAKAO_ID)).willReturn(Optional.empty());
-        given(jwtProvider.generateAccessToken(any(Long.class))).willReturn("access-token");
-        given(jwtProvider.generateRefreshToken(any(Long.class))).willReturn("refresh-token");
-
-        // mock kakao token migration
-        given(kakaoTokenService.getAccessToken(KAKAO_ID)).willReturn(Optional.of(KAKAO_ACCESS_TOKEN));
-        given(kakaoTokenService.getRefreshToken(KAKAO_ID)).willReturn(Optional.of(KAKAO_REFRESH_TOKEN));
-
-        // when
-        authService.register(request);
-
-        // then
-        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-        then(userRepository).should(times(1)).save(userCaptor.capture());
-        User savedUser = userCaptor.getValue();
-        assertThat(savedUser.getKakaoId()).isEqualTo(KAKAO_ID);
-        assertThat(savedUser.getName()).isEqualTo(USER_NAME);
-        assertThat(savedUser.getDeviceUuid()).isEqualTo(DEVICE_UUID);
-
-        then(kakaoTokenService).should(times(1)).saveTokens(any(Long.class), any(), any());
-        then(kakaoTokenService).should(times(1)).deleteTokens(KAKAO_ID);
-        then(jwtRefreshTokenService).should(times(1)).save(any(Long.class), any());
-    }
-
-    @Test
-    @DisplayName("회원가입 - 이미 존재하는 유저일 경우 예외를 발생시킨다")
-    void register_existingUser_throwsException() {
-        // given
-        RegisterRequest request = mockRegisterRequest();
-        given(userRepository.findByKakaoId(KAKAO_ID)).willReturn(Optional.of(mockUser(USER_ID, KAKAO_ID, DEVICE_UUID)));
-
-        // when & then
-        assertThatThrownBy(() -> authService.register(request))
-                .isInstanceOf(BusinessException.class)
-                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
-                        .isEqualTo(ErrorCode.USER_ALREADY_EXISTS));
-    }
-
 
     // ───────────────────── helpers ─────────────────────
 
@@ -157,17 +119,12 @@ class AuthServiceTest {
         return request;
     }
 
-    private RegisterRequest mockRegisterRequest() {
-        RegisterRequest request = new RegisterRequest();
-        setField(request, "kakaoId", KAKAO_ID);
-        setField(request, "name", USER_NAME);
-        setField(request, "deviceUuid", DEVICE_UUID);
-        return request;
-    }
-
-    private KakaoUserInfoResponse mockKakaoUserInfo(Long kakaoId) {
+    private KakaoUserInfoResponse mockKakaoUserInfo(Long kakaoId, String name) {
         KakaoUserInfoResponse response = new KakaoUserInfoResponse();
         setField(response, "kakaoId", kakaoId);
+        KakaoUserInfoResponse.KakaoAccount account = new KakaoUserInfoResponse.KakaoAccount();
+        setField(account, "name", name);
+        setField(response, "kakaoAccount", account);
         return response;
     }
 
@@ -191,4 +148,3 @@ class AuthServiceTest {
         }
     }
 }
-
