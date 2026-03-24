@@ -118,15 +118,24 @@ class VideoCallDetectService : Service() {
         // 오버레이 콜백 설정
         warningOverlayManager.onEndCall = {
             Log.d(TAG, "📞 전화 종료 요청 (오버레이)")
-            // AccessibilityService를 통해 실제 통화 종료
-            // - 통신사 전화: TelecomManager.endCall() (윈도우 포커스 무관)
-            // - VoIP 앱: windows API로 통화 앱 윈도우를 직접 탐색 (오버레이 유무 무관)
-            val service = ForegroundAppMonitorService.instance
-            if (service != null) {
-                val success = service.performEndCall()
-                Log.d(TAG, "📞 AccessibilityService 통화 종료 결과: $success")
+
+            if (videoCallRepository.isInAppCallActive()) {
+                // ── 인앱(Agora) 영상통화 종료 ──
+                Log.d(TAG, "📞 인앱 영상통화 → onInAppCallEnd 콜백 호출")
+                onInAppCallEnd?.invoke()
+                videoCallRepository.setInAppCallActive(false)
             } else {
-                Log.w(TAG, "❌ AccessibilityService 미활성 — 통화 종료 불가")
+                // ── 외부 앱(카카오톡/통신사) 영상통화 종료 ──
+                // AccessibilityService를 통해 실제 통화 종료
+                // - 통신사 전화: TelecomManager.endCall() (윈도우 포커스 무관)
+                // - VoIP 앱: windows API로 통화 앱 윈도우를 직접 탐색 (오버레이 유무 무관)
+                val service = ForegroundAppMonitorService.instance
+                if (service != null) {
+                    val success = service.performEndCall()
+                    Log.d(TAG, "📞 AccessibilityService 통화 종료 결과: $success")
+                } else {
+                    Log.w(TAG, "❌ AccessibilityService 미활성 — 통화 종료 불가")
+                }
             }
             warningOverlayManager.dismissAll()
             alertSoundManager.stopAlert()
@@ -237,10 +246,11 @@ class VideoCallDetectService : Service() {
 
         if (!ForegroundAppMonitorService.isRunning()) {
             Log.w(TAG, "⚠️ AccessibilityService(ForegroundAppMonitor) 미활성 — 포그라운드 앱 추적 불가")
-            return
+            // 인앱 통화가 아닌 경우에만 리턴 (인앱 통화는 foregroundPackage로 자기 앱 패키지가 잡히므로 동작 가능)
+            if (!videoCallRepository.isInAppCallActive()) return
         }
 
-        Log.d(TAG, "포그라운드 앱 모니터링 시작")
+        Log.d(TAG, "포그라운드 앱 모니터링 시작 (인앱=${videoCallRepository.isInAppCallActive()})")
         foregroundMonitorJob = serviceScope.launch {
             videoCallRepository.observeForegroundIsVideoCallApp().collect { isOnVideoCallScreen ->
                 Log.d(TAG, "영상통화 화면 여부: $isOnVideoCallScreen, 오버레이 표시 중: ${warningOverlayManager.isShowing()}")
@@ -282,7 +292,8 @@ class VideoCallDetectService : Service() {
 
         if (!ForegroundAppMonitorService.isRunning()) {
             Log.w(TAG, "⚠️ AccessibilityService 미활성 — 금융 앱 추적 불가")
-            return
+            // 인앱 통화가 아닌 경우에만 리턴
+            if (!videoCallRepository.isInAppCallActive()) return
         }
 
         Log.d(TAG, "금융 앱 모니터링 시작")
@@ -555,5 +566,13 @@ class VideoCallDetectService : Service() {
 
         const val EXTRA_RESULT_CODE = "extra_result_code"
         const val EXTRA_PROJECTION_DATA = "extra_projection_data"
+
+        /**
+         * 인앱(Agora) 영상통화 종료 콜백.
+         * VideoCallScreen에서 등록하고, 통화 종료 시 해제한다.
+         * 오버레이 "전화 종료" 버튼 클릭 시 인앱 통화이면 이 콜백을 호출한다.
+         */
+        @Volatile
+        var onInAppCallEnd: (() -> Unit)? = null
     }
 }
