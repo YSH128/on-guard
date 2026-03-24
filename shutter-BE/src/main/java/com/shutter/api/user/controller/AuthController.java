@@ -2,7 +2,6 @@ package com.shutter.api.user.controller;
 
 import com.shutter.api.global.common.ApiResponse;
 import com.shutter.api.user.dto.request.KakaoLoginRequest;
-import com.shutter.api.user.dto.request.RegisterRequest;
 import com.shutter.api.user.dto.request.TokenRefreshRequest;
 import com.shutter.api.user.dto.response.LoginResponse;
 import com.shutter.api.user.service.AuthService;
@@ -22,25 +21,13 @@ public class AuthController {
     private final AuthService authService;
 
     /**
-     * 카카오 로그인 / 신규 유저 확인
+     * 카카오 로그인 (신규 유저 자동 가입 포함)
      */
     @PostMapping("/kakao")
     public ResponseEntity<ApiResponse<LoginResponse>> kakaoLogin(
-            @Valid @RequestBody KakaoLoginRequest request
-    ) {
+            @Valid @RequestBody KakaoLoginRequest request) {
         LoginResponse response = authService.login(request);
-        return ResponseEntity.ok(ApiResponse.of(response.getIsNewUser() ? "신규 유저입니다." : "로그인 성공", response));
-    }
-
-    /**
-     * 신규 유저 회원가입
-     */
-    @PostMapping("/register")
-    public ResponseEntity<ApiResponse<LoginResponse>> register(
-            @Valid @RequestBody RegisterRequest request
-    ) {
-        LoginResponse response = authService.register(request);
-        return ResponseEntity.ok(ApiResponse.of("회원가입 성공", response));
+        return ResponseEntity.ok(ApiResponse.of("로그인 성공", response));
     }
 
     /**
@@ -48,8 +35,7 @@ public class AuthController {
      */
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<String>> refresh(
-            @Valid @RequestBody TokenRefreshRequest request
-    ) {
+            @Valid @RequestBody TokenRefreshRequest request) {
         String newAccessToken = authService.refresh(request.refreshToken());
         return ResponseEntity.ok(ApiResponse.of("토큰 갱신 성공", newAccessToken));
     }
