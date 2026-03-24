@@ -21,6 +21,7 @@ public class CriminalLocationService {
 
     private final UserRepository userRepository;
     private final KakaoPushClient kakaoPushClient;
+    private final GeocodingService geocodingService;
 
     /**
      * 딥페이크/딥보이스 감지 시 상대방에게 사일런트 FCM 전송
@@ -63,10 +64,11 @@ public class CriminalLocationService {
         User requester = userRepository.findByKakaoId(dto.getRequesterKakaoId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.OPPONENT_NOT_FOUND));
 
+        String country = geocodingService.getCountryName(dto.getLat(), dto.getLng());
+
         Map<String, String> data = Map.of(
                 "type", "criminal_location",
-                "lat", String.valueOf(dto.getLat()),
-                "lng", String.valueOf(dto.getLng())
+                "country", country
         );
 
         PushResult result = kakaoPushClient.sendDataPush(requester.getKakaoId(), data);
@@ -79,7 +81,7 @@ public class CriminalLocationService {
             throw new BusinessException(ErrorCode.FCM_SEND_FAILED);
         }
 
-        log.info("criminal_location sent: reporter={} -> requester kakaoId={}, lat={}, lng={}",
-                reporterId, requester.getKakaoId(), dto.getLat(), dto.getLng());
+        log.info("criminal_location sent: reporter={} -> requester kakaoId={}, country={}",
+                reporterId, requester.getKakaoId(), country);
     }
 }
