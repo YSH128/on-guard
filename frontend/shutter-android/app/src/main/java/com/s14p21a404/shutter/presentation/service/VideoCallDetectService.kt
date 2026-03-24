@@ -115,20 +115,18 @@ class VideoCallDetectService : Service() {
         // 오버레이 콜백 설정
         warningOverlayManager.onEndCall = {
             Log.d(TAG, "📞 전화 종료 요청 (오버레이)")
-            // ① 먼저 오버레이를 닫아서 통화 앱 윈도우가 active window가 되도록 함
+            // AccessibilityService를 통해 실제 통화 종료
+            // - 통신사 전화: TelecomManager.endCall() (윈도우 포커스 무관)
+            // - VoIP 앱: windows API로 통화 앱 윈도우를 직접 탐색 (오버레이 유무 무관)
+            val service = ForegroundAppMonitorService.instance
+            if (service != null) {
+                val success = service.performEndCall()
+                Log.d(TAG, "📞 AccessibilityService 통화 종료 결과: $success")
+            } else {
+                Log.w(TAG, "❌ AccessibilityService 미활성 — 통화 종료 불가")
+            }
             warningOverlayManager.dismissAll()
             alertSoundManager.stopAlert()
-            // ② AccessibilityService를 통해 실제 통화 종료 버튼 클릭
-            serviceScope.launch {
-                delay(300) // 오버레이 제거 후 윈도우 포커스 전환 대기
-                val service = ForegroundAppMonitorService.instance
-                if (service != null) {
-                    val success = service.performEndCall()
-                    Log.d(TAG, "📞 AccessibilityService 통화 종료 결과: $success")
-                } else {
-                    Log.w(TAG, "❌ AccessibilityService 미활성 — 통화 종료 불가")
-                }
-            }
         }
         warningOverlayManager.onRescan = {
             Log.d(TAG, "🔄 재탐지 요청 (오버레이)")
