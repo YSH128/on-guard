@@ -1,9 +1,13 @@
 package com.s14p21a404.shutter.presentation.criminal
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.net.Uri
+import androidx.exifinterface.media.ExifInterface
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -116,8 +120,7 @@ fun FaceSetupScreen(
                 val uri = uiState.photoUri
                 if (uri != null) {
                     val bitmap = remember(uri) {
-                        context.contentResolver.openInputStream(uri)
-                            ?.use { BitmapFactory.decodeStream(it) }
+                        loadBitmapRotated(context, uri)
                     }
                     if (bitmap != null) {
                         Image(
@@ -227,4 +230,29 @@ fun FaceSetupScreen(
 private fun createCameraUri(context: android.content.Context): Uri {
     val file = File(context.cacheDir, "face_capture.jpg")
     return FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+}
+
+private fun loadBitmapRotated(context: Context, uri: Uri): Bitmap? {
+    val bitmap = context.contentResolver.openInputStream(uri)
+        ?.use { BitmapFactory.decodeStream(it) } ?: return null
+
+    val degrees = try {
+        // 카메라(FileProvider)는 실제 파일 경로로 EXIF 읽기, 갤러리는 스트림으로
+        val exif = if (uri.authority?.contains(context.packageName) == true) {
+            val file = java.io.File(context.cacheDir, "face_capture.jpg")
+            ExifInterface(file.absolutePath)
+        } else {
+            context.contentResolver.openInputStream(uri)?.use { ExifInterface(it) }
+        }
+        when (exif?.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+            ExifInterface.ORIENTATION_ROTATE_90  -> 90f
+            ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+            ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+            else -> 0f
+        }
+    } catch (e: Exception) { 0f }
+
+    if (degrees == 0f) return bitmap
+    val matrix = Matrix().apply { postRotate(degrees) }
+    return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 }
