@@ -16,7 +16,6 @@ import com.s14p21a404.shutter.domain.usecase.GetAccessTokenUseCase
 import com.s14p21a404.shutter.domain.usecase.LoginUseCase
 import com.s14p21a404.shutter.push.ShutterFirebaseMessagingService
 import com.s14p21a404.shutter.domain.usecase.LogoutUseCase
-import com.s14p21a404.shutter.domain.usecase.RegisterUseCase
 import com.s14p21a404.shutter.network.AuthEventBus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,8 +27,6 @@ sealed class LoginUiState {
     object Checking : LoginUiState()
     /** 로그인 필요 */
     object LoggedOut : LoginUiState()
-    /** 신규 회원 — 이름 입력 후 /auth/register 호출 필요 */
-    data class NeedsRegistration(val kakaoId: Long) : LoginUiState()
     /** 로그인 완료 */
     object LoggedIn : LoginUiState()
 }
@@ -38,7 +35,6 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
     private val serviceLocator = ServiceLocator.getInstance(application)
     private val loginUseCase: LoginUseCase = serviceLocator.loginUseCase
-    private val registerUseCase: RegisterUseCase = serviceLocator.registerUseCase
     private val logoutUseCase: LogoutUseCase = serviceLocator.logoutUseCase
     private val getAccessTokenUseCase: GetAccessTokenUseCase = serviceLocator.getAccessTokenUseCase
 
@@ -124,33 +120,12 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                             registerFcmToken()
                             _loginUiState.value = LoginUiState.LoggedIn
                         }
-                        is KakaoLoginResult.NewUser -> {
-                            Log.d(TAG, "신규 회원 — kakaoId: ${result.kakaoId}")
-                            _loginUiState.value = LoginUiState.NeedsRegistration(result.kakaoId)
-                        }
                     }
                 }
                 .onFailure { e ->
                     Log.e(TAG, "서버 로그인 실패", e)
                     _loginError.value = e.message ?: "서버 연결에 실패했습니다."
                     _loginUiState.value = LoginUiState.LoggedOut
-                }
-        }
-    }
-
-    /**
-     * 신규 회원 등록: 이름을 입력받아 /auth/register 호출 후 JWT 저장.
-     */
-    fun register(kakaoId: Long, name: String) {
-        viewModelScope.launch {
-            registerUseCase(kakaoId, name)
-                .onSuccess {
-                    Log.d(TAG, "회원가입 완료")
-                    _loginUiState.value = LoginUiState.LoggedIn
-                }
-                .onFailure { e ->
-                    Log.e(TAG, "회원가입 실패", e)
-                    _loginError.value = e.message ?: "회원가입에 실패했습니다."
                 }
         }
     }
