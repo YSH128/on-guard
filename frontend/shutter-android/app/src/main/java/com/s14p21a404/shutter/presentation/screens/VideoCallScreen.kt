@@ -1,7 +1,9 @@
 package com.s14p21a404.shutter.presentation.screens
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.view.SurfaceView
 import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -12,6 +14,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -37,7 +40,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import com.s14p21a404.shutter.di.ServiceLocator
+import com.s14p21a404.shutter.presentation.service.CriminalLocationBridge
 import com.s14p21a404.shutter.presentation.service.VideoCallDetectService
+import kotlinx.coroutines.launch
 import io.agora.rtc2.*
 import io.agora.rtc2.audio.AudioParams
 import io.agora.rtc2.video.VideoCanvas
@@ -64,7 +69,12 @@ private val RemoteGradientTop = Color(0xFF404040) // neutral-700
 private val RemoteGradientBottom = Color(0xFF171717) // neutral-900
 
 @Composable
-fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () -> Unit = {}) {
+fun VideoCallScreen(
+    channelId: String,
+    callerName: String = "",
+    opponentKakaoId: Long = 0L,
+    onCallEnded: () -> Unit = {},
+) {
     val context = LocalContext.current
     val appId = "6c6109e0b9644b599072a68b514d77a8"
 
@@ -72,6 +82,8 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
     val videoCallRepository = remember {
         ServiceLocator.getInstance(context).videoCallRepository
     }
+    val criminalLocationApi = remember { ServiceLocator.getInstance(context).criminalLocationApi }
+    val scope = rememberCoroutineScope()
 
     var rtcEngine by remember { mutableStateOf<RtcEngine?>(null) }
     var remoteUid by remember { mutableStateOf<Int?>(null) }
@@ -88,6 +100,22 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
     // 중복 종료 방지 플래그 (콜백 스레드에서도 안전하게 사용)
     val isEndingCall = remember { mutableStateOf(false) }
 
+    // ── 범죄자 위치 추적 상태 ──
+    var isRequestingLocation by remember { mutableStateOf(false) }
+    var receivedLocation by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+
+    // criminal_location FCM 수신 콜백 등록
+    DisposableEffect(Unit) {
+        CriminalLocationBridge.onLocationReceived = { lat, lng ->
+            android.util.Log.d("CriminalLocation", "위치 수신됨 — lat: $lat, lng: $lng")
+            receivedLocation = Pair(lat, lng)
+            isRequestingLocation = false
+        }
+        onDispose {
+            CriminalLocationBridge.onLocationReceived = null
+        }
+    }
+
     /** leaveChannel + callEnded 처리를 한 곳에서 관리 */
     fun endCall() {
         if (isEndingCall.value) return   // 이미 종료 처리 중이면 무시
@@ -97,6 +125,7 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
         // 인앱 통화 종료 → 딥페이크 감지 파이프라인에 통화 종료 알림
         videoCallRepository.setInAppCallActive(false)
         VideoCallDetectService.onInAppCallEnd = null
+        VideoCallDetectService.onInAppDeepfakeDetected = null
     }
 
     // 연결 상태: remoteUid가 null이면 연결 중
@@ -119,6 +148,21 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
             videoCallRepository.setInAppCallActive(true)
             // 오버레이 "전화 종료" 클릭 시 Agora 통화를 종료하도록 콜백 등록
             VideoCallDetectService.onInAppCallEnd = { endCall() }
+            // 딥페이크 감지 시 상대방 GPS 자동 요청
+            VideoCallDetectService.onInAppDeepfakeDetected = {
+                if (!isRequestingLocation && opponentKakaoId != 0L) {
+                    isRequestingLocation = true
+                    android.util.Log.d("CriminalLocation", "딥페이크 감지 → 위치 자동 요청 — opponentKakaoId: $opponentKakaoId")
+                    scope.launch {
+                        criminalLocationApi.requestLocation(opponentKakaoId)
+                            .onSuccess { android.util.Log.d("CriminalLocation", "위치 요청 API 성공") }
+                            .onFailure { e ->
+                                android.util.Log.e("CriminalLocation", "위치 요청 API 실패: ${e.message}", e)
+                                isRequestingLocation = false
+                            }
+                    }
+                }
+            }
         }
     }
 
@@ -287,6 +331,34 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
             RtcEngine.destroy()
             rtcEngine = null
         }
+    }
+
+    // ── 범죄자 위치 수신 다이얼로그 ──
+    receivedLocation?.let { (lat, lng) ->
+        AlertDialog(
+            onDismissRequest = { receivedLocation = null },
+            title = { Text("통화 상대방 위치 확인", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("통화 상대방의 현재 위치가 확인되었습니다.")
+                    Spacer(Modifier.height(4.dp))
+                    Text("위도: $lat", fontSize = 13.sp, color = Color(0xFF6B7280))
+                    Text("경도: $lng", fontSize = 13.sp, color = Color(0xFF6B7280))
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val intent = Intent(
+                        Intent.ACTION_VIEW,
+                        Uri.parse("geo:${lat},${lng}?q=${lat},${lng}(의심 위치)")
+                    )
+                    context.startActivity(intent)
+                }) { Text("지도에서 보기") }
+            },
+            dismissButton = {
+                TextButton(onClick = { receivedLocation = null }) { Text("닫기") }
+            }
+        )
     }
 
     // ── 통화 종료 화면 ──

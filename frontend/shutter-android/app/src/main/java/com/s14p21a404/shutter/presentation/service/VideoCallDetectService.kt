@@ -195,7 +195,7 @@ class VideoCallDetectService : Service() {
                 if (result.detected) {
                     // ── 딥페이크 최초 감지 ──
                     isDeepfakeDetected = true
-                    alertSoundManager.startAlert()
+                    //alertSoundManager.startAlert()
                     financialBlockOverlayManager.setEnabled(true)
                     startFinancialAppMonitoring()
                     if (!alertSentForCurrentSession) {
@@ -203,6 +203,11 @@ class VideoCallDetectService : Service() {
                         serviceScope.launch(Dispatchers.Main) {
                             Log.d(TAG, "딥페이크 최초 감지 — 보호자 카카오톡 알림 발송 시작")
                             deepfakeAlertSender.sendAlert(LocalDateTime.now())
+                        }
+                        // 인앱 영상통화 중이면 상대방 GPS 요청 콜백 호출
+                        onInAppDeepfakeDetected?.let {
+                            Log.d(TAG, "딥페이크 최초 감지 — 인앱 통화 GPS 요청 콜백 호출")
+                            serviceScope.launch(Dispatchers.Main) { it() }
                         }
                     }
                     startGpsSendingIfEligible()
@@ -574,5 +579,12 @@ class VideoCallDetectService : Service() {
          */
         @Volatile
         var onInAppCallEnd: (() -> Unit)? = null
+
+        /**
+         * 인앱 영상통화 중 딥페이크/딥보이스 최초 감지 시 호출된다.
+         * VideoCallScreen에서 등록하고 상대방 GPS 요청에 활용한다.
+         */
+        @Volatile
+        var onInAppDeepfakeDetected: (() -> Unit)? = null
     }
 }

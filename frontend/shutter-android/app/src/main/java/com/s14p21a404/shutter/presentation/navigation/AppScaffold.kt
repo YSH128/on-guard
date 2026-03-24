@@ -125,9 +125,9 @@ fun AppScaffold(
                     onRequestPermissions = onRequestPermissions,
                     onRequestOverlayPermission = onRequestOverlayPermission,
                     onRequestAccessibilityPermission = onRequestAccessibilityPermission,
-                    onNavigateToVideoCall = { channelId, callerName ->
-            navController.navigate(Screen.VideoCall.createRoute(channelId, callerName))
-        },
+                    onNavigateToVideoCall = { channelId, callerName, opponentKakaoId ->
+                        navController.navigate(Screen.VideoCall.createRoute(channelId, callerName, opponentKakaoId))
+                    },
                 )
             }
             composable(Screen.RecentRecords.route) {
@@ -159,9 +159,11 @@ fun AppScaffold(
                 val callerName = backStackEntry.arguments?.getString("callerName")?.let {
                     java.net.URLDecoder.decode(it, "UTF-8")
                 } ?: ""
+                val opponentKakaoId = backStackEntry.arguments?.getString("opponentKakaoId")?.toLongOrNull() ?: 0L
                 VideoCallScreen(
                     channelId = channelId,
                     callerName = callerName,
+                    opponentKakaoId = opponentKakaoId,
                     onCallEnded = { navController.popBackStack() }
                 )
             }
