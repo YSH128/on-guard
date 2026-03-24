@@ -16,7 +16,7 @@ class DSModel_ONNXWrapper(torch.nn.Module):
     Model input size: [B, 3, 224, 224]
 
     Returns:
-        logits: [B, 2]
+ OB       logits: [B, 2]
             - real, fake logits (또는 probabilities)
         cam: [B, 1, 224, 224]
             - xray_pred (fake 탐지에 영향을 준 픽셀 단위 맵 역할)
@@ -52,8 +52,11 @@ class DSModel_ONNXWrapper(torch.nn.Module):
         clip_cls_output = self.model.clip_post_process(clip_output.float()).view(-1, 2)
         
         logits = clip_cls_output         # [B, 2] 형태의 Logit 리턴
-        cam = xray_preds[-1]             # [B, 1, 224, 224] 형태의 CAM(xray_pred) 리턴
+        # cam = xray_preds[-1]             # [B, 1, 224, 224] 형태의 CAM(xray_pred) 리턴
         
+        # CAM 이용 ROI 추출 시, 노이즈의 영향을 줄이기 위해서 각 픽셀의 값을 0~1 사이의 확률값으로 변환
+        cam = torch.sigmoid(xray_preds[-1])
+
         return logits, cam
 
 
@@ -116,7 +119,9 @@ def convert_ds_to_onnx():
             wrapped_model,
             example_input,
             OUTPUT_PATH,
-            opset_version=17,
+            export_params=True,
+            opset_version=15, # 기존 17,
+            do_constant_folding=True,
             input_names=["input"],
             output_names=["logits", "cam"]
         )
