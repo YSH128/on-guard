@@ -1,7 +1,6 @@
 package com.s14p21a404.shutter.presentation.screens
 
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,7 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -186,12 +185,20 @@ private fun FriendItem(
                 .background(Color(0xFFE8EBF5)),
             contentAlignment = Alignment.Center
         ) {
-            if (profileImageUrl != null) {
-                Image(
-                    painter = rememberAsyncImagePainter(profileImageUrl),
+            if (!profileImageUrl.isNullOrEmpty()) {
+                SubcomposeAsyncImage(
+                    model = profileImageUrl,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
+                    error = {
+                        Icon(
+                            imageVector = Icons.Outlined.Person,
+                            contentDescription = null,
+                            modifier = Modifier.size(22.dp),
+                            tint = Color(0xFF5B7FD6)
+                        )
+                    },
                 )
             } else {
                 Icon(

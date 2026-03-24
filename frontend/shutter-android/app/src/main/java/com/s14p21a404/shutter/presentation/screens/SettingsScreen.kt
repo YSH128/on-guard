@@ -3,7 +3,6 @@ package com.s14p21a404.shutter.presentation.screens
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -34,7 +33,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.rememberAsyncImagePainter
+import coil.compose.SubcomposeAsyncImage
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -402,12 +401,20 @@ private fun GuardianCard(
                     .background(AvatarBg),
                 contentAlignment = Alignment.Center
             ) {
-                if (guardian.profileImageUrl != null) {
-                    Image(
-                        painter = rememberAsyncImagePainter(guardian.profileImageUrl),
+                if (!guardian.profileImageUrl.isNullOrEmpty()) {
+                    SubcomposeAsyncImage(
+                        model = guardian.profileImageUrl,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
+                        error = {
+                            Icon(
+                                imageVector = Icons.Outlined.Person,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                                tint = TextSecondary
+                            )
+                        },
                     )
                 } else {
                     Icon(
@@ -495,12 +502,20 @@ private fun DeleteGuardianDialog(
                             .background(AvatarBg),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (guardian.profileImageUrl != null) {
-                            Image(
-                                painter = rememberAsyncImagePainter(guardian.profileImageUrl),
+                        if (!guardian.profileImageUrl.isNullOrEmpty()) {
+                            SubcomposeAsyncImage(
+                                model = guardian.profileImageUrl,
                                 contentDescription = null,
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop,
+                                error = {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Person,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp),
+                                        tint = TextSecondary
+                                    )
+                                },
                             )
                         } else {
                             Icon(

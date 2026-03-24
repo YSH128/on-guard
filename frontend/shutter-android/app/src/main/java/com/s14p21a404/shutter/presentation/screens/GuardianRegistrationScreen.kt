@@ -1,6 +1,5 @@
 package com.s14p21a404.shutter.presentation.screens
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -25,7 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.rememberAsyncImagePainter
+import coil.compose.SubcomposeAsyncImage
 
 // ── 색상 상수 ──
 private val BgColor = Color(0xFFF2F5F9)
@@ -327,12 +326,20 @@ private fun FriendSelectionCard(
                     .background(AvatarBg),
                 contentAlignment = Alignment.Center
             ) {
-                if (profileImageUrl != null) {
-                    Image(
-                        painter = rememberAsyncImagePainter(profileImageUrl),
+                if (!profileImageUrl.isNullOrEmpty()) {
+                    SubcomposeAsyncImage(
+                        model = profileImageUrl,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
+                        error = {
+                            Icon(
+                                imageVector = Icons.Outlined.Person,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                                tint = AvatarIconColor
+                            )
+                        },
                     )
                 } else {
                     Icon(
