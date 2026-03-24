@@ -40,6 +40,9 @@ public class RedisKeyExpirationListener extends KeyExpirationEventMessageListene
             } catch (NumberFormatException e) {
                 log.error("Failed to parse wardId from expired Redis key: {}", expiredKey, e);
             }
+        } else if (expiredKey.startsWith("call:")) {
+            // 통화 수락 대기시간(TTL 30초) 만료 시 자동 취소용이므로 별도 처리 없이 무시
+            log.debug("Call ringing session expired. Ignored in listener: {}", expiredKey);
         }
     }
 }

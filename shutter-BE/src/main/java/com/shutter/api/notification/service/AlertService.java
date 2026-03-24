@@ -6,6 +6,7 @@ import com.shutter.api.global.exception.ErrorCode;
 import com.shutter.api.notification.client.KakaoPushClient;
 import com.shutter.api.notification.domain.NotificationLog;
 import com.shutter.api.notification.domain.NotificationStatus;
+import com.shutter.api.notification.domain.NotificationEventType;
 import com.shutter.api.notification.domain.PushResult;
 import com.shutter.api.notification.dto.request.AlertRequest;
 import com.shutter.api.notification.dto.response.AlertLogResponse;
@@ -115,6 +116,23 @@ public class AlertService {
                 .collect(Collectors.toList());
         
         return AlertLogsResponse.from(responses);
+    }
+
+    /**
+     * 단일 대상에게 커스텀 푸시 메시지(JSON) 전송
+     */
+    public void sendAlertToUser(Long kakaoId, String payloadJson) {
+        PushResult pushResult = kakaoPushClient.sendPush(kakaoId, NotificationEventType.MESSAGE, payloadJson);
+        
+        if (pushResult == PushResult.CONFIG_ERROR) {
+            log.error("CRITICAL: Kakao Push configuration error detected.");
+            throw new AlertException(ErrorCode.KAKAO_PUSH_CONFIG_ERROR);
+        }
+        
+        if (pushResult != PushResult.SUCCESS) {
+            log.error("Alert push failed for kakaoId: {}", kakaoId);
+            throw new AlertException(ErrorCode.FCM_SEND_FAILED);
+        }
     }
 
     /**

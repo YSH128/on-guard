@@ -67,7 +67,7 @@ class TelemetryControllerTest {
         Map<String, Object> body = validBody();
         body.put("model_type", "INVALID_TYPE");
 
-        mockMvc.perform(post("/api/telemetry")
+        mockMvc.perform(post("/api/v1/telemetry")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(body)))
                 .andExpect(status().isBadRequest());

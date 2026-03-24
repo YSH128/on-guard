@@ -4,7 +4,7 @@ spring:
     compose:
       enabled: false # 직접 docker compose up으로 컨테이너 관리
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3307}/${DB_NAME:shutter}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&useUnicode=true&characterEncoding=UTF-8
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3307}/${DB_NAME:shutter}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&useUnicode=true&characterEncoding=utf8mb4&connectionCollation=utf8mb4_unicode_ci
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -54,3 +54,8 @@ jwt:
   secret: ${JWT_SECRET}
   access-expiry-ms: ${JWT_ACCESS_EXPIRY_MS:3600000} # 기본 1시간
   refresh-expiry-ms: ${JWT_REFRESH_EXPIRY_MS:1209600000} # 기본 14일
+
+# Agora RTC
+agora:
+  app-id: ${AGORA_APP_ID}
+  app-certificate: ${AGORA_APP_CERTIFICATE}
