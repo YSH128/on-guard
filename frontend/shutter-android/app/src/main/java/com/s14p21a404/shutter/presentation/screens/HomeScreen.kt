@@ -44,7 +44,7 @@ fun HomeScreen(
     onRequestPermissions: () -> Unit = {},
     onRequestOverlayPermission: () -> Unit = {},
     onRequestAccessibilityPermission: () -> Unit = {},
-    onNavigateToVideoCall: (String) -> Unit = {},
+    onNavigateToVideoCall: (String, String) -> Unit = { _, _ -> },
     homeViewModel: HomeViewModel = viewModel(),
 ) {
     val uiState by homeViewModel.uiState.collectAsState()
@@ -149,7 +149,7 @@ fun HomeScreen(
                                     .sorted()
                                     .joinToString("_")
                                 android.util.Log.d("Channel", "채널명: $channelId")
-                                onNavigateToVideoCall(channelId)
+                                onNavigateToVideoCall(channelId, friend.name)
                             }
                         )
                     }
