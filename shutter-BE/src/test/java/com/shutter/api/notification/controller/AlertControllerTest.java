@@ -154,7 +154,7 @@ class AlertControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andDo(print())
-                .andExpect(status().isBadGateway())
+                .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("FCM_SEND_FAILED"));
     }
 }
