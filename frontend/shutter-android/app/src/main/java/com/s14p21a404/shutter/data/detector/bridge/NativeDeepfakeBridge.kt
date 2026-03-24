@@ -8,10 +8,6 @@ import com.s14p21a404.shutter.telemetry.DeviceStatusProvider
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.concurrent.thread
-import ai.onnxruntime.OnnxTensor
-import ai.onnxruntime.OrtEnvironment
-import ai.onnxruntime.OrtSession
-import java.nio.FloatBuffer
 
 /**
  * JNI 브릿지 (Kotlin 쪽) — NDK 네이티브 함수 request_deepfake_detection 호출
@@ -40,8 +36,6 @@ class NativeDeepfakeBridge(private val context: Context) {
     @Volatile
     var isQnnSupported = true // 기본 지원가정. 초기화 실패시 false.
 
-    private var ortEnv: OrtEnvironment? = null
-    private var ortSession: OrtSession? = null
     @Volatile
     var isOnnxInitialized = false
     private val onnxLock = Any()
@@ -56,41 +50,25 @@ class NativeDeepfakeBridge(private val context: Context) {
     private external fun loadModel(assetsPath: String): Boolean
     private external fun releaseQnn()
     private external fun detectDeepfakeVisual(buffer: ByteArray, width: Int, height: Int, stride: Int): FloatArray
-    private external fun preprocessFrameForOnnx(buffer: ByteArray, width: Int, height: Int, stride: Int): FloatArray?
+    private external fun initOnnx(modelPath: String): Boolean
+    private external fun releaseOnnx()
+    private external fun detectDeepfakeOnnx(buffer: ByteArray, width: Int, height: Int, stride: Int): FloatArray
 
     private fun initOnnxFallback() {
         synchronized(onnxLock) {
             if (isOnnxInitialized) return
             try {
-                Log.d("NativeDeepfakeBridge", "ONNX Runtime 폴백 초기화 시작...")
-                ortEnv = OrtEnvironment.getEnvironment()
-                val options = OrtSession.SessionOptions()
-                options.addNnapi() // Android NNAPI 가속 활성화
+                Log.d("NativeDeepfakeBridge", "ONNX C++ 네이티브 초기화 시작...")
                 val modelPath = getAssetFilePath(context, "face_deepfake.onnx")
-                ortSession = ortEnv?.createSession(modelPath, options)
-                
-                // Warmup Inference (VRAM 사전 적재 및 셰이더 컴파일 강제실행)
-                try {
-                    val dummyFloatArray = FloatArray(1 * 3 * 224 * 224) { 0f }
-                    val dummyTensor = OnnxTensor.createTensor(
-                        ortEnv, 
-                        FloatBuffer.wrap(dummyFloatArray), 
-                        longArrayOf(1, 3, 224, 224)
-                    )
-                    val inputName = ortSession?.inputNames?.iterator()?.next() ?: "input"
-                    ortSession?.run(mapOf(inputName to dummyTensor))?.close()
-                    dummyTensor.close()
-                    
-                    val providers = "NNAPI (OS 자율할당)"
-                    Log.d("NativeDeepfakeBridge", "ONNX Runtime (NNAPI) 웜업 완료 / 활성화된 가속기: $providers")
-                } catch(e: Exception) {
-                    Log.e("NativeDeepfakeBridge", "ONNX 웜업 실패: ${e.message}")
+                val ok = initOnnx(modelPath)
+                if (ok) {
+                    isOnnxInitialized = true
+                    Log.d("NativeDeepfakeBridge", "ONNX C++ 세션 초기화 완료 (워밍업 포함)")
+                } else {
+                    Log.e("NativeDeepfakeBridge", "ONNX C++ 세션 초기화 실패")
                 }
-
-                isOnnxInitialized = true
-                Log.d("NativeDeepfakeBridge", "ONNX Runtime 폴백 초기화 및 적재 완료")
             } catch (e: Exception) {
-                Log.e("NativeDeepfakeBridge", "ONNX 초기화 실패: ${e.message}")
+                Log.e("NativeDeepfakeBridge", "ONNX 초기화 에러: ${e.message}")
             }
         }
     }
@@ -232,65 +210,47 @@ class NativeDeepfakeBridge(private val context: Context) {
                     put("error", "ONNX 폴백 모델 로드 중...")
                 }.toString()
             }
-            
+
             try {
                 val startCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
-                val startTimeMs = System.currentTimeMillis()
-                
-                val floatArray = preprocessFrameForOnnx(buffer, width, height, stride)
-                if (floatArray == null || floatArray.isEmpty()) {
+
+                // C++ 에서 전처리 + 추론 + CAM ROI 추출까지 전부 수행
+                // 반환: [fakeProb, realProb, 0.0, inferTime, minx, miny, maxx, maxy, bboxScore]
+                val results = detectDeepfakeOnnx(buffer, width, height, stride)
+
+                if (results.isEmpty() || results[0] < 0f) {
                     return org.json.JSONObject().apply {
                         put("detected", 0)
                         put("error", "INFERENCE_ERROR")
                     }.toString()
                 }
 
-                // Create ONNX NCHW Tensor [1, 3, 224, 224]
-                val inputTensor = OnnxTensor.createTensor(
-                    ortEnv, 
-                    FloatBuffer.wrap(floatArray), 
-                    longArrayOf(1, 3, 224, 224)
-                )
+                val fakeProb      = results[0]
+                val realProb      = results[1]
+                val inferenceTime = results[3]
+                val isFake        = fakeProb > realProb
+                val status        = if (isFake) "FAKE" else "REAL"
 
-                val inputName = ortSession?.inputNames?.iterator()?.next() ?: "input"
-                val inputs = mapOf(inputName to inputTensor)
-                val results = ortSession?.run(inputs)
-                
-                val output = results?.get(0)?.value as? Array<FloatArray>
-                val fakeReal = output?.get(0) ?: floatArrayOf(0f, 0f)
-                
-                inputTensor.close()
-                results?.close()
+                var roi: FloatArray? = null
+                var bboxScore = -1f
+                if (results.size >= 9 && results[4] >= 0f) {
+                    roi       = floatArrayOf(results[4], results[5], results[6], results[7])
+                    bboxScore = results[8]
+                }
 
-                val out0 = fakeReal[0]
-                val out1 = fakeReal[1]
-                val maxVal = maxOf(out0, out1)
-                val exp0 = Math.exp((out0 - maxVal).toDouble()).toFloat()
-                val exp1 = Math.exp((out1 - maxVal).toDouble()).toFloat()
-                val sum = exp0 + exp1
-                
-                val realProb = exp0 / sum
-                val fakeProb = exp1 / sum
-
-                val isFake = fakeProb > realProb
-                val status = if (isFake) "FAKE" else "REAL"
-
-                val endCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
+                val endCpuTimeMs          = DeviceStatusProvider.getThreadCpuTimeMs()
                 val inferenceThreadCpuTime = endCpuTimeMs - startCpuTimeMs
-                val inferenceTimeMs = System.currentTimeMillis() - startTimeMs
+                val currentTemp           = DeviceStatusProvider.getDeviceTemperature(context)
+                val pssMemoryKb           = DeviceStatusProvider.getAppPssMemory()
+                val thermalStatus         = DeviceStatusProvider.getThermalThrottlingStatus(context)
+                val batteryCurrentmA      = DeviceStatusProvider.getBatteryCurrentNow(context)
 
-                val currentTemp = DeviceStatusProvider.getDeviceTemperature(context)
-                val pssMemoryKb = DeviceStatusProvider.getAppPssMemory()
-                val thermalStatus = DeviceStatusProvider.getThermalThrottlingStatus(context)
-                val batteryCurrentmA = DeviceStatusProvider.getBatteryCurrentNow(context)
-
-                val header = "[NNAPI 플백 추론 성공 - $status]\nFake: ${String.format("%.2f%%", fakeProb * 100)}\nReal: ${String.format("%.2f%%", realProb * 100)}" 
-                
+                val header = "[ONNX 폴백 추론 성공 - $status]\nFake: ${String.format("%.2f%%", fakeProb * 100)}\nReal: ${String.format("%.2f%%", realProb * 100)}"
                 val resultText = """
                     $header
-                    ROI: [0.0, 0.0, 0.0, 0.0]
-                    Infer: ${String.format("%.2f", inferenceTimeMs.toFloat())} ms
-                    
+                    ROI: ${roi?.let { "[${it[0]}, ${it[1]}, ${it[2]}, ${it[3]}]" } ?: "[없음]"}
+                    Infer: ${String.format("%.2f", inferenceTime)} ms
+
                     [하드웨어 모니터링]
                     Temp: ${String.format("%.2f", currentTemp)}°C
                     RAM (PSS): $pssMemoryKb KB
@@ -298,10 +258,16 @@ class NativeDeepfakeBridge(private val context: Context) {
                     Current: ${String.format("%.2f", batteryCurrentmA)} mA
                     Thermal Status: $thermalStatus
                 """.trimIndent()
-                
+
                 return org.json.JSONObject().apply {
                     put("detected", if (isFake) 1 else 0)
                     put("fakeProb", fakeProb)
+                    roi?.let {
+                        put("roi", org.json.JSONArray().apply {
+                            put(it[0]); put(it[1]); put(it[2]); put(it[3])
+                        })
+                        put("bboxScore", bboxScore)
+                    }
                     put("debug_info", resultText)
                 }.toString()
             } catch (e: Exception) {
@@ -335,7 +301,8 @@ class NativeDeepfakeBridge(private val context: Context) {
             var status = ""
             var faceFakeProb = 0.0f
             var faceRealProb = 0.0f
-            var roi = floatArrayOf(0f, 0f, 0f, 0f)
+            var roi: FloatArray? = null
+            var bboxScore = -1f
 
             val avgFake = results[0]
             val avgReal = results[1]
@@ -343,8 +310,9 @@ class NativeDeepfakeBridge(private val context: Context) {
             inferenceTime = results[3]
             val isSuccess = avgFake > -1.0f
 
-            if (results.size >= 10) {
-                roi = floatArrayOf(results[6], results[7], results[8], results[9])
+            if (results.size >= 9 && results[4] >= 0f) {
+                roi = floatArrayOf(results[4], results[5], results[6], results[7])
+                bboxScore = results[8]
             }
 
             if (isSuccess) {
@@ -373,7 +341,7 @@ class NativeDeepfakeBridge(private val context: Context) {
                 
                 val resultText = """
                     $header
-                    ROI: [${roi[0]}, ${roi[1]}, ${roi[2]}, ${roi[3]}]
+                    ROI: ${roi?.let { "[${it[0]}, ${it[1]}, ${it[2]}, ${it[3]}]" } ?: "[없음]"}
                     Load: ${String.format("%.2f", loadTime)} ms
                     Infer: ${String.format("%.2f", inferenceTime)} ms
 
@@ -388,13 +356,14 @@ class NativeDeepfakeBridge(private val context: Context) {
                 return org.json.JSONObject().apply {
                     put("detected", if (isFake) 1 else 0)
                     put("fakeProb", faceFakeProb)
-                    if (results.size >= 10) {
+                    roi?.let {
                         put("roi", org.json.JSONArray().apply {
-                            put(roi[0])
-                            put(roi[1])
-                            put(roi[2])
-                            put(roi[3])
+                            put(it[0])
+                            put(it[1])
+                            put(it[2])
+                            put(it[3])
                         })
+                        put("bboxScore", bboxScore)
                     }
                     put("debug_info", resultText)
                 }.toString()

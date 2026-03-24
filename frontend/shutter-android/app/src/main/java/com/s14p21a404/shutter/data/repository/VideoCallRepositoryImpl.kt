@@ -54,13 +54,6 @@ class VideoCallRepositoryImpl(
     @Volatile
     private var videoCallPackage: String? = null
 
-    /**
-     * 인앱(Agora) 영상통화 활성 상태 플래그.
-     * true이면 외부 앱 감지 조건(camera+callScreen+timer)을 우회하여 즉시 영상통화 상태로 전환.
-     */
-    @Volatile
-    private var inAppCallActive: Boolean = false
-
     // ── 통화 상태 콜백 (IDLE 감지 → 래치 리셋 전용) ──
     private val callStateCallback = object : TelephonyCallback(),
         TelephonyCallback.CallStateListener {
@@ -106,10 +99,8 @@ class VideoCallRepositoryImpl(
             } else {
                 // 포그라운드 패키지가 영상통화 패키지와 같거나,
                 // 시스템 전화 UI 패키지인 경우 true
-                // 인앱 통화 시 자기 앱 패키지도 포함
                 val isOnVideoCallScreen = currentPkg == targetPkg
                         || currentPkg in ForegroundAppMonitorService.CALL_UI_PACKAGES
-                        || (inAppCallActive && currentPkg == context.packageName)
                         || currentPkg.isEmpty()  // 아직 감지 전
                 Log.d(TAG, "포그라운드=$currentPkg, 영상통화앱=$targetPkg → onScreen=$isOnVideoCallScreen")
                 isOnVideoCallScreen
@@ -129,22 +120,6 @@ class VideoCallRepositoryImpl(
         videoCallPackage = packageName
         Log.d(TAG, "영상통화 패키지 설정: $packageName")
     }
-
-    override fun setInAppCallActive(active: Boolean) {
-        inAppCallActive = active
-        Log.d(TAG, "인앱 영상통화 상태 설정: $active")
-        if (active) {
-            // 인앱 통화 시작 → 자기 앱 패키지를 영상통화 패키지로 설정하고 즉시 videoCallState = true
-            videoCallPackage = context.packageName
-            _videoCallState.value = true
-        } else {
-            // 인앱 통화 종료 → videoCallState = false 및 패키지 초기화
-            _videoCallState.value = false
-            videoCallPackage = null
-        }
-    }
-
-    override fun isInAppCallActive(): Boolean = inAppCallActive
 
     override fun startMonitoring() {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE)
@@ -177,17 +152,9 @@ class VideoCallRepositoryImpl(
         stopForegroundObserver()
         _videoCallState.value = false
         videoCallPackage = null
-        inAppCallActive = false
     }
 
     private fun evaluate() {
-        // 인앱 영상통화가 활성 상태이면 외부 앱 감지 조건을 우회한다.
-        // setInAppCallActive()에서 이미 _videoCallState를 직접 제어하므로 여기서는 건드리지 않는다.
-        if (inAppCallActive) {
-            Log.d(TAG, "인앱 영상통화 활성 중 — evaluate() 스킵")
-            return
-        }
-
         val currentFg = ForegroundAppMonitorService.foregroundPackage.value
         val isCallTimerVisible = ForegroundAppMonitorService.isCallConnected.value
 

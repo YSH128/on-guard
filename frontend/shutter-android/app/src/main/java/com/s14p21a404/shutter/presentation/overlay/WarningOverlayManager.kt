@@ -326,8 +326,8 @@ class WarningOverlayManager(
                     result.roiMaxX, result.roiMaxY,
                     result.fakeProb * 100f
                 )
-            } else if (Settings.canDrawOverlays(context)) {
-                // ROI box가 없으면 새로 생성 (바텀시트 닫힌 후 재표시)
+            } else if (result.detected && Settings.canDrawOverlays(context)) {
+                // 딥페이크 확정 후에만 새 ROI box 생성 (바텀시트 닫힌 후 재표시)
                 val roiView = RoiBoundingBoxView(context)
                 addOverlayView(
                     view = roiView,
@@ -352,6 +352,23 @@ class WarningOverlayManager(
                 removeOverlayView(it)
             }
             roiBoundingBoxView = null
+        }
+    }
+
+    /**
+     * 매 프레임 들어오는 원시 결과를 바탕으로 ROI 박스 위치만 즉시 갱신한다.
+     * 판정(detected) 여부와 상관없이 박스를 부드럽게 움직이기 위함.
+     */
+    fun updateRoiRealtime(result: DeepfakeDetectionResult) {
+        if (!enabled || !result.hasRoi) return
+
+        // 이미 ROI 박스가 떠 있는 상태라면 위치만 즉시 업데이트
+        roiBoundingBoxView?.let { view ->
+            view.setRoi(
+                result.roiMinX, result.roiMinY,
+                result.roiMaxX, result.roiMaxY,
+                result.fakeProb * 100f
+            )
         }
     }
 

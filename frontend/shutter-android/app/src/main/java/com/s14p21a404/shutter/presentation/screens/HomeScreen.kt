@@ -288,7 +288,6 @@ private fun WaveformAnimation() {
 @Composable
 private fun FriendItem(
     name: String,
-    profileImageUrl: String? = null,
     onVideoCall: () -> Unit
 ) {
     Row(

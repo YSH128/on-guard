@@ -84,6 +84,9 @@ class VideoCallDetectService : Service() {
     @Volatile
     private var alertSentForCurrentSession = false
 
+    /** 영상통화 감지 시점 타임스탬프 (딥페이크 알람까지 소요 시간 측정용) */
+    private var videoCallStartTimeMs: Long = 0L
+
     /**
      * 오버레이가 표시 중이었는지 여부.
      * 영상통화 화면을 벗어났다가 돌아올 때 오버레이를 복원하기 위해 사용.
@@ -118,24 +121,15 @@ class VideoCallDetectService : Service() {
         // 오버레이 콜백 설정
         warningOverlayManager.onEndCall = {
             Log.d(TAG, "📞 전화 종료 요청 (오버레이)")
-
-            if (videoCallRepository.isInAppCallActive()) {
-                // ── 인앱(Agora) 영상통화 종료 ──
-                Log.d(TAG, "📞 인앱 영상통화 → onInAppCallEnd 콜백 호출")
-                onInAppCallEnd?.invoke()
-                videoCallRepository.setInAppCallActive(false)
+            // AccessibilityService를 통해 실제 통화 종료
+            // - 통신사 전화: TelecomManager.endCall() (윈도우 포커스 무관)
+            // - VoIP 앱: windows API로 통화 앱 윈도우를 직접 탐색 (오버레이 유무 무관)
+            val service = ForegroundAppMonitorService.instance
+            if (service != null) {
+                val success = service.performEndCall()
+                Log.d(TAG, "📞 AccessibilityService 통화 종료 결과: $success")
             } else {
-                // ── 외부 앱(카카오톡/통신사) 영상통화 종료 ──
-                // AccessibilityService를 통해 실제 통화 종료
-                // - 통신사 전화: TelecomManager.endCall() (윈도우 포커스 무관)
-                // - VoIP 앱: windows API로 통화 앱 윈도우를 직접 탐색 (오버레이 유무 무관)
-                val service = ForegroundAppMonitorService.instance
-                if (service != null) {
-                    val success = service.performEndCall()
-                    Log.d(TAG, "📞 AccessibilityService 통화 종료 결과: $success")
-                } else {
-                    Log.w(TAG, "❌ AccessibilityService 미활성 — 통화 종료 불가")
-                }
+                Log.w(TAG, "❌ AccessibilityService 미활성 — 통화 종료 불가")
             }
             warningOverlayManager.dismissAll()
             alertSoundManager.stopAlert()
@@ -160,6 +154,8 @@ class VideoCallDetectService : Service() {
             monitorUseCase.observeAndControl().collect { isVideoCall ->
                 Log.d(TAG, "영상통화 상태: $isVideoCall")
                 if (isVideoCall) {
+                    videoCallStartTimeMs = System.currentTimeMillis()
+                    Log.d(TAG, "⏱ [TIMING] 영상통화 감지 → 측정 시작 (T=0)")
                     warningOverlayManager.setEnabled(true)
                     warningOverlayManager.showScanningPill() // 스캐닝 pill 표시
                     monitorUseCase.startDetection()
@@ -196,6 +192,8 @@ class VideoCallDetectService : Service() {
                 if (result.detected) {
                     // ── 딥페이크 최초 감지 ──
                     isDeepfakeDetected = true
+                    val elapsedMs = System.currentTimeMillis() - videoCallStartTimeMs
+                    Log.d(TAG, "⏱ [TIMING] 딥페이크 알람 발생 — 총 소요 시간: ${elapsedMs}ms (${elapsedMs / 1000.0}초)")
                     //
                     // rmsep sork alertSoundManager.startAlert()
                     financialBlockOverlayManager.setEnabled(true)
@@ -234,6 +232,7 @@ class VideoCallDetectService : Service() {
         serviceScope.launch {
             detectUseCase.observeFrameResults().collect { frameResult ->
                 if (isDeepfakeDetected) {
+                    warningOverlayManager.updateRoiRealtime(frameResult)
                     warningOverlayManager.onDetectionResult(frameResult)
                 }
             }
@@ -253,11 +252,10 @@ class VideoCallDetectService : Service() {
 
         if (!ForegroundAppMonitorService.isRunning()) {
             Log.w(TAG, "⚠️ AccessibilityService(ForegroundAppMonitor) 미활성 — 포그라운드 앱 추적 불가")
-            // 인앱 통화가 아닌 경우에만 리턴 (인앱 통화는 foregroundPackage로 자기 앱 패키지가 잡히므로 동작 가능)
-            if (!videoCallRepository.isInAppCallActive()) return
+            return
         }
 
-        Log.d(TAG, "포그라운드 앱 모니터링 시작 (인앱=${videoCallRepository.isInAppCallActive()})")
+        Log.d(TAG, "포그라운드 앱 모니터링 시작")
         foregroundMonitorJob = serviceScope.launch {
             videoCallRepository.observeForegroundIsVideoCallApp().collect { isOnVideoCallScreen ->
                 Log.d(TAG, "영상통화 화면 여부: $isOnVideoCallScreen, 오버레이 표시 중: ${warningOverlayManager.isShowing()}")
@@ -299,8 +297,7 @@ class VideoCallDetectService : Service() {
 
         if (!ForegroundAppMonitorService.isRunning()) {
             Log.w(TAG, "⚠️ AccessibilityService 미활성 — 금융 앱 추적 불가")
-            // 인앱 통화가 아닌 경우에만 리턴
-            if (!videoCallRepository.isInAppCallActive()) return
+            return
         }
 
         Log.d(TAG, "금융 앱 모니터링 시작")

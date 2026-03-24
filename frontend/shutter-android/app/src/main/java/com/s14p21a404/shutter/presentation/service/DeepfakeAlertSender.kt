@@ -130,11 +130,11 @@ class DeepfakeAlertSender(
 
     private suspend fun sendKakaoMessage(uuids: List<String>, text: String) =
         suspendCancellableCoroutine { cont ->
-            val deeplink = Link(androidExecutionParams = mapOf("screen" to "location"))
+            val deeplink = Link(androidExecutionParams = emptyMap())
             val template = TextTemplate(
                 text = text,
                 link = deeplink,
-                buttons = listOf(Button(title = "위치 확인하기", link = deeplink)),
+                buttons = listOf(Button(title = "앱에서 확인하기", link = deeplink)),
             )
             TalkApiClient.instance.sendDefaultMessage(
                 receiverUuids = uuids,

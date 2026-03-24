@@ -18,7 +18,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
-data class KakaoFriendItem(val id: Long, val uuid: String, val name: String, val profileImageUrl: String? = null)
+data class KakaoFriendItem(val id: Long, val uuid: String, val name: String)
 
 sealed class RegistrationUiState {
     object Idle : RegistrationUiState()
@@ -71,7 +71,7 @@ class GuardianRegistrationViewModel(application: Application) : AndroidViewModel
                         ?.mapNotNull { friend ->
                             val id = friend.id ?: return@mapNotNull null
                             val name = friend.profileNickname ?: return@mapNotNull null
-                            KakaoFriendItem(id = id, uuid = friend.uuid, name = name, profileImageUrl = friend.profileThumbnailImage)
+                            KakaoFriendItem(id = id, uuid = friend.uuid, name = name)
                         } ?: emptyList()
                     cont.resume(Result.success(items))
                 }
@@ -102,7 +102,6 @@ class GuardianRegistrationViewModel(application: Application) : AndroidViewModel
                         guardianUuidStore.saveUuid(guardian.guardianId, friend.uuid)
                         guardianUuidStore.saveKakaoId(guardian.guardianId, friend.id)
                         guardianUuidStore.saveKakaoName(guardian.guardianId, friend.name)
-                        friend.profileImageUrl?.let { guardianUuidStore.saveProfileImageUrl(guardian.guardianId, it) }
                         sendGuardianMessage(wardName, friend)
                     }
                     .onFailure { e -> lastError = e.message }

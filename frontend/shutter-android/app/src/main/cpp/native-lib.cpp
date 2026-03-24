@@ -8,10 +8,21 @@
 #include <android/log.h>
 #include <memory>
 #include "QnnModelLoader.h"
+#include "onnxruntime_c_api.h"
+// 💡 NNAPI 가속을 위한 헤더 추가
+#include "nnapi_provider_factory.h"
 
 #define LOG_TAG "NativeLib"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
+
+// ─── Model Parameters ─────────────────────────────────────
+static const int   INPUT_H       = 256;
+static const int   INPUT_W       = 256;
+// 💡 ROI 임계값을 0.7로 높여 노이즈(세로 길쭉이)를 1차 차단합니다.
+static const float ROI_THRESHOLD = 0.7f;
+// ──────────────────────────────────────────────────────────
 
 float get_ms(std::chrono::high_resolution_clock::time_point start) {
     auto end = std::chrono::high_resolution_clock::now();
@@ -30,8 +41,7 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
         jint height,
         jint stride) {
 
-    // Return: [avgFake, avgReal, loadTime, inferTime, frame0Fake, frame0Real, roiL, roiT, roiR, roiB]
-    int resultSize = 10;
+    int resultSize = 9;
     jfloatArray resultMap = env->NewFloatArray(resultSize);
     std::vector<float> results(resultSize, -1.0f);
 
@@ -42,12 +52,9 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
         return resultMap;
     }
 
-    results[2] = 0.0f; // QNN is pre-initialized, loadTime is 0 here
+    results[2] = 0.0f;
     auto start_inference = std::chrono::high_resolution_clock::now();
-
     jbyte* data = env->GetByteArrayElements(buffer, nullptr);
-    
-    // Create OpenCV Mat from raw RGBA buffer
     cv::Mat frame(height, width, CV_8UC4, (void*)data, stride);
 
     if (frame.empty()) {
@@ -57,56 +64,101 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
         return resultMap;
     }
 
-    const int W = 224, H = 224, C = 3;
-
     cv::Mat resized;
-    cv::resize(frame, resized, cv::Size(W, H));
-    
+    cv::resize(frame, resized, cv::Size(INPUT_W, INPUT_H));
     cv::Mat rgb;
-    cv::cvtColor(resized, rgb, cv::COLOR_RGBA2RGB); 
-    
+    cv::cvtColor(resized, rgb, cv::COLOR_RGBA2RGB);
     cv::Mat floatMat;
     rgb.convertTo(floatMat, CV_32F, 1.0f / 255.0f);
 
-    // Apply normalization properly on NHWC data using OpenCV split/merge
     std::vector<cv::Mat> channels(3);
     cv::split(floatMat, channels);
-    channels[0] = (channels[0] - 0.485f) / 0.229f; // R
-    channels[1] = (channels[1] - 0.456f) / 0.224f; // G
-    channels[2] = (channels[2] - 0.406f) / 0.225f; // B
+    channels[0] = (channels[0] - 0.485f) / 0.229f;
+    channels[1] = (channels[1] - 0.456f) / 0.224f;
+    channels[2] = (channels[2] - 0.406f) / 0.225f;
     cv::merge(channels, floatMat);
 
     std::vector<float> frameData((float*)floatMat.datastart, (float*)floatMat.dataend);
 
-    float out[2] = {0};
-    bool execSuccess = g_qnnLoader->ExecuteGraph(frameData.data(), frameData.size(), out, 2);
+    int cam_h = (int)g_qnnLoader->m_camH;
+    int cam_w = (int)g_qnnLoader->m_camW;
+    float logitsOut[2] = {0.f, 0.f};
+    std::vector<float> camOut(cam_h * cam_w, 0.f);
 
-    float fake = 0.0f, real = 0.0f;
-    if (execSuccess) {
-        float max_val = std::max(out[0], out[1]);
-        float exp0 = std::exp(out[0] - max_val);
-        float exp1 = std::exp(out[1] - max_val);
-        float sum = exp0 + exp1;
-        
-        real = exp0 / sum;
-        fake = exp1 / sum;
-    } else {
+    bool execSuccess = g_qnnLoader->ExecuteGraph(
+            frameData.data(), frameData.size(),
+            logitsOut, 2,
+            camOut.data(), (size_t)(cam_h * cam_w)
+    );
+
+    if (!execSuccess) {
         LOGE("QNN Inference Execution Failed");
+        env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
+        env->SetFloatArrayRegion(resultMap, 0, resultSize, results.data());
+        return resultMap;
     }
 
+    float max_val = std::max(logitsOut[0], logitsOut[1]);
+    float exp0    = std::exp(logitsOut[0] - max_val);
+    float exp1    = std::exp(logitsOut[1] - max_val);
+    float sum     = exp0 + exp1;
+    results[0] = exp1 / sum;
+    results[1] = exp0 / sum;
     results[3] = get_ms(start_inference);
-    results[0] = fake; // avgFake
-    results[1] = real; // avgReal
-    results[4] = fake; // frame0Fake
-    results[5] = real; // frame0Real
-    results[6] = 0.3f; // Dummy ROI left
-    results[7] = 0.22f; // Dummy ROI top
-    results[8] = 0.45f; // Dummy ROI right
-    results[9] = 0.567f; // Dummy ROI bottom
+
+    if (cam_h > 0 && cam_w > 0) {
+        cv::Mat cam_mat(cam_h, cam_w, CV_32F, camOut.data());
+        double minVal, maxVal;
+        cv::minMaxLoc(cam_mat, &minVal, &maxVal);
+
+        if (maxVal - minVal > 1e-6) {
+            cv::Mat cam_norm = (cam_mat - minVal) / (maxVal - minVal);
+            cv::Mat cam_upsampled;
+            cv::resize(cam_norm, cam_upsampled, cv::Size(INPUT_W, INPUT_H), 0, 0, cv::INTER_LINEAR);
+
+            cv::Mat binary;
+            cv::threshold(cam_upsampled, binary, ROI_THRESHOLD, 1.0, cv::THRESH_BINARY);
+            binary.convertTo(binary, CV_8U);
+
+            cv::Mat labels, stats, centroids;
+            int num_labels = cv::connectedComponentsWithStats(binary, labels, stats, centroids);
+
+            float norm = 1.0f / (float)INPUT_W;
+            float best_score = -1.f;
+
+            for (int i = 1; i < num_labels; i++) {
+                int left   = stats.at<int>(i, cv::CC_STAT_LEFT);
+                int top    = stats.at<int>(i, cv::CC_STAT_TOP);
+                int w      = stats.at<int>(i, cv::CC_STAT_WIDTH);
+                int h      = stats.at<int>(i, cv::CC_STAT_HEIGHT);
+                int area   = stats.at<int>(i, cv::CC_STAT_AREA);
+
+                // 💡 노이즈 필터: 가로세로 비율이 너무 안 맞거나 너무 작으면 스킵
+                float aspect_ratio = (float)h / (float)w;
+                if (aspect_ratio > 3.0f || aspect_ratio < 0.3f) continue;
+                if (area < 500) continue;
+
+                float score_sum = 0.f;
+                for (int r = top; r < top + h; r++)
+                    for (int c = left; c < left + w; c++)
+                        if (labels.at<int>(r, c) == i)
+                            score_sum += cam_upsampled.at<float>(r, c);
+
+                float mean_score = score_sum / area;
+                if (mean_score > best_score) {
+                    best_score = mean_score;
+                    results[4] = (float)left       * norm;
+                    results[5] = (float)top        * norm;
+                    results[6] = (float)(left + w) * norm;
+                    results[7] = (float)(top  + h) * norm;
+                    results[8] = mean_score;
+                }
+            }
+        }
+    }
 
     env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
     env->SetFloatArrayRegion(resultMap, 0, resultSize, results.data());
-    
     return resultMap;
 }
 
@@ -117,107 +169,265 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_initQnn(
         JNIEnv *env, jobject thiz, jstring cache_dir, jstring native_lib_dir) {
-    
-    if (!g_qnnLoader) {
-        g_qnnLoader = std::make_unique<QnnModelLoader>();
-    }
-
+    if (!g_qnnLoader) g_qnnLoader = std::make_unique<QnnModelLoader>();
     const char *cacheDirStr = env->GetStringUTFChars(cache_dir, nullptr);
     const char *nativeLibDirStr = env->GetStringUTFChars(native_lib_dir, nullptr);
-
     bool success = g_qnnLoader->InitSystem(std::string(cacheDirStr), std::string(nativeLibDirStr));
-
     env->ReleaseStringUTFChars(cache_dir, cacheDirStr);
     env->ReleaseStringUTFChars(native_lib_dir, nativeLibDirStr);
-
     return success ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_loadModel(
         JNIEnv *env, jobject thiz, jstring assets_path) {
-    
     if (!g_qnnLoader) return JNI_FALSE;
-
     const char *assetsPathStr = env->GetStringUTFChars(assets_path, nullptr);
     bool success = g_qnnLoader->LoadModel(std::string(assetsPathStr));
     env->ReleaseStringUTFChars(assets_path, assetsPathStr);
-
     return success ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_buildModelCache(
         JNIEnv *env, jobject thiz, jstring assets_path) {
-    
     if (!g_qnnLoader) return JNI_FALSE;
-
     const char *assetsPathStr = env->GetStringUTFChars(assets_path, nullptr);
     bool success = g_qnnLoader->BuildModelCache(std::string(assetsPathStr));
     env->ReleaseStringUTFChars(assets_path, assetsPathStr);
-
     return success ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_releaseQnn(
         JNIEnv *env, jobject thiz) {
-    if (g_qnnLoader) {
-        g_qnnLoader->Cleanup();
-        g_qnnLoader.reset();
-    }
+    if (g_qnnLoader) { g_qnnLoader->Cleanup(); g_qnnLoader.reset(); }
 }
 
 // ---------------------------------------------------------
-// ONNX Runtime Fallback JNI (Non-Qualcomm)
+// ONNX Runtime C API (GPU/NNAPI 가속 추가)
 // ---------------------------------------------------------
 
-extern "C" JNIEXPORT jfloatArray JNICALL
-Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_preprocessFrameForOnnx(
-        JNIEnv* env,
-        jobject,
-        jbyteArray buffer,
-        jint width,
-        jint height,
-        jint stride) {
+static const OrtApi* g_ort         = nullptr;
+static OrtEnv* g_ort_env     = nullptr;
+static OrtSession* g_ort_session = nullptr;
+static int              g_ort_cam_h   = 0;
+static int              g_ort_cam_w   = 0;
 
+#define ORT_CHECK(expr) \
+    do { \
+        OrtStatus* _s = (expr); \
+        if (_s) { \
+            LOGE("ORT Error: %s", g_ort->GetErrorMessage(_s)); \
+            g_ort->ReleaseStatus(_s); \
+            return false; \
+        } \
+    } while(0)
+
+static bool ort_init_session(const char* model_path) {
+    g_ort = OrtGetApiBase()->GetApi(ORT_API_VERSION);
+    if (!g_ort) { LOGE("OrtGetApiBase failed"); return false; }
+    ORT_CHECK(g_ort->CreateEnv(ORT_LOGGING_LEVEL_WARNING, "deepfake", &g_ort_env));
+
+    OrtSessionOptions* opts = nullptr;
+    ORT_CHECK(g_ort->CreateSessionOptions(&opts));
+
+    // 💡 [핵심] GPU(NNAPI) 가속 활성화!
+    uint32_t nnapi_flags = 0;
+    // Android 기기의 NPU/GPU를 사용하도록 설정합니다.
+    OrtStatus* nnapi_status = OrtSessionOptionsAppendExecutionProvider_Nnapi(opts, nnapi_flags);
+    if (nnapi_status) {
+        LOGW("NNAPI not available, falling back to CPU. Error: %s", g_ort->GetErrorMessage(nnapi_status));
+        g_ort->ReleaseStatus(nnapi_status);
+    } else {
+        LOGD("NNAPI GPU/NPU acceleration enabled!");
+    }
+
+    g_ort->SetIntraOpNumThreads(opts, 4);
+    ORT_CHECK(g_ort->CreateSession(g_ort_env, model_path, opts, &g_ort_session));
+    g_ort->ReleaseSessionOptions(opts);
+
+    OrtMemoryInfo* mem_info = nullptr;
+    ORT_CHECK(g_ort->CreateCpuMemoryInfo(OrtArenaAllocator, OrtMemTypeDefault, &mem_info));
+    std::vector<float> dummy(1 * 3 * INPUT_H * INPUT_W, 0.f);
+    int64_t in_shape[] = {1, 3, INPUT_H, INPUT_W};
+    OrtValue* in_tensor = nullptr;
+    ORT_CHECK(g_ort->CreateTensorWithDataAsOrtValue(mem_info, dummy.data(), dummy.size() * sizeof(float), in_shape, 4, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, &in_tensor));
+    g_ort->ReleaseMemoryInfo(mem_info);
+
+    const char* in_names[]  = {"input"};
+    const char* out_names[] = {"logits", "cam"};
+    OrtValue* out_vals[2] = {nullptr, nullptr};
+    ORT_CHECK(g_ort->Run(g_ort_session, nullptr, in_names,  (const OrtValue* const*)&in_tensor, 1, out_names, 2, out_vals));
+    g_ort->ReleaseValue(in_tensor);
+    g_ort->ReleaseValue(out_vals[0]);
+
+    OrtTensorTypeAndShapeInfo* shape_info = nullptr;
+    g_ort->GetTensorTypeAndShape(out_vals[1], &shape_info);
+    int64_t dims[4] = {0};
+    size_t  ndim    = 0;
+    g_ort->GetDimensionsCount(shape_info, &ndim);
+    g_ort->GetDimensions(shape_info, dims, ndim);
+    g_ort->ReleaseTensorTypeAndShapeInfo(shape_info);
+    g_ort->ReleaseValue(out_vals[1]);
+
+    if (ndim == 2) { g_ort_cam_h = (int)dims[0]; g_ort_cam_w = (int)dims[1]; }
+    else if (ndim >= 3) { g_ort_cam_h = (int)dims[ndim-2]; g_ort_cam_w = (int)dims[ndim-1]; }
+    LOGD("ONNX session init OK. cam: %d x %d", g_ort_cam_h, g_ort_cam_w);
+    return true;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_initOnnx(
+        JNIEnv* env, jobject, jstring model_path_j) {
+    if (g_ort_session) return JNI_TRUE;
+    const char* path = env->GetStringUTFChars(model_path_j, nullptr);
+    bool ok = ort_init_session(path);
+    env->ReleaseStringUTFChars(model_path_j, path);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_releaseOnnx(
+        JNIEnv*, jobject) {
+    if (g_ort_session) { g_ort->ReleaseSession(g_ort_session); g_ort_session = nullptr; }
+    if (g_ort_env)     { g_ort->ReleaseEnv(g_ort_env);         g_ort_env     = nullptr; }
+    g_ort_cam_h = g_ort_cam_w = 0;
+}
+
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeepfakeOnnx(
+        JNIEnv* env, jobject,
+        jbyteArray buffer, jint width, jint height, jint stride) {
+
+    const int resultSize = 9;
+    jfloatArray resultArr = env->NewFloatArray(resultSize);
+    std::vector<float> results(resultSize, -1.f);
+
+    if (!g_ort_session) {
+        LOGE("ONNX session not initialized");
+        env->SetFloatArrayRegion(resultArr, 0, resultSize, results.data());
+        return resultArr;
+    }
+
+    auto t0 = std::chrono::high_resolution_clock::now();
     jbyte* data = env->GetByteArrayElements(buffer, nullptr);
     cv::Mat frame(height, width, CV_8UC4, (void*)data, stride);
-
     if (frame.empty()) {
+        results[0] = -2.f;
         env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
-        return env->NewFloatArray(0);
+        env->SetFloatArrayRegion(resultArr, 0, resultSize, results.data());
+        return resultArr;
     }
 
-    const int W = 224, H = 224;
     cv::Mat resized, rgb, floatMat;
-    cv::resize(frame, resized, cv::Size(W, H));
-    cv::cvtColor(resized, rgb, cv::COLOR_RGBA2RGB); 
+    cv::resize(frame, resized, cv::Size(INPUT_W, INPUT_H));
+    cv::cvtColor(resized, rgb, cv::COLOR_RGBA2RGB);
     rgb.convertTo(floatMat, CV_32F, 1.0f / 255.0f);
 
-    // Apply normalization properly using OpenCV split
-    std::vector<cv::Mat> channels(3);
-    cv::split(floatMat, channels);
-    channels[0] = (channels[0] - 0.485f) / 0.229f; // R
-    channels[1] = (channels[1] - 0.456f) / 0.224f; // G
-    channels[2] = (channels[2] - 0.406f) / 0.225f; // B
+    std::vector<cv::Mat> ch(3);
+    cv::split(floatMat, ch);
+    ch[0] = (ch[0] - 0.485f) / 0.229f;
+    ch[1] = (ch[1] - 0.456f) / 0.224f;
+    ch[2] = (ch[2] - 0.406f) / 0.225f;
 
-    // Convert to NCHW flat array [1, 3, 224, 224] for ONNX Runtime PyTorch models.
-    // Since cv::split separates channels into planar mats, we directly copy them memory-aligned.
-    int numPixels = W * H;
-    jfloatArray result = env->NewFloatArray(3 * numPixels);
-    if (!result) {
-        env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
-        return nullptr;
-    }
-
+    int numPx = INPUT_W * INPUT_H;
+    std::vector<float> inputData(3 * numPx);
     for (int i = 0; i < 3; ++i) {
-        if (!channels[i].isContinuous()) {
-            channels[i] = channels[i].clone();
-        }
-        env->SetFloatArrayRegion(result, i * numPixels, numPixels, (const jfloat*)channels[i].datastart);
+        if (!ch[i].isContinuous()) ch[i] = ch[i].clone();
+        std::copy((float*)ch[i].datastart, (float*)ch[i].dataend, inputData.data() + i * numPx);
+    }
+    env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
+
+    OrtMemoryInfo* mem_info = nullptr;
+    g_ort->CreateCpuMemoryInfo(OrtArenaAllocator, OrtMemTypeDefault, &mem_info);
+    int64_t in_shape[] = {1, 3, INPUT_H, INPUT_W};
+    OrtValue* in_tensor = nullptr;
+    g_ort->CreateTensorWithDataAsOrtValue(mem_info, inputData.data(), inputData.size() * sizeof(float), in_shape, 4, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, &in_tensor);
+    g_ort->ReleaseMemoryInfo(mem_info);
+
+    const char* in_names[]  = {"input"};
+    const char* out_names[] = {"logits", "cam"};
+    OrtValue* out_vals[2] = {nullptr, nullptr};
+    OrtStatus* run_status = g_ort->Run(g_ort_session, nullptr, in_names,  (const OrtValue* const*)&in_tensor, 1, out_names, 2, out_vals);
+    g_ort->ReleaseValue(in_tensor);
+
+    if (run_status) {
+        LOGE("ONNX Run failed: %s", g_ort->GetErrorMessage(run_status));
+        g_ort->ReleaseStatus(run_status);
+        env->SetFloatArrayRegion(resultArr, 0, resultSize, results.data());
+        return resultArr;
     }
 
-    env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
-    return result;
+    results[2] = 0.f;
+    results[3] = get_ms(t0);
+
+    float* logits_ptr = nullptr;
+    g_ort->GetTensorMutableData(out_vals[0], (void**)&logits_ptr);
+    float max_v = std::max(logits_ptr[0], logits_ptr[1]);
+    float e0 = std::exp(logits_ptr[0] - max_v);
+    float e1 = std::exp(logits_ptr[1] - max_v);
+    float s  = e0 + e1;
+    results[0] = e1 / s;
+    results[1] = e0 / s;
+    g_ort->ReleaseValue(out_vals[0]);
+
+    float* cam_ptr = nullptr;
+    g_ort->GetTensorMutableData(out_vals[1], (void**)&cam_ptr);
+
+    int cam_h = g_ort_cam_h, cam_w = g_ort_cam_w;
+    if (cam_h > 0 && cam_w > 0) {
+        cv::Mat cam_mat(cam_h, cam_w, CV_32F, cam_ptr);
+        double minVal, maxVal;
+        cv::minMaxLoc(cam_mat, &minVal, &maxVal);
+
+        if (maxVal - minVal > 1e-6) {
+            cv::Mat cam_norm = (cam_mat - minVal) / (maxVal - minVal);
+            cv::Mat cam_upsampled;
+            cv::resize(cam_norm, cam_upsampled, cv::Size(INPUT_W, INPUT_H), 0, 0, cv::INTER_LINEAR);
+
+            cv::Mat binary;
+            cv::threshold(cam_upsampled, binary, ROI_THRESHOLD, 1.0, cv::THRESH_BINARY);
+            binary.convertTo(binary, CV_8U);
+
+            cv::Mat labels, stats, centroids;
+            int num_labels = cv::connectedComponentsWithStats(binary, labels, stats, centroids);
+
+            float norm  = 1.0f / (float)INPUT_W;
+            float best_score = -1.f;
+
+            for (int i = 1; i < num_labels; i++) {
+                int left = stats.at<int>(i, cv::CC_STAT_LEFT);
+                int top  = stats.at<int>(i, cv::CC_STAT_TOP);
+                int w    = stats.at<int>(i, cv::CC_STAT_WIDTH);
+                int h    = stats.at<int>(i, cv::CC_STAT_HEIGHT);
+                int area = stats.at<int>(i, cv::CC_STAT_AREA);
+
+                // 💡 노이즈 필터: 가로세로 비율이 너무 안 맞거나 너무 작으면 스킵
+                float aspect_ratio = (float)h / (float)w;
+                if (aspect_ratio > 3.0f || aspect_ratio < 0.3f) continue;
+                if (area < 500) continue;
+
+                float score_sum = 0.f;
+                for (int r = top; r < top + h; r++)
+                    for (int c = left; c < left + w; c++)
+                        if (labels.at<int>(r, c) == i)
+                            score_sum += cam_upsampled.at<float>(r, c);
+
+                float mean_score = score_sum / area;
+                if (mean_score > best_score) {
+                    best_score    = mean_score;
+                    results[4]    = (float)left        * norm;
+                    results[5]    = (float)top         * norm;
+                    results[6]    = (float)(left + w)  * norm;
+                    results[7]    = (float)(top  + h)  * norm;
+                    results[8]    = mean_score;
+                }
+            }
+        }
+    }
+    g_ort->ReleaseValue(out_vals[1]);
+
+    env->SetFloatArrayRegion(resultArr, 0, resultSize, results.data());
+    return resultArr;
 }
