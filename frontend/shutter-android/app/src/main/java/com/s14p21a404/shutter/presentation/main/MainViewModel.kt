@@ -76,17 +76,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             context, Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
 
+        val hasAnswerPhoneCalls = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ANSWER_PHONE_CALLS
+        ) == PackageManager.PERMISSION_GRANTED
+
         val hasOverlay = Settings.canDrawOverlays(context)
 
         val hasAccessibility = ForegroundAppMonitorService.isRunning()
 
         _uiState.update { it.copy(
-            allPermissionsGranted = hasPhoneState && hasNotification && hasLocation,
+            allPermissionsGranted = hasPhoneState && hasNotification && hasLocation && hasAnswerPhoneCalls,
             overlayPermissionGranted = hasOverlay,
             accessibilityServiceEnabled = hasAccessibility
         ) }
 
-        Log.d(TAG, "권한 상태 - Phone: $hasPhoneState, Notification: $hasNotification, Location: $hasLocation, Overlay: $hasOverlay, Accessibility: $hasAccessibility")
+        Log.d(TAG, "권한 상태 - Phone: $hasPhoneState, Notification: $hasNotification, Location: $hasLocation, AnswerPhoneCalls: $hasAnswerPhoneCalls, Overlay: $hasOverlay, Accessibility: $hasAccessibility")
     }
 
     /**

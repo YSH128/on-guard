@@ -11,6 +11,8 @@
 
     <!-- 통화 상태 감지 -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <!-- 통화 종료 (통신사 전화) -->
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
 
     <!-- Foreground Service -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
