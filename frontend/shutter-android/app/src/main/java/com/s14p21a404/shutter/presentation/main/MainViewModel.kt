@@ -40,6 +40,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
+    private val _pendingDeepLinkScreen = MutableStateFlow<String?>(null)
+    val pendingDeepLinkScreen: StateFlow<String?> = _pendingDeepLinkScreen.asStateFlow()
+
+    fun setDeepLinkScreen(screen: String?) {
+        _pendingDeepLinkScreen.value = screen
+    }
+
     init {
         checkAllPermissions()
         syncGpsSharingState()

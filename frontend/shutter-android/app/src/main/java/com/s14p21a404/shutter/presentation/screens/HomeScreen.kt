@@ -18,6 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.SubcomposeAsyncImage
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -143,6 +145,8 @@ fun HomeScreen(
                     items(uiState.friends) { friend ->
                         FriendItem(
                             name = friend.name,
+                            profileImageUrl = friend.profileImageUrl,
+
                             onVideoCall = {
                                 val myName = homeViewModel.getMyName()
                                 val channelId = listOf(myName, friend.id.toString())
@@ -162,6 +166,7 @@ fun HomeScreen(
 @Composable
 private fun FriendItem(
     name: String,
+    profileImageUrl: String? = null,
     onVideoCall: () -> Unit
 ) {
     Row(
@@ -180,12 +185,29 @@ private fun FriendItem(
                 .background(Color(0xFFE8EBF5)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.Outlined.Person,
-                contentDescription = null,
-                modifier = Modifier.size(22.dp),
-                tint = Color(0xFF5B7FD6)
-            )
+            if (!profileImageUrl.isNullOrEmpty()) {
+                SubcomposeAsyncImage(
+                    model = profileImageUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    error = {
+                        Icon(
+                            imageVector = Icons.Outlined.Person,
+                            contentDescription = null,
+                            modifier = Modifier.size(22.dp),
+                            tint = Color(0xFF5B7FD6)
+                        )
+                    },
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Outlined.Person,
+                    contentDescription = null,
+                    modifier = Modifier.size(22.dp),
+                    tint = Color(0xFF5B7FD6)
+                )
+            }
         }
 
         Spacer(Modifier.width(12.dp))

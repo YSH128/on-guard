@@ -8,4 +8,5 @@ data class Guardian(
     val guardianId: Long,
     val name: String,
     val createdAt: String,
+    val profileImageUrl: String? = null,
 )

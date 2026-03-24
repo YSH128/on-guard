@@ -71,7 +71,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         ?.mapNotNull { friend ->
                             val id = friend.id ?: return@mapNotNull null
                             val name = friend.profileNickname ?: return@mapNotNull null
-                            KakaoFriendItem(id = id, uuid = friend.uuid, name = name)
+                            KakaoFriendItem(id = id, uuid = friend.uuid, name = name, profileImageUrl = friend.profileThumbnailImage)
                         } ?: emptyList()
                     cont.resume(Result.success(items))
                 }
