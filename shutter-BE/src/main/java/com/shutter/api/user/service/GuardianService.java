@@ -61,6 +61,7 @@ public class GuardianService {
                     return new WardResponse(
                             ward.getId(),
                             ward.getName(),
+                            ward.getProfileImageUrl(),
                             gps != null ? gps.lat() : null,
                             gps != null ? gps.lng() : null,
                             gps != null ? gps.updatedAt() : null
