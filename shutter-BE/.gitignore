@@ -43,3 +43,13 @@ out/
 
 ### macOS ###
 .DS_Store
+
+### AWS SSH Key ###
+*.pem
+
+### guide file ###
+ai_monitoring_context.md
+monitoring_project.md
+
+### Nginx ###
+nginx/upstream.conf

@@ -18,10 +18,10 @@ public class AiTelemetryLog {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer id;
+    private Long id;
 
     @Column(name = "user_id")
-    private Integer userId;
+    private Long userId;
 
     @Column(name = "model_version", nullable = false)
     private String modelVersion;

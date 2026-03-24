@@ -1,0 +1,143 @@
+package com.shutter.api.notification.service;
+
+import com.shutter.api.global.exception.AlertException;
+import com.shutter.api.global.exception.BusinessException;
+import com.shutter.api.global.exception.ErrorCode;
+import com.shutter.api.notification.client.KakaoPushClient;
+import com.shutter.api.notification.domain.NotificationLog;
+import com.shutter.api.notification.domain.NotificationStatus;
+import com.shutter.api.notification.domain.PushResult;
+import com.shutter.api.notification.dto.request.AlertRequest;
+import com.shutter.api.notification.dto.response.AlertLogResponse;
+import com.shutter.api.notification.dto.response.AlertLogsResponse;
+import com.shutter.api.notification.dto.response.TimelineItemResponse;
+import com.shutter.api.notification.dto.response.TimelineListResponse;
+import com.shutter.api.notification.repository.NotificationLogRepository;
+import com.shutter.api.user.domain.User;
+import com.shutter.api.user.domain.UserRelationship;
+import com.shutter.api.user.repository.UserRelationshipRepository;
+import com.shutter.api.user.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * 알림(Alert) 관련 비즈니스 로직 처리 서비스
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class AlertService {
+
+    private final UserRepository userRepository;
+    private final UserRelationshipRepository userRelationshipRepository;
+    private final NotificationLogRepository notificationLogRepository;
+    private final KakaoPushClient kakaoPushClient;
+
+    /**
+     * 알림 그룹 전송 및 로그 저장
+     *
+     * @param wardId     피보호자 ID (JWT 추출)
+     * @param request    알림 요청 정보 (이벤트 타입, 발신자 등)
+     * @return 저장된 알림 로그 목록
+     */
+    @Transactional(noRollbackFor = AlertException.class)
+    public List<AlertLogResponse> sendAlertsToGuardians(Long wardId, AlertRequest request) {
+        // 1. 피보호자 존재 여부 확인
+        User ward = userRepository.findById(wardId)
+                .orElseThrow(() -> new AlertException(ErrorCode.WARD_NOT_FOUND));
+
+        // 2. 보호자 목록 조회 (관계 테이블)
+        List<UserRelationship> relationships = userRelationshipRepository.findByWardIdWithGuardian(wardId);
+        
+        if (relationships.isEmpty()) {
+            throw new AlertException(ErrorCode.NO_GUARDIANS_REGISTERED);
+        }
+
+        // 3. 알림 메시지 생성 (Enum 활용)
+        String pushMessage = request.getEventType().getPushMessage(ward.getName());
+
+        boolean hasFailure = false;
+        List<NotificationLog> savedLogs = new java.util.ArrayList<>();
+
+        // 4. 각 보호자에게 푸시 발송 및 로그 저장
+        for (UserRelationship rel : relationships) {
+            User guardian = rel.getGuardian();
+            PushResult pushResult = kakaoPushClient.sendPush(guardian.getKakaoId(), request.getEventType(), pushMessage);
+            boolean pushSuccess = (pushResult == PushResult.SUCCESS);
+
+            NotificationLog notificationLog = NotificationLog.builder()
+                    .ward(ward)
+                    .guardian(guardian)
+                    .caller(request.getCaller())
+                    .eventType(request.getEventType())
+                    .callStartedAt(request.getCallStartedAt())
+                    .status(pushSuccess ? NotificationStatus.SUCCESS : NotificationStatus.FAIL)
+                    .failReason(pushSuccess ? null : "Kakao Push API 호출 실패 (" + pushResult.name() + ")")
+                    .build();
+
+            NotificationLog savedLog = notificationLogRepository.save(notificationLog);
+            savedLogs.add(savedLog);
+            
+            if (pushResult == PushResult.CONFIG_ERROR) {
+                log.error("CRITICAL: Kakao Push configuration error detected.");
+                throw new AlertException(ErrorCode.KAKAO_PUSH_CONFIG_ERROR);
+            }
+
+            if (!pushSuccess) {
+                hasFailure = true;
+            }
+            
+            log.info("Alert sent from ward {} to guardian {}. Status: {}", wardId, guardian.getId(), savedLog.getStatus());
+        }
+
+        // 5. 하나라도 실패했다면 최종적으로 에러 반환
+        if (hasFailure) {
+            throw new AlertException(ErrorCode.FCM_SEND_FAILED);
+        }
+
+        return savedLogs.stream().map(AlertLogResponse::from).collect(Collectors.toList());
+    }
+
+    /**
+     * 피보호자의 알림 로그 목록 조회 (기존 API용)
+     */
+    @Transactional(readOnly = true)
+    public AlertLogsResponse getAlertLogs(Long wardId) {
+        List<NotificationLog> logs = getLogsByWardId(wardId);
+        
+        List<AlertLogResponse> responses = logs.stream()
+                .map(AlertLogResponse::from)
+                .collect(Collectors.toList());
+        
+        return AlertLogsResponse.from(responses);
+    }
+
+    /**
+     * 피보호자의 타임라인 조회 (프론트 규격)
+     */
+    @Transactional(readOnly = true)
+    public TimelineListResponse getTimeline(Long wardId) {
+        List<NotificationLog> logs = getLogsByWardId(wardId);
+
+        List<TimelineItemResponse> timelineItems = logs.stream()
+                .map(TimelineItemResponse::from)
+                .collect(Collectors.toList());
+
+        return TimelineListResponse.of(timelineItems);
+    }
+
+    /**
+     * 공통 로그 조회 메서드 (중복 제거용)
+     */
+    private List<NotificationLog> getLogsByWardId(Long wardId) {
+        if (!userRepository.existsById(wardId)) {
+            throw new BusinessException(ErrorCode.WARD_NOT_FOUND);
+        }
+        return notificationLogRepository.findAllByWardIdOrderBySentAtDesc(wardId);
+    }
+}

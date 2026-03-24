@@ -1,7 +1,10 @@
 spring:
+  # Nginx의 X-Forwarded 헤더를 인식하도록 설정 (Swagger URL HTTPS로 생성)
+  forward-headers-strategy: framework
+
   # ───── 운영 환경 설정 (EC2 Docker 배포) ─────
   datasource:
-    url: jdbc:mysql://${DB_HOST:mysql}:${DB_PORT:3306}/${DB_NAME}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8
+    url: jdbc:mysql://${DB_HOST:mysql}:${DB_PORT:3306}/${DB_NAME}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&useUnicode=true&characterEncoding=UTF-8
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -9,6 +12,7 @@ spring:
       maximum-pool-size: 10
       minimum-idle: 5
       connection-timeout: 30000
+      connection-init-sql: "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
 
   data:
     redis:
@@ -31,6 +35,17 @@ logging:
 # Swagger UI (운영에서 비활성화)
 springdoc:
   swagger-ui:
-    enabled: false
+    enabled: true
   api-docs:
-    enabled: false
+    enabled: true
+
+# Kakao OAuth
+kakao:
+  rest-api-key: ${KAKAO_REST_API_KEY}
+  admin-key: ${KAKAO_ADMIN_KEY}
+
+# JWT
+jwt:
+  secret: ${JWT_SECRET}
+  access-expiry-ms: ${JWT_ACCESS_EXPIRY_MS:3600000}
+  refresh-expiry-ms: ${JWT_REFRESH_EXPIRY_MS:1209600000}

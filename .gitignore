@@ -314,6 +314,10 @@ mydocs/
 .idea/
 
 
+
+# -------Claude code CLI---------
+.claude
+
 # --------------AI---------------
 *.flac
 *.jpg

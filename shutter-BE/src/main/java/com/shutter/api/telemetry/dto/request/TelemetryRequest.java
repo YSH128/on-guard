@@ -1,7 +1,5 @@
 package com.shutter.api.telemetry.dto.request;
 
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -12,10 +10,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class TelemetryRequest {
 
-    private Integer userId;
-
     @NotBlank
-    @Pattern(regexp = "FACE|DEEPVOICE", message = "model_type must be FACE or DEEPVOICE")
+    @Pattern(regexp = "FACE|LIP|OCR", message = "model_type must be FACE, LIP, or OCR")
     private String modelType;
 
     @NotBlank
@@ -25,7 +21,7 @@ public class TelemetryRequest {
     private Boolean inferenceSuccess;
 
     @Pattern(
-            regexp = "MODEL_LOAD_FAIL|TIMEOUT|INFERENCE_ERROR|UNKNOWN",
+            regexp = "^$|MODEL_LOAD_FAIL|TIMEOUT|INFERENCE_ERROR|UNKNOWN",
             message = "failure_type must be one of MODEL_LOAD_FAIL, TIMEOUT, INFERENCE_ERROR, UNKNOWN"
     )
     private String failureType;
@@ -46,11 +42,12 @@ public class TelemetryRequest {
 
     private Float deviceTemperature;
 
+    private Long userId;
+
     @NotNull
     private Integer appPssMemory;
 
     @NotNull
-    @Min(0) @Max(6)
     private Integer thermalThrottlingStatus;
 
     @NotNull

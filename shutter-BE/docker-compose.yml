@@ -9,10 +9,10 @@ services:
       - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro # SSL 인증서 (도메인 발급 후 마운트)
-      - certbot-webroot:/var/www/certbot:ro # Let's Encrypt 인증용
-    depends_on:
-      - spring-blue
+      - ./nginx/upstream.conf:/etc/nginx/upstream.conf # ← 배포 시 Jenkins가 덮어씀
+      - /etc/letsencrypt/live/j14a404.p.ssafy.io/fullchain.pem:/etc/nginx/ssl/fullchain.pem:ro
+      - /etc/letsencrypt/live/j14a404.p.ssafy.io/privkey.pem:/etc/nginx/ssl/privkey.pem:ro
+      - certbot-webroot:/var/www/certbot:ro
     networks:
       - shutter-network
     restart: unless-stopped
@@ -20,14 +20,15 @@ services:
   # ───── Spring App (Blue) - 현재 운영 중인 버전 ─────
   spring-blue:
     profiles:
-      - prod
+      - blue
     build:
       context: .
       dockerfile: Dockerfile
     container_name: spring-blue
     expose:
-      - "8080" # nginx에서만 접근 (외부 포트 미노출)
+      - "8080"
     environment:
+      - TZ=Asia/Seoul
       - SPRING_PROFILES_ACTIVE=prod
       - DB_HOST=${DB_HOST:-mysql}
       - DB_PORT=${DB_PORT:-3306}
@@ -36,6 +37,11 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
+      - KAKAO_REST_API_KEY=${KAKAO_REST_API_KEY}
+      - KAKAO_ADMIN_KEY=${KAKAO_ADMIN_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ACCESS_EXPIRY_MS=${JWT_ACCESS_EXPIRY_MS}
+      - JWT_REFRESH_EXPIRY_MS=${JWT_REFRESH_EXPIRY_MS}
     depends_on:
       mysql:
         condition: service_healthy
@@ -46,11 +52,9 @@ services:
     restart: unless-stopped
 
   # ───── Spring App (Green) - 배포 대기 버전 ─────
-  # 배포 시: docker compose --profile prod up -d spring-green
-  # 전환 시: nginx.conf의 upstream을 spring-green으로 변경 후 nginx reload
   spring-green:
     profiles:
-      - green # 배포 시에만 활성화
+      - green
     build:
       context: .
       dockerfile: Dockerfile
@@ -58,6 +62,7 @@ services:
     expose:
       - "8080"
     environment:
+      - TZ=Asia/Seoul
       - SPRING_PROFILES_ACTIVE=prod
       - DB_HOST=${DB_HOST:-mysql}
       - DB_PORT=${DB_PORT:-3306}
@@ -66,6 +71,11 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
+      - KAKAO_REST_API_KEY=${KAKAO_REST_API_KEY}
+      - KAKAO_ADMIN_KEY=${KAKAO_ADMIN_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ACCESS_EXPIRY_MS=${JWT_ACCESS_EXPIRY_MS}
+      - JWT_REFRESH_EXPIRY_MS=${JWT_REFRESH_EXPIRY_MS}
     depends_on:
       mysql:
         condition: service_healthy
@@ -77,9 +87,11 @@ services:
   # ───── MySQL ─────
   mysql:
     image: "mysql:8.0"
-    ports:
-      - "${EXTERNAL_DB_PORT:-3307}:3306" # 로컬 개발 시 직접 접근용
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci # ← 한국어 인코딩 설정
+    expose:
+      - "3306" # ← 외부 포트 제거, 내부망에서만 접근
     environment:
+      - TZ=Asia/Seoul
       - MYSQL_DATABASE=${DB_NAME}
       - MYSQL_PASSWORD=${DB_PASSWORD}
       - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
@@ -99,8 +111,9 @@ services:
   # ───── Redis ─────
   redis:
     image: "redis:alpine"
-    ports:
-      - "6379:6379" # 로컬 개발 시 Redis Insight 접근용
+    command: redis-server --notify-keyspace-events Ex
+    expose:
+      - "6379" # ← 외부 포트 제거, 내부망에서만 접근
     volumes:
       - redis_data:/data
     networks:
@@ -110,11 +123,13 @@ services:
   # ───── Grafana ─────
   grafana:
     image: "grafana/grafana:latest"
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000" # ← 외부 포트 제거, nginx를 통해서만 접근
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_SERVER_ROOT_URL=https://j14a404.p.ssafy.io/grafana/ # ← 서브도메인 명시적 지정으로 리다이렉트 에러 해결
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true # ← 서브경로 활성화
       - DB_NAME=${DB_NAME}
       - DB_USERNAME=${DB_USERNAME}
       - DB_PASSWORD=${DB_PASSWORD}
