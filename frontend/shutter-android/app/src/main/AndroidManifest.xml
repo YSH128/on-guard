@@ -69,7 +69,6 @@
             android:theme="@style/Theme.Shutterandroid">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
             <!-- 카카오톡 메시지 딥링크 처리 -->
             <intent-filter>
@@ -81,6 +80,29 @@
             </intent-filter>
         </activity>
 
+
+        <!-- 범죄자 시연 앱 진입점 -->
+        <activity
+            android:name=".presentation.criminal.CriminalActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Shutterandroid"
+            android:label="Criminal Demo">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 카메라 촬영용 파일 공급자 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.provider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_provider_paths" />
+        </provider>
 
         <!-- 카카오 OAuth 리다이렉트 처리 -->
         <activity
