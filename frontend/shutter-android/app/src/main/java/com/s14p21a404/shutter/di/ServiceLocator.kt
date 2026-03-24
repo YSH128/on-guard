@@ -27,7 +27,6 @@ import com.s14p21a404.shutter.domain.usecase.GetMyWardsUseCase
 import com.s14p21a404.shutter.domain.usecase.GetUserIdUseCase
 import com.s14p21a404.shutter.domain.usecase.LoginUseCase
 import com.s14p21a404.shutter.domain.usecase.LogoutUseCase
-import com.s14p21a404.shutter.domain.usecase.RegisterUseCase
 import com.s14p21a404.shutter.domain.usecase.SaveUserIdUseCase
 import com.s14p21a404.shutter.domain.usecase.MonitorVideoCallUseCase
 import com.s14p21a404.shutter.network.RetrofitClient
@@ -87,7 +86,6 @@ class ServiceLocator private constructor(context: Context) {
     // ── Auth UseCases ──
 
     val loginUseCase = LoginUseCase(authRepository)
-    val registerUseCase = RegisterUseCase(authRepository)
     val logoutUseCase = LogoutUseCase(authRepository)
     val getAccessTokenUseCase = GetAccessTokenUseCase(authRepository)
     val saveUserIdUseCase = SaveUserIdUseCase(authRepository)
