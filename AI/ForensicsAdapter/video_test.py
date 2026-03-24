@@ -130,7 +130,7 @@ def test_epoch(model, test_data_loaders):
             avg_prob = sum(stats['preds']) / len(stats['preds'])
             y_true = stats['label']
             
-            status = "FAKE" if avg_prob > 0.5 else "REAL"
+            status = "FAKE" if avg_prob > 0.3 else "REAL"
             true_status = "FAKE" if y_true == 1 else "REAL"
             result_str = "O" if status == true_status else "X"
             
