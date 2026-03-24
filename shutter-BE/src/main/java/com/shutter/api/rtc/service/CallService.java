@@ -126,4 +126,41 @@ public class CallService {
                 .token(token)
                 .build();
     }
+
+    /**
+     * 통화 거절(Reject) 기능 처리
+     */
+    public void rejectCall(Long userId, String channelName) {
+        // 1. Redis 통화 세션 조회 (없으면 CALL_NOT_FOUND)
+        CallSession session = callSessionService.getSession(channelName);
+        if (session == null) {
+            throw new CallException(ErrorCode.CALL_NOT_FOUND);
+        }
+
+        // 2. 수신자 권한 확인 (userId != calleeId 이면 403)
+        if (!userId.equals(session.getCalleeId())) {
+            throw new CallException(ErrorCode.UNAUTHORIZED_ACCESS);
+        }
+
+        // 3. Redis 세션 삭제
+        callSessionService.deleteSession(channelName);
+
+        // 4. 발신자 조회 -> kakaoId 획득
+        User caller = userRepository.findById(session.getCallerId())
+                .orElseThrow(() -> new CallException(ErrorCode.USER_NOT_FOUND));
+
+        // 5. 카카오 푸시 전송 (AlertService.sendAlertToUser)
+        Map<String, Object> payloadMap = new HashMap<>();
+        payloadMap.put("type", "CALL_REJECTED");
+        payloadMap.put("channel_name", channelName);
+
+        try {
+            String payloadJson = objectMapper.writeValueAsString(payloadMap);
+            alertService.sendAlertToUser(caller.getKakaoId(), payloadJson);
+            log.info("Sent CALL_REJECTED push to caller: {}", caller.getId());
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize push payload for caller: {}", caller.getId(), e);
+            throw new CallException(ErrorCode.INTERNAL_SERVER_ERROR);
+        }
+    }
 }
