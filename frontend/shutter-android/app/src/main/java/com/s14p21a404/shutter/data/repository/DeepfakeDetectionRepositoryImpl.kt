@@ -43,12 +43,19 @@ class DeepfakeDetectionRepositoryImpl(
         extraBufferCapacity = 1
     )
 
+    private val _frameResults = MutableSharedFlow<DeepfakeDetectionResult>(
+        replay = 0,
+        extraBufferCapacity = 8
+    )
+
     // ── 화면 캡처 내부 관리 ──
     private var captureContext: Context? = null
     private var mediaProjection: MediaProjection? = null
     private var screenCaptureManager: ScreenCaptureManager? = null
 
     override fun observeDetectionResults(): Flow<DeepfakeDetectionResult> = _results.asSharedFlow()
+
+    override fun observeFrameResults(): Flow<DeepfakeDetectionResult> = _frameResults.asSharedFlow()
 
     override fun startDetection() {
         Log.d(TAG, "감지 및 모델 로드 시작")
@@ -57,9 +64,9 @@ class DeepfakeDetectionRepositoryImpl(
                 Log.d(TAG, "📊 감지 결과: $result")
                 _results.tryEmit(result)
             },
-            onFrameResult = {result ->
+            onFrameResult = { result ->
                 Log.d(TAG, "📊 Frame 별 감지 결과: $result")
-                // 텔레메트리 비동기 전송
+                _frameResults.tryEmit(result)
                 sendTelemetry(result)
             },
             onReady = {
