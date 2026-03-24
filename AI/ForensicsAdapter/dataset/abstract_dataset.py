@@ -120,11 +120,11 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
             A.GaussianBlur(blur_limit=self.config['data_aug']['blur_limit'], p=self.config['data_aug']['blur_prob']),
             A.OneOf([
                 IsotropicResize(max_side=self.config['resolution'], interpolation_down=cv2.INTER_AREA,
-                                interpolation_up=cv2.INTER_CUBIC),
+                                interpolation_up=cv2.INTER_CUBIC, p=1),
                 IsotropicResize(max_side=self.config['resolution'], interpolation_down=cv2.INTER_AREA,
-                                interpolation_up=cv2.INTER_LINEAR),
+                                interpolation_up=cv2.INTER_LINEAR, p=1),
                 IsotropicResize(max_side=self.config['resolution'], interpolation_down=cv2.INTER_LINEAR,
-                                interpolation_up=cv2.INTER_LINEAR),
+                                interpolation_up=cv2.INTER_LINEAR, p=1),
             ], p=1),
             A.OneOf([
                 A.RandomBrightnessContrast(brightness_limit=self.config['data_aug']['brightness_limit'],
