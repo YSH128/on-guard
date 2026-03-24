@@ -13,6 +13,8 @@ services:
       - /etc/letsencrypt/live/j14a404.p.ssafy.io/fullchain.pem:/etc/nginx/ssl/fullchain.pem:ro
       - /etc/letsencrypt/live/j14a404.p.ssafy.io/privkey.pem:/etc/nginx/ssl/privkey.pem:ro
       - certbot-webroot:/var/www/certbot:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - shutter-network
     restart: unless-stopped
