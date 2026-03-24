@@ -38,9 +38,9 @@ public class CallService {
         User caller = userRepository.findById(callerId)
                 .orElseThrow(() -> new CallException(ErrorCode.USER_NOT_FOUND));
 
-        // 2. 수신자 조회 (없으면 CALL_NOT_FOUND)
+        // 2. 수신자 조회 (없으면 USER_NOT_FOUND)
         User callee = userRepository.findById(calleeId)
-                .orElseThrow(() -> new CallException(ErrorCode.CALL_NOT_FOUND));
+                .orElseThrow(() -> new CallException(ErrorCode.USER_NOT_FOUND));
 
         // 3. 본인에게 통화 요청 방지
         if (callerId.equals(calleeId)) {
