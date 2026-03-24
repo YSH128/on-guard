@@ -68,22 +68,6 @@ class MainActivity : ComponentActivity() {
                             onDismissError = { loginViewModel.dismissLoginError() }
                         )
                     }
-                    is LoginUiState.NeedsRegistration -> {
-                        // 신규 회원: 이름 입력 화면 (권한 화면에 포함)
-                        val uiState by viewModel.uiState.collectAsState()
-                        MainScreen(
-                            uiState = uiState,
-                            isNewUser = true,
-                            onRegister = { name -> loginViewModel.register(state.kakaoId, name) },
-                            onRequestPermissions = { requestAllPermissions() },
-                            onRequestOverlayPermission = { requestOverlayPermission() },
-                            onRequestAccessibilityPermission = { requestAccessibilityPermission() },
-                            onToggleService = { toggleService() },
-                            onLogout = { loginViewModel.logout() },
-                            loginError = loginError,
-                            onDismissError = { loginViewModel.dismissLoginError() }
-                        )
-                    }
                     LoginUiState.LoggedIn -> {
                         val uiState by viewModel.uiState.collectAsState()
                         MainScreen(
@@ -154,6 +138,12 @@ class MainActivity : ComponentActivity() {
             != PackageManager.PERMISSION_GRANTED
         ) {
             permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ANSWER_PHONE_CALLS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            permissionsToRequest.add(Manifest.permission.ANSWER_PHONE_CALLS)
         }
 
         if (permissionsToRequest.isNotEmpty()) {
