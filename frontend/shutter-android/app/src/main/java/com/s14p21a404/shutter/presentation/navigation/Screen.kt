@@ -20,9 +20,8 @@ sealed class Screen(val route: String) {
     object GuardianRegistration : Screen("guardian_registration")
 
     /** 영상 통화 */
-    object VideoCall : Screen("video_call/{channelId}/{callerName}") {
-        fun createRoute(channelId: String, callerName: String) =
-            "video_call/$channelId/${java.net.URLEncoder.encode(callerName, "UTF-8")}"
-    }
+    object VideoCall : Screen("video_call/{channelId}") {
+    fun createRoute(channelId: String) = "video_call/$channelId"
+}
 }
 

@@ -6,39 +6,19 @@ import android.view.SurfaceView
 import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.*
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CallEnd
-import androidx.compose.material.icons.filled.Cameraswitch
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import io.agora.rtc2.*
 import io.agora.rtc2.audio.AudioParams
 import io.agora.rtc2.video.VideoCanvas
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -48,21 +28,10 @@ import okio.ByteString
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
-
-// ── 색상 상수 ──
-private val ControlBarBg = Color.Black
-private val EndCallRed = Color(0xFFEF4444)
-private val ControlBtnBg = Color(0xFF404040)
-private val BounceDotColor = Color(0xFFFACC15)   // yellow-400
-private val AvatarBg = Color(0xFF6B7280)          // neutral-500
-private val AvatarBgLarge = Color(0xFF4B5563)     // neutral-600
-private val GradientTop = Color(0xFF525252)       // neutral-600
-private val GradientBottom = Color(0xFF262626)    // neutral-800
-private val RemoteGradientTop = Color(0xFF404040) // neutral-700
-private val RemoteGradientBottom = Color(0xFF171717) // neutral-900
+import java.util.concurrent.TimeUnit
 
 @Composable
-fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () -> Unit = {}) {
+fun VideoCallScreen(channelId: String) {
     val context = LocalContext.current
     val appId = "6c6109e0b9644b599072a68b514d77a8"
 
@@ -72,44 +41,14 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
     var outputStream by remember { mutableStateOf<FileOutputStream?>(null) }
     var recordingFile by remember { mutableStateOf<File?>(null) }
 
-    // UI 상태
-    var isMuted by remember { mutableStateOf(false) }
-    var isFrontCamera by remember { mutableStateOf(true) }
-    var callEnded by remember { mutableStateOf(false) }
-    var callDuration by remember { mutableIntStateOf(0) }
+    val detectedTopics = remember { mutableStateOf(setOf<String>()) }
 
-    // 중복 종료 방지 플래그 (콜백 스레드에서도 안전하게 사용)
-    val isEndingCall = remember { mutableStateOf(false) }
-
-    /** leaveChannel + callEnded 처리를 한 곳에서 관리 */
-    fun endCall() {
-        if (isEndingCall.value) return   // 이미 종료 처리 중이면 무시
-        isEndingCall.value = true
-        rtcEngine?.leaveChannel()
-        callEnded = true
-    }
-
-    // 연결 상태: remoteUid가 null이면 연결 중
-    val isConnecting = remoteUid == null && !callEnded
-
-    // 로컬/리모트 SurfaceView를 remember로 보관
     val localView = remember { mutableStateOf<SurfaceView?>(null) }
     val remoteView = remember { mutableStateOf<SurfaceView?>(null) }
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { }
-
-
-    // ── 통화 시간 타이머 ──
-    LaunchedEffect(isConnecting, callEnded) {
-        if (!isConnecting && !callEnded) {
-            while (true) {
-                kotlinx.coroutines.delay(1000)
-                callDuration++
-            }
-        }
-    }
 
     val audioFrameObserver = remember {
         object : IAudioFrameObserver {
@@ -137,53 +76,7 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
         }
     }
 
-    // rtcEngine 또는 localView가 바뀌면 로컬 비디오 세팅 + SurfaceHolder 콜백 등록
-    val currentLocalView = localView.value
-    LaunchedEffect(rtcEngine, currentLocalView) {
-        val engine = rtcEngine ?: return@LaunchedEffect
-        val view = currentLocalView ?: return@LaunchedEffect
-        engine.setupLocalVideo(VideoCanvas(view, VideoCanvas.RENDER_MODE_HIDDEN, 0))
-        engine.startPreview()
-    }
-    // Surface가 크기 변경 등으로 재생성될 때 setupLocalVideo를 다시 호출
-    DisposableEffect(currentLocalView, rtcEngine) {
-        val view = currentLocalView
-        val engine = rtcEngine
-        if (view == null || engine == null) {
-            onDispose { }
-        } else {
-            val callback = object : android.view.SurfaceHolder.Callback {
-                override fun surfaceCreated(holder: android.view.SurfaceHolder) {
-                    android.util.Log.d("VIDEO", "Local surface created → re-setup")
-                    engine.setupLocalVideo(VideoCanvas(view, VideoCanvas.RENDER_MODE_HIDDEN, 0))
-                    engine.startPreview()
-                }
-                override fun surfaceChanged(holder: android.view.SurfaceHolder, format: Int, width: Int, height: Int) {
-                    android.util.Log.d("VIDEO", "Local surface changed ${width}x${height} → re-setup")
-                    engine.setupLocalVideo(VideoCanvas(view, VideoCanvas.RENDER_MODE_HIDDEN, 0))
-                    engine.startPreview()
-                }
-                override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {
-                    android.util.Log.d("VIDEO", "Local surface destroyed")
-                }
-            }
-            view.holder.addCallback(callback)
-            onDispose {
-                view.holder.removeCallback(callback)
-            }
-        }
-    }
-
-    // remoteUid가 바뀌면 리모트 비디오 세팅
-    val currentRemoteView = remoteView.value
-    LaunchedEffect(remoteUid, rtcEngine, currentRemoteView) {
-        val engine = rtcEngine ?: return@LaunchedEffect
-        val uid = remoteUid ?: return@LaunchedEffect
-        val view = currentRemoteView ?: return@LaunchedEffect
-        android.util.Log.d("VIDEO", "setupRemoteVideo uid=$uid view=$view")
-        engine.setupRemoteVideo(VideoCanvas(view, VideoCanvas.RENDER_MODE_HIDDEN, uid))
-    }
-
+    // 1. Agora 초기화 (가장 먼저)
     LaunchedEffect(Unit) {
         val permissions = arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA)
         val needRequest = permissions.any {
@@ -202,10 +95,8 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
                     }
                 }
                 override fun onUserOffline(uid: Int, reason: Int) {
-                    android.util.Log.d("Agora", "상대방 퇴장: uid=$uid reason=$reason")
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
                         remoteUid = null
-                        endCall()
                     }
                 }
                 override fun onRemoteVideoStateChanged(uid: Int, state: Int, reason: Int, elapsed: Int) {
@@ -242,528 +133,162 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
         rtcEngine = engine
     }
 
+    // 2. 로컬 비디오 세팅
+    LaunchedEffect(rtcEngine) {
+        val engine = rtcEngine ?: return@LaunchedEffect
+        val view = localView.value ?: return@LaunchedEffect
+        engine.setupLocalVideo(VideoCanvas(view, VideoCanvas.RENDER_MODE_HIDDEN, 0))
+        engine.startPreview()
+    }
+
+    // 3. 리모트 비디오 세팅
+    LaunchedEffect(remoteUid, rtcEngine) {
+        val engine = rtcEngine ?: return@LaunchedEffect
+        val uid = remoteUid ?: return@LaunchedEffect
+        val view = remoteView.value ?: return@LaunchedEffect
+        android.util.Log.d("VIDEO", "setupRemoteVideo uid=$uid view=$view")
+        engine.setupRemoteVideo(VideoCanvas(view, VideoCanvas.RENDER_MODE_HIDDEN, uid))
+    }
+
+    // 4. WebSocket 연결 + 10초마다 WAV 전송
+    LaunchedEffect(Unit) {
+        val client = OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(0, TimeUnit.SECONDS)
+            .build()
+
+        val request = Request.Builder()
+            .url("ws://116.43.199.143:8000/ws/stt")
+            .build()
+
+        var persistentWebSocket: WebSocket? = null
+        var readyReceived = false
+
+        val listener = object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                android.util.Log.d("WS", "✅ WebSocket 연결됨 (유지)")
+                persistentWebSocket = webSocket
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                android.util.Log.d("WS", "서버 메시지: $text")
+                if (text.trim() == "ready") {
+                    readyReceived = true
+                    android.util.Log.d("WS", "ready 수신 - WAV 대기 중")
+                } else {
+                    val topic = text.trim()
+                    android.util.Log.d("WS", "STT 결과: $topic")
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        detectedTopics.value = detectedTopics.value + topic
+                        android.util.Log.d("WS", "현재 감지된 주제들: ${detectedTopics.value}")
+                    }
+                }
+            }
+
+            override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+                android.util.Log.d("WS", "서버 바이너리: ${bytes.size} bytes")
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                android.util.Log.e("WS", "❌ WebSocket 오류: ${t.message}")
+                persistentWebSocket = null
+                readyReceived = false
+            }
+
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                android.util.Log.d("WS", "WebSocket 닫힘: $reason")
+                persistentWebSocket = null
+                readyReceived = false
+            }
+        }
+
+        client.newWebSocket(request, listener)
+
+        while (isActive) {
+            delay(10000)
+
+            if (!isRecording) {
+                continue  // break 대신 continue로 변경
+            }
+
+            try {
+                outputStream?.flush()
+                outputStream?.close()
+
+                val pcmFile = recordingFile ?: continue
+                if (pcmFile.exists() && pcmFile.length() > 0 && readyReceived) {
+                    val tempPcm = File(context.getExternalFilesDir(null), "temp_chunk.pcm")
+                    pcmFile.copyTo(tempPcm, overwrite = true)
+
+                    val wavFile = File(context.getExternalFilesDir(null), "chunk_${System.currentTimeMillis()}.wav")
+                    convertPcmToWav(tempPcm, wavFile, 44100, 1, 16)
+                    tempPcm.delete()
+
+                    val audioBytes = wavFile.readBytes()
+                    persistentWebSocket?.send(ByteString.of(*audioBytes))
+                    android.util.Log.d("WS", "✅ WAV 전송: ${audioBytes.size} bytes")
+                    wavFile.delete()
+                    readyReceived = false
+
+                    pcmFile.delete()
+                } else {
+                    android.util.Log.d("WS", "스킵 - isRecording=$isRecording readyReceived=$readyReceived pcmExists=${recordingFile?.exists()}")
+                }
+
+                outputStream = FileOutputStream(recordingFile)
+            } catch (e: Exception) {
+                android.util.Log.e("WS", "청크 오류: ${e.message}")
+                try { outputStream = FileOutputStream(recordingFile) } catch (_: Exception) {}
+            }
+        }
+
+        persistentWebSocket?.close(1000, "통화 종료")
+    }
+
     DisposableEffect(Unit) {
         onDispose {
             isRecording = false
             outputStream?.flush()
             outputStream?.close()
             outputStream = null
-
-            recordingFile?.let { pcmFile ->
-                if (pcmFile.exists() && pcmFile.length() > 0) {
-                    val wavFile = File(context.getExternalFilesDir(null), "remote_only.wav")
-                    convertPcmToWav(pcmFile, wavFile, 44100, 1, 16)
-                    pcmFile.delete()
-                    sendWavToJetson(wavFile)
-                }
-            }
-
             rtcEngine?.leaveChannel()
             RtcEngine.destroy()
             rtcEngine = null
         }
     }
 
-    // ── 통화 종료 화면 ──
-    if (callEnded) {
-        CallEndedScreen(
-            callerName = callerName,
-            callDuration = callDuration,
-            onDismiss = onCallEnded
+    Box(modifier = Modifier.fillMaxSize()) {
+        AndroidView(
+            factory = { ctx ->
+                SurfaceView(ctx).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    remoteView.value = this
+                }
+            },
+            modifier = Modifier.fillMaxSize()
         )
-        return
-    }
 
-    // ── 메인 통화 UI ──
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    ) {
-        // 비디오 영역
-        Box(
+        AndroidView(
+            factory = { ctx ->
+                SurfaceView(ctx).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    localView.value = this
+                }
+            },
             modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-        ) {
-            // 리모트 비디오 (전체 화면) – 연결 후에만 보임
-            androidx.compose.animation.AnimatedVisibility(
-                visible = !isConnecting,
-                enter = fadeIn(animationSpec = tween(700)),
-                exit = fadeOut(animationSpec = tween(700)),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(12.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                ) {
-                    // 리모트 비디오 placeholder
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    listOf(RemoteGradientTop, RemoteGradientBottom)
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(128.dp)
-                                .clip(CircleShape)
-                                .background(AvatarBgLarge),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Person,
-                                contentDescription = null,
-                                tint = Color(0xFF9CA3AF),
-                                modifier = Modifier.size(64.dp)
-                            )
-                        }
-                    }
-                    // 실제 리모트 비디오
-                    AndroidView(
-                        factory = { ctx ->
-                            SurfaceView(ctx).apply {
-                                layoutParams = ViewGroup.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.MATCH_PARENT
-                                )
-                                remoteView.value = this
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
-
-            // ── 내 비디오 – 부드러운 전체화면 ↔ PiP 전환 ──
-            // 애니메이션 값: 0f = 전체화면(연결 중), 1f = PiP(연결됨)
-            val pipProgress by animateFloatAsState(
-                targetValue = if (isConnecting) 0f else 1f,
-                animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
-                label = "pipTransition"
-            )
-
-            // PiP 목표 크기/위치
-            val pipWidth = 128.dp
-            val pipHeight = 176.dp
-            val pipPaddingStart = 16.dp
-            val pipPaddingBottom = 24.dp
-            val cornerRadius by animateDpAsState(
-                targetValue = if (isConnecting) 16.dp else 12.dp,
-                animationSpec = tween(600, easing = FastOutSlowInEasing),
-                label = "cornerRadius"
-            )
-
-            BoxWithConstraints(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                val fullWidth = maxWidth
-                val fullHeight = maxHeight
-
-                // 보간: 전체화면 → PiP
-                val currentWidth = lerp(fullWidth, pipWidth, pipProgress)
-                val currentHeight = lerp(fullHeight, pipHeight, pipProgress)
-                val currentPadding = 12.dp * (1f - pipProgress) // 전체화면일 때 12dp, PiP면 0dp
-
-                // 정렬: 전체화면일 때 중앙, PiP일 때 좌측 하단
-                val alignX by animateFloatAsState(
-                    targetValue = if (isConnecting) 0f else -1f,
-                    animationSpec = tween(600, easing = FastOutSlowInEasing),
-                    label = "alignX"
-                )
-                val alignY by animateFloatAsState(
-                    targetValue = if (isConnecting) 0f else 1f,
-                    animationSpec = tween(600, easing = FastOutSlowInEasing),
-                    label = "alignY"
-                )
-
-                Box(
-                    modifier = Modifier
-                        .align(BiasAlignment(alignX, alignY))
-                        .padding(
-                            start = if (pipProgress > 0.5f) pipPaddingStart * pipProgress else currentPadding,
-                            end = currentPadding * (1f - pipProgress),
-                            top = currentPadding * (1f - pipProgress),
-                            bottom = if (pipProgress > 0.5f) pipPaddingBottom * pipProgress else currentPadding
-                        )
-                        .size(width = currentWidth, height = currentHeight)
-                        .clip(RoundedCornerShape(cornerRadius))
-                        .zIndex(10f)
-                ) {
-                    // placeholder 배경
-                    val avatarSize by animateDpAsState(
-                        targetValue = if (isConnecting) 112.dp else 56.dp,
-                        animationSpec = tween(600, easing = FastOutSlowInEasing),
-                        label = "avatarSize"
-                    )
-                    val iconSize by animateDpAsState(
-                        targetValue = if (isConnecting) 56.dp else 28.dp,
-                        animationSpec = tween(600, easing = FastOutSlowInEasing),
-                        label = "iconSize"
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    listOf(GradientTop, GradientBottom)
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(avatarSize)
-                                .clip(CircleShape)
-                                .background(AvatarBg),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Person,
-                                contentDescription = null,
-                                tint = Color(0xFFD1D5DB),
-                                modifier = Modifier.size(iconSize)
-                            )
-                        }
-                    }
-                    // 실제 로컬 비디오 – AndroidView는 한 번만 생성
-                    AndroidView(
-                        factory = { ctx ->
-                            SurfaceView(ctx).apply {
-                                layoutParams = ViewGroup.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.MATCH_PARENT
-                                )
-                                setZOrderMediaOverlay(true)
-                                localView.value = this
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-
-                    // PiP일 때 내 이름 오버레이
-                    val overlayAlpha by animateFloatAsState(
-                        targetValue = if (isConnecting) 0f else 1f,
-                        animationSpec = tween(600),
-                        label = "overlayAlpha"
-                    )
-                    if (overlayAlpha > 0f) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .fillMaxWidth()
-                                .background(
-                                    Brush.verticalGradient(
-                                        listOf(
-                                            Color.Transparent,
-                                            Color.Black.copy(alpha = 0.7f * overlayAlpha)
-                                        )
-                                    )
-                                )
-                                .padding(8.dp)
-                        ) {
-                            Text(
-                                text = "나",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.White.copy(alpha = overlayAlpha),
-                            )
-                        }
-                    }
-                }
-            }
-
-            // ── 연결 중 오버레이 (이름 + "연결 중" + 바운스 점) ──
-            androidx.compose.animation.AnimatedVisibility(
-                visible = isConnecting,
-                enter = fadeIn(),
-                exit = fadeOut(animationSpec = tween(500)),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(12.dp)
-                        .clip(RoundedCornerShape(16.dp)),
-                    contentAlignment = Alignment.TopCenter
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(top = 160.dp)
-                    ) {
-                        Text(
-                            text = callerName.ifEmpty { "상대방" },
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White,
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "연결 중",
-                            fontSize = 16.sp,
-                            color = Color.White.copy(alpha = 0.9f),
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        BouncingDots()
-                    }
-                }
-            }
-        }
-
-        // ── 상대 이름 & 통화 시간 (연결 후에만) ──
-        AnimatedVisibility(
-            visible = !isConnecting,
-            enter = fadeIn(animationSpec = tween(500)),
-            exit = fadeOut(),
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp)
-            ) {
-                Text(
-                    text = callerName.ifEmpty { "상대방" },
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.White,
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = formatDuration(callDuration),
-                    fontSize = 14.sp,
-                    color = Color(0xFF9CA3AF),
-                )
-            }
-        }
-
-        // ── 하단 컨트롤 바 ──
-        ControlBar(
-            isMuted = isMuted,
-            onToggleMute = {
-                val newMuted = !isMuted
-                isMuted = newMuted
-                rtcEngine?.muteLocalAudioStream(newMuted)
-            },
-            onEndCall = ::endCall,
-            onSwitchCamera = {
-                isFrontCamera = !isFrontCamera
-                rtcEngine?.switchCamera()
-            },
+                .width(120.dp)
+                .height(160.dp)
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
         )
     }
-}
-
-// ── 바운싱 점 애니메이션 ──
-@Composable
-private fun BouncingDots() {
-    val infiniteTransition = rememberInfiniteTransition(label = "bounce")
-    val delays = listOf(0, 150, 300)
-
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        delays.forEach { delay ->
-            val offsetY by infiniteTransition.animateFloat(
-                initialValue = 0f,
-                targetValue = -12f,
-                animationSpec = infiniteRepeatable(
-                    animation = keyframes {
-                        durationMillis = 600
-                        0f at 0
-                        -12f at 200
-                        0f at 400
-                        0f at 600
-                    },
-                    repeatMode = RepeatMode.Restart,
-                    initialStartOffset = StartOffset(delay)
-                ),
-                label = "dot_$delay"
-            )
-            Box(
-                modifier = Modifier
-                    .offset(y = offsetY.dp)
-                    .size(10.dp)
-                    .clip(CircleShape)
-                    .background(BounceDotColor)
-            )
-        }
-    }
-}
-
-// ── 하단 컨트롤 바 ──
-@Composable
-private fun ControlBar(
-    isMuted: Boolean,
-    onToggleMute: () -> Unit,
-    onEndCall: () -> Unit,
-    onSwitchCamera: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(ControlBarBg)
-            .padding(horizontal = 24.dp)
-            .padding(top = 16.dp, bottom = 40.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // 음소거 버튼
-        IconButton(
-            onClick = onToggleMute,
-            modifier = Modifier
-                .size(56.dp)
-                .clip(CircleShape)
-                .background(if (isMuted) Color.White else ControlBtnBg)
-        ) {
-            Icon(
-                imageVector = if (isMuted) Icons.Filled.MicOff else Icons.Filled.Mic,
-                contentDescription = if (isMuted) "마이크 켜기" else "마이크 음소거",
-                tint = if (isMuted) Color.Black else Color.White,
-                modifier = Modifier.size(24.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.width(24.dp))
-
-        // 통화 종료 버튼
-        IconButton(
-            onClick = onEndCall,
-            modifier = Modifier
-                .size(64.dp)
-                .clip(CircleShape)
-                .background(EndCallRed)
-        ) {
-            Icon(
-                imageVector = Icons.Filled.CallEnd,
-                contentDescription = "통화 종료",
-                tint = Color.White,
-                modifier = Modifier.size(28.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.width(24.dp))
-
-        // 카메라 전환 버튼
-        IconButton(
-            onClick = onSwitchCamera,
-            modifier = Modifier
-                .size(56.dp)
-                .clip(CircleShape)
-                .background(ControlBtnBg)
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Cameraswitch,
-                contentDescription = "카메라 전환",
-                tint = Color.White,
-                modifier = Modifier.size(24.dp)
-            )
-        }
-    }
-}
-
-// ── 통화 종료 화면 ──
-@Composable
-private fun CallEndedScreen(callerName: String, callDuration: Int, onDismiss: () -> Unit) {
-    // 1초 후 자동으로 화면 닫기
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(1000)
-        onDismiss()
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF262626)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Person,
-                    contentDescription = null,
-                    tint = Color(0xFF9CA3AF),
-                    modifier = Modifier.size(40.dp)
-                )
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = callerName.ifEmpty { "상대방" },
-                fontSize = 20.sp,
-                color = Color.White,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "통화 종료",
-                fontSize = 16.sp,
-                color = Color(0xFF9CA3AF),
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "통화 시간: ${formatDuration(callDuration)}",
-                fontSize = 14.sp,
-                color = Color(0xFF737373),
-            )
-        }
-    }
-}
-
-// ── 유틸리티 ──
-
-/** Dp 선형 보간 */
-private fun lerp(start: Dp, stop: Dp, fraction: Float): Dp {
-    return start + (stop - start) * fraction
-}
-
-private fun formatDuration(seconds: Int): String {
-    val mins = seconds / 60
-    val secs = seconds % 60
-    return "%02d:%02d".format(mins, secs)
-}
-
-private fun sendWavToJetson(wavFile: File) {
-    Thread {
-        try {
-            val client = OkHttpClient()
-            val request = Request.Builder()
-                .url("ws://116.43.199.143:8000/ws/stt")
-                .build()
-
-            val listener = object : WebSocketListener() {
-                override fun onOpen(webSocket: WebSocket, response: Response) {
-                    android.util.Log.d("WS", "✅ WebSocket 연결됨")
-                }
-                override fun onMessage(webSocket: WebSocket, text: String) {
-                    android.util.Log.d("WS", "서버 메시지 수신: $text")
-                    val audioBytes = wavFile.readBytes()
-                    webSocket.send(ByteString.of(*audioBytes))
-                    android.util.Log.d("WS", "✅ WAV 전송 완료: ${audioBytes.size} bytes")
-                }
-                override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
-                    android.util.Log.d("WS", "서버 바이너리 수신: ${bytes.size} bytes")
-                }
-                override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                    android.util.Log.e("WS", "❌ WebSocket 오류: ${t.message}")
-                }
-                override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                    android.util.Log.d("WS", "WebSocket 닫힘: $reason")
-                }
-            }
-
-            client.newWebSocket(request, listener)
-
-        } catch (e: Exception) {
-            android.util.Log.e("WS", "❌ 전송 실패: ${e.message}")
-        }
-    }.start()
 }
 
 private fun convertPcmToWav(pcmFile: File, wavFile: File, sampleRate: Int, channels: Int, bitDepth: Int) {
