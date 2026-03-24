@@ -34,5 +34,13 @@ interface VideoCallRepository {
 
     /** 모니터링 중단 (콜백 해제) */
     fun stopMonitoring()
+
+    // ── 인앱(Agora) 영상통화 지원 ──
+
+    /** 인앱 영상통화 활성/비활성 설정. true이면 외부 앱 감지 조건을 우회하여 즉시 영상통화 상태로 전환. */
+    fun setInAppCallActive(active: Boolean)
+
+    /** 현재 인앱 영상통화가 활성 상태인지 반환 */
+    fun isInAppCallActive(): Boolean
 }
 

@@ -36,6 +36,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
+import com.s14p21a404.shutter.di.ServiceLocator
+import com.s14p21a404.shutter.presentation.service.VideoCallDetectService
 import io.agora.rtc2.*
 import io.agora.rtc2.audio.AudioParams
 import io.agora.rtc2.video.VideoCanvas
@@ -66,6 +68,11 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
     val context = LocalContext.current
     val appId = "6c6109e0b9644b599072a68b514d77a8"
 
+    // ── 딥페이크 감지 연동: ServiceLocator에서 VideoCallRepository 획득 ──
+    val videoCallRepository = remember {
+        ServiceLocator.getInstance(context).videoCallRepository
+    }
+
     var rtcEngine by remember { mutableStateOf<RtcEngine?>(null) }
     var remoteUid by remember { mutableStateOf<Int?>(null) }
     var isRecording by remember { mutableStateOf(false) }
@@ -87,6 +94,9 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
         isEndingCall.value = true
         rtcEngine?.leaveChannel()
         callEnded = true
+        // 인앱 통화 종료 → 딥페이크 감지 파이프라인에 통화 종료 알림
+        videoCallRepository.setInAppCallActive(false)
+        VideoCallDetectService.onInAppCallEnd = null
     }
 
     // 연결 상태: remoteUid가 null이면 연결 중
@@ -100,6 +110,17 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
         ActivityResultContracts.RequestMultiplePermissions()
     ) { }
 
+
+    // ── 딥페이크 감지 연동: 상대방 연결 시 인앱 통화 활성화 ──
+    LaunchedEffect(remoteUid, callEnded) {
+        if (remoteUid != null && !callEnded) {
+            // 상대방 연결됨 → 인앱 영상통화 활성
+            android.util.Log.d("VideoCallScreen", "🛡️ 인앱 영상통화 활성화 → 딥페이크 감지 시작")
+            videoCallRepository.setInAppCallActive(true)
+            // 오버레이 "전화 종료" 클릭 시 Agora 통화를 종료하도록 콜백 등록
+            VideoCallDetectService.onInAppCallEnd = { endCall() }
+        }
+    }
 
     // ── 통화 시간 타이머 ──
     LaunchedEffect(isConnecting, callEnded) {
@@ -248,6 +269,10 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
             outputStream?.flush()
             outputStream?.close()
             outputStream = null
+
+            // 인앱 통화 정리 → 딥페이크 감지 파이프라인에 통화 종료 알림
+            videoCallRepository.setInAppCallActive(false)
+            VideoCallDetectService.onInAppCallEnd = null
 
             recordingFile?.let { pcmFile ->
                 if (pcmFile.exists() && pcmFile.length() > 0) {
