@@ -49,3 +49,8 @@ jwt:
   secret: ${JWT_SECRET}
   access-expiry-ms: ${JWT_ACCESS_EXPIRY_MS:3600000}
   refresh-expiry-ms: ${JWT_REFRESH_EXPIRY_MS:1209600000}
+
+# Agora RTC
+agora:
+  app-id: ${AGORA_APP_ID}
+  app-certificate: ${AGORA_APP_CERTIFICATE}

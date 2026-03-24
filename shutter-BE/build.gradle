@@ -45,6 +45,9 @@ dependencies {
 	// WebSocket
 	implementation 'org.springframework.boot:spring-boot-starter-websocket'
 
+	// Agora RTC Token Builder
+	implementation 'io.agora:authentication:2.0.0'
+
 	// JWT (자체 Access/Refresh Token 발급 및 검증)
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
 	runtimeOnly    'io.jsonwebtoken:jjwt-impl:0.12.6'
