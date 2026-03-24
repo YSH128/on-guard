@@ -35,6 +35,14 @@ class GuardianUuidStore(context: Context) {
         return if (value == -1L) null else value
     }
 
+    /** 보호자 등록 시 내 카카오 연락처에 저장된 이름을 저장 (설정 화면 표시용) */
+    fun saveKakaoName(guardianId: Long, name: String) {
+        prefs.edit().putString("kakao_name_$guardianId", name).apply()
+    }
+
+    fun getKakaoName(guardianId: Long): String? =
+        prefs.getString("kakao_name_$guardianId", null)
+
     companion object {
         private const val PREFS_NAME = "guardian_uuid_store"
     }

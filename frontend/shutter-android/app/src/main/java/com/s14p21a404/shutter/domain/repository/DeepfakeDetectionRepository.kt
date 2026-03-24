@@ -14,8 +14,11 @@ import kotlinx.coroutines.flow.Flow
  */
 interface DeepfakeDetectionRepository {
 
-    /** 감지 결과를 Flow로 관찰 */
+    /** 사이클(10프레임) 집계 결과를 Flow로 관찰 */
     fun observeDetectionResults(): Flow<DeepfakeDetectionResult>
+
+    /** 프레임별 실시간 결과를 Flow로 관찰 (딥페이크 확정 후 RoI 실시간 갱신에 사용) */
+    fun observeFrameResults(): Flow<DeepfakeDetectionResult>
 
     /** 감지 시작 (내부적으로 화면 캡처도 함께 시작) */
     fun startDetection()
