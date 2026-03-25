@@ -51,6 +51,7 @@ class WarningBottomSheetView(
     private var detectionTypeRow: LinearLayout? = null
     private var countryNameTv: TextView? = null
     private var labelContainer: LinearLayout? = null
+    private lateinit var subtitleContainer: LinearLayout
     private val buttonsContainer: LinearLayout
 
     /** 현재 표시 중인 국가명 */
@@ -199,72 +200,6 @@ class WarningBottomSheetView(
             buildMapSection()
             buildDetectionTypeSection()
         }
-        val warningIcon = TextView(context).apply {
-            text = "⚠"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
-            setTextColor(Color.parseColor("#EF4444")) // red-500
-            gravity = Gravity.CENTER
-        }
-        iconCircle.addView(warningIcon, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-        val iconCircleSize = dpToPx(40)
-        iconWrapper.addView(iconCircle, LayoutParams(iconCircleSize, iconCircleSize).apply {
-            gravity = Gravity.CENTER
-        })
-
-        titleRow.addView(iconWrapper)
-
-        // 타이틀 텍스트
-        val titleTv = TextView(context).apply {
-            text = "AI 위조 감지"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
-            setTextColor(Color.parseColor("#111827")) // gray-900
-            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-        }
-        titleRow.addView(titleTv)
-
-        sheetContainer.addView(titleRow, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            bottomMargin = dpToPx(16)
-        })
-
-        // ── 서브타이틀 ──
-        subtitleContainer = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            alpha = 0f
-            translationY = dpToPx(16).toFloat()
-        }
-
-        subtitleContainer.addView(TextView(context).apply {
-            text = "딥페이크 의심 통화가 감지되었습니다."
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            setTextColor(Color.parseColor("#6B7280")) // gray-500
-            gravity = Gravity.CENTER
-        }, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = dpToPx(4) })
-
-        // "금융 거래에 주의하세요." (금융 거래 = red, 나머지 = gray)
-        val subtitleRow2 = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-        subtitleRow2.addView(TextView(context).apply {
-            text = "금융 거래"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            setTextColor(Color.parseColor("#EF4444")) // red-500
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-        })
-        subtitleRow2.addView(TextView(context).apply {
-            text = "에 주의하세요."
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            setTextColor(Color.parseColor("#6B7280")) // gray-500
-        })
-        subtitleContainer.addView(subtitleRow2)
 
         // GMS 분석 결과 추가
         if (!analysisResult.isNullOrBlank()) {
