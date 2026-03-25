@@ -219,6 +219,23 @@ data class CallResponse(
     val data: CallResponseData
 )
 
+// ── 범죄자 위치 요청/신고 ──────────────────────────────────────────────────────
+
+data class CriminalLocationRequestBody(
+    @SerializedName("opponent_kakao_id") val opponentKakaoId: Long,
+)
+
+data class CriminalLocationReportBody(
+    @SerializedName("requester_kakao_id") val requesterKakaoId: Long,
+    val lat: Double,
+    val lng: Double,
+)
+
+data class MessageResponse(
+    val success: Boolean,
+    val message: String,
+)
+
 // ── 인터페이스 ─────────────────────────────────────────────────────────────────
 
 interface ApiService {
@@ -266,4 +283,10 @@ interface ApiService {
 
     @POST("api/v1/calls/{channelName}/reject")
     suspend fun rejectCall(@Path("channelName") channelName: String): retrofit2.Response<Unit>
+
+    @POST("api/v1/location/criminal-request")
+    suspend fun requestCriminalLocation(@Body request: CriminalLocationRequestBody): MessageResponse
+
+    @POST("api/v1/location/criminal-report")
+    suspend fun reportCriminalLocation(@Body request: CriminalLocationReportBody): MessageResponse
 }

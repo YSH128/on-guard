@@ -21,7 +21,8 @@ public class CallSessionService {
     private final ObjectMapper objectMapper;
 
     private static final String REDIS_KEY_PREFIX = "call:";
-    private static final int CALL_RINGING_TTL_SECONDS = 30;
+    private static final String REDIS_LOCK_PREFIX = "call:lock:";
+    private static final int CALL_RINGING_TTL_SECONDS = 60;
 
     /**
      * 채널명으로 통화 세션을 생성하고 Redis에 30초 TTL로 기록.
@@ -70,5 +71,27 @@ public class CallSessionService {
         String key = REDIS_KEY_PREFIX + channelName;
         redisTemplate.delete(key);
         log.info("Deleted call session in Redis [Key: {}]", key);
+    }
+
+    /**
+     * 발신자가 이미 전화를 걸고 있는지 확인 후 락 생성
+     */
+    public void saveCallerLock(Long callerId, String channelName) {
+        String key = REDIS_LOCK_PREFIX + callerId;
+        Boolean isSet = redisTemplate.opsForValue().setIfAbsent(key, channelName, CALL_RINGING_TTL_SECONDS, TimeUnit.SECONDS);
+
+        if (Boolean.FALSE.equals(isSet)) {
+            log.warn("Concurrent call detected for callerId: {}", callerId);
+            throw new BusinessException(ErrorCode.CALL_ALREADY_IN_PROGRESS);
+        }
+    }
+
+    /**
+     * 발신자 락 해제 (수락, 거절 등)
+     */
+    public void deleteCallerLock(Long callerId) {
+        String key = REDIS_LOCK_PREFIX + callerId;
+        redisTemplate.delete(key);
+        log.info("Deleted caller lock in Redis [Key: {}]", key);
     }
 }

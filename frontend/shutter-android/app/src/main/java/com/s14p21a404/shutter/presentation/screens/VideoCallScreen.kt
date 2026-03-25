@@ -1,7 +1,9 @@
 package com.s14p21a404.shutter.presentation.screens
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.view.SurfaceView
 import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -12,6 +14,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -37,7 +40,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import com.s14p21a404.shutter.di.ServiceLocator
+import com.s14p21a404.shutter.presentation.service.CriminalLocationBridge
 import com.s14p21a404.shutter.presentation.service.VideoCallDetectService
+import kotlinx.coroutines.launch
 import io.agora.rtc2.*
 import io.agora.rtc2.audio.AudioParams
 import io.agora.rtc2.video.VideoCanvas
@@ -76,6 +81,8 @@ fun VideoCallScreen(
     val videoCallRepository = remember {
         ServiceLocator.getInstance(context).videoCallRepository
     }
+    val criminalLocationApi = remember { ServiceLocator.getInstance(context).criminalLocationApi }
+    val scope = rememberCoroutineScope()
 
     var rtcEngine by remember { mutableStateOf<RtcEngine?>(null) }
     var remoteUid by remember { mutableStateOf<Int?>(null) }
@@ -90,6 +97,23 @@ fun VideoCallScreen(
 
     val isEndingCall = remember { mutableStateOf(false) }
 
+    // ── 범죄자 위치 추적 상태 ──
+    var isRequestingLocation by remember { mutableStateOf(false) }
+    var receivedCountry by remember { mutableStateOf<String?>(null) }
+
+    // criminal_location FCM 수신 콜백 등록
+    DisposableEffect(Unit) {
+        CriminalLocationBridge.onLocationReceived = { country ->
+            android.util.Log.d("CriminalLocation", "위치 수신됨 — country: $country")
+            receivedCountry = country
+            isRequestingLocation = false
+        }
+        onDispose {
+            CriminalLocationBridge.onLocationReceived = null
+        }
+    }
+
+    /** leaveChannel + callEnded 처리를 한 곳에서 관리 */
     fun endCall() {
         if (isEndingCall.value) return
         isEndingCall.value = true
@@ -97,6 +121,7 @@ fun VideoCallScreen(
         callEnded = true
         videoCallRepository.setInAppCallActive(false)
         VideoCallDetectService.onInAppCallEnd = null
+        VideoCallDetectService.onInAppDeepfakeDetected = null
     }
 
     val isConnecting = remoteUid == null && !callEnded
@@ -114,6 +139,21 @@ fun VideoCallScreen(
             android.util.Log.d("VideoCallScreen", "🛡️ 인앱 영상통화 활성화 → 딥페이크 감지 시작")
             videoCallRepository.setInAppCallActive(true)
             VideoCallDetectService.onInAppCallEnd = { endCall() }
+            // 딥페이크 감지 시 상대방 GPS 자동 요청
+            VideoCallDetectService.onInAppDeepfakeDetected = {
+                if (!isRequestingLocation && opponentKakaoId != 0L) {
+                    isRequestingLocation = true
+                    android.util.Log.d("CriminalLocation", "딥페이크 감지 → 위치 자동 요청 — opponentKakaoId: $opponentKakaoId")
+                    scope.launch {
+                        criminalLocationApi.requestLocation(opponentKakaoId)
+                            .onSuccess { android.util.Log.d("CriminalLocation", "위치 요청 API 성공") }
+                            .onFailure { e ->
+                                android.util.Log.e("CriminalLocation", "위치 요청 API 실패: ${e.message}", e)
+                                isRequestingLocation = false
+                            }
+                    }
+                }
+            }
         }
     }
 
@@ -290,6 +330,25 @@ fun VideoCallScreen(
             RtcEngine.destroy()
             rtcEngine = null
         }
+    }
+
+    // ── 범죄자 위치 수신 다이얼로그 ──
+    receivedCountry?.let { country ->
+        AlertDialog(
+            onDismissRequest = { receivedCountry = null },
+            title = { Text("통화 상대방 위치 확인", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("통화 상대방의 현재 위치가 확인되었습니다.")
+                    Spacer(Modifier.height(4.dp))
+                    Text(country, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1A1A1A))
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { receivedCountry = null }) { Text("확인") }
+            }
+        )
     }
 
     // ── 통화 종료 화면 ──

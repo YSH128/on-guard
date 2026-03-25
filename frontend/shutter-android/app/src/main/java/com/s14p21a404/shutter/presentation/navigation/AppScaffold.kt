@@ -193,10 +193,15 @@ fun AppScaffold(
                 android.util.Log.d("NAV_DEBUG", "callerName=$callerName")
                 android.util.Log.d("NAV_DEBUG", "token=$agoraToken")
 
+                val callerName = backStackEntry.arguments?.getString("callerName")?.let {
+                    java.net.URLDecoder.decode(it, "UTF-8")
+                } ?: ""
+                val opponentKakaoId = backStackEntry.arguments?.getString("opponentKakaoId")?.toLongOrNull() ?: 0L
                 VideoCallScreen(
                     channelId = channelId,
                     agoraToken = agoraToken,
                     callerName = callerName,
+                    opponentKakaoId = opponentKakaoId,
                     onCallEnded = { navController.popBackStack() }
                 )
             }

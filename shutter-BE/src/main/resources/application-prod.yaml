@@ -23,14 +23,27 @@ spring:
     show-sql: false # 운영에서는 SQL 미출력
 
 # Actuator - 운영에서는 헬스체크만 (공통 설정 유지)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, metrics
+  endpoint:
+    health:
+      show-details: always
 
 # 운영 로그 설정
 logging:
   level:
     root: WARN
     com.shutter: INFO
+    com.shutter.api.gps: DEBUG
   file:
     name: /var/log/shutter/app.log
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 7
 
 # Swagger UI (운영에서 비활성화)
 springdoc:

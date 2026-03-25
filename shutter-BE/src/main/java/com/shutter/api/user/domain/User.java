@@ -41,11 +41,14 @@ public class User {
     @Column(name = "gps_sharing", nullable = false)
     private Boolean gpsSharing = false;
 
+    @Column(name = "profile_image_url", length = 512)
+    private String profileImageUrl;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
     @Builder
-    public User(Long kakaoId, String name, String deviceUuid, String fcmToken, Boolean gpsSharing) {
+    public User(Long kakaoId, String name, String deviceUuid, String fcmToken, Boolean gpsSharing, String profileImageUrl) {
         this.kakaoId = kakaoId;
         this.name = name;
         this.deviceUuid = deviceUuid;
@@ -53,6 +56,7 @@ public class User {
         if (gpsSharing != null) {
             this.gpsSharing = gpsSharing;
         }
+        this.profileImageUrl = profileImageUrl;
         this.role = null;
         this.createdAt = LocalDateTime.now();
     }
@@ -67,5 +71,9 @@ public class User {
 
     public void updateGpsSharing(Boolean gpsSharing) {
         this.gpsSharing = gpsSharing;
+    }
+
+    public void updateProfileImageUrl(String profileImageUrl) {
+        this.profileImageUrl = profileImageUrl;
     }
 }

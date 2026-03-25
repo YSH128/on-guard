@@ -38,9 +38,14 @@ public enum ErrorCode {
     NO_GUARDIANS_REGISTERED(HttpStatus.NOT_FOUND, "NO_GUARDIANS_REGISTERED", "알림을 보낼 보호자가 등록되어 있지 않습니다."),
     KAKAO_PUSH_CONFIG_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "KAKAO_PUSH_CONFIG_ERROR", "카카오 푸시 설정이 올바르지 않습니다."),
 
+    // 범죄자 위치 추적 관련
+    OPPONENT_NOT_FOUND(HttpStatus.NOT_FOUND, "OPPONENT_NOT_FOUND", "상대방 정보를 찾을 수 없습니다."),
+
     // 통화 관련
     CALL_NOT_FOUND(HttpStatus.NOT_FOUND, "CALL_NOT_FOUND", "통화 세션이 만료되었거나 존재하지 않습니다."),
+    CALL_ALREADY_IN_PROGRESS(HttpStatus.CONFLICT, "CALL_ALREADY_IN_PROGRESS", "이미 발신 중인 통화가 존재합니다. 잠시 후 다시 시도해주세요."),
     SELF_CALL_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "SELF_CALL_NOT_ALLOWED", "본인에게 통화를 요청할 수 없습니다."),
+    CALLEE_NOT_FOUND(HttpStatus.NOT_FOUND, "CALLEE_NOT_FOUND", "수신자가 앱에 가입되어 있지 않습니다."),
 
     // 서버 관련
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "서버 오류가 발생했습니다.");
