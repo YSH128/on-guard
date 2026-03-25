@@ -66,7 +66,7 @@ class NativeDeepfakeBridge(private val context: Context) {
                 ortEnv = OrtEnvironment.getEnvironment()
                 val options = OrtSession.SessionOptions()
                 options.addNnapi() // Android NNAPI 가속 활성화
-                val modelPath = getAssetFilePath(context, "ds_model_quantized.onnx")
+                val modelPath = getAssetFilePath(context, "face_deepfake_v3.onnx")
                 ortSession = ortEnv?.createSession(modelPath, options)
                 
                 // Warmup Inference (VRAM 사전 적재 및 셰이더 컴파일 강제실행)
