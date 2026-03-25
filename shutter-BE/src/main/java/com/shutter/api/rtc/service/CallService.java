@@ -32,15 +32,17 @@ public class CallService {
      * 통화 요청(Request) 기능 처리
      */
     public CallResponse requestCall(Long callerId, CallRequest request) {
-        Long calleeId = request.getCalleeId();
+        Long calleeKakaoId = request.getCalleeKakaoId();
 
-        // 1. 발신자 조회 -> kakaoId 혹은 name 획득
+        // 1. 발신자 조회
         User caller = userRepository.findById(callerId)
                 .orElseThrow(() -> new CallException(ErrorCode.USER_NOT_FOUND));
 
-        // 2. 수신자 조회 (없으면 USER_NOT_FOUND)
-        User callee = userRepository.findById(calleeId)
+        // 2. 수신자 조회 (카카오 ID로 매핑)
+        User callee = userRepository.findByKakaoId(calleeKakaoId)
                 .orElseThrow(() -> new CallException(ErrorCode.USER_NOT_FOUND));
+
+        Long calleeId = callee.getId();
 
         // 3. 본인에게 통화 요청 방지
         if (callerId.equals(calleeId)) {

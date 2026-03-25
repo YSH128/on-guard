@@ -47,6 +47,7 @@ dependencies {
 
 	// Agora RTC Token Builder
 	implementation 'io.agora:authentication:2.0.0'
+	implementation 'commons-codec:commons-codec:1.16.1'
 
 	// JWT (자체 Access/Refresh Token 발급 및 검증)
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'

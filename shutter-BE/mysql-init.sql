@@ -7,6 +7,7 @@ CREATE TABLE users (
                        kakao_id BIGINT NOT NULL UNIQUE,       -- 카카오 회원번호 (숫자형)
                        name VARCHAR(50) NOT NULL,             -- 지도에서 표시될 이름
                        role VARCHAR(10),             -- 'guardian' or 'ward'
+                       profile_image_url VARCHAR(512),        -- 카카오 프로필 이미지 URL
                        device_uuid VARCHAR(36) NOT NULL,    -- 기기 고유 ID
                        fcm_token VARCHAR(255),
                        gps_sharing BOOLEAN DEFAULT FALSE NOT NULL,
