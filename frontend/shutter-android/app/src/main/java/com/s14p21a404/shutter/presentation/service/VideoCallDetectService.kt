@@ -228,11 +228,12 @@ class VideoCallDetectService : Service() {
             }
         }
 
-        // 프레임별 실시간 결과 관찰 → 딥페이크 확정 후 RoI 실시간 갱신
+        // 프레임별 실시간 결과 관찰 → ROI + fakeProb 매 프레임 갱신
         serviceScope.launch {
             detectUseCase.observeFrameResults().collect { frameResult ->
+                // ROI 박스 위치 및 fakeProb — 박스가 존재할 때만 내부에서 동작하므로 항상 호출 가능
+                warningOverlayManager.updateRoiRealtime(frameResult)
                 if (isDeepfakeDetected) {
-                    warningOverlayManager.updateRoiRealtime(frameResult)
                     warningOverlayManager.onDetectionResult(frameResult)
                 }
             }

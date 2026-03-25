@@ -54,6 +54,9 @@ class VideoCallRepositoryImpl(
     @Volatile
     private var videoCallPackage: String? = null
 
+    @Volatile
+    private var inAppCallActive: Boolean = false
+
     // ── 통화 상태 콜백 (IDLE 감지 → 래치 리셋 전용) ──
     private val callStateCallback = object : TelephonyCallback(),
         TelephonyCallback.CallStateListener {
@@ -115,6 +118,13 @@ class VideoCallRepositoryImpl(
             isFinancial
         }
     }
+
+    override fun setInAppCallActive(active: Boolean) {
+        inAppCallActive = active
+        Log.d(TAG, "인앱 영상통화 상태: $active")
+    }
+
+    override fun isInAppCallActive(): Boolean = inAppCallActive
 
     override fun setVideoCallPackage(packageName: String?) {
         videoCallPackage = packageName

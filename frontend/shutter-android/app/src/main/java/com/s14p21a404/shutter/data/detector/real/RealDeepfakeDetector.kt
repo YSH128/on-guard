@@ -134,7 +134,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
     private fun averageResults(results: List<DeepfakeDetectionResult>): DeepfakeDetectionResult {
         // detected: 과반수(5개 이상)가 true면 true
         val avgFakeProb = results.map { it.fakeProb }.average().toFloat()
-        val detected = avgFakeProb > 0.1f
+        val detected = avgFakeProb > 0.1f // 원래 0.5f
 
         // roi: null 아닌 것들의 평균
         val roiList = results.mapNotNull { it.roi }
@@ -197,7 +197,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
     companion object {
         private const val TAG = "RealDeepfakeDetector"
-        private const val BUFFER_SIZE = 10
+        private const val BUFFER_SIZE = 5 // 원래 10
     }
 }
 

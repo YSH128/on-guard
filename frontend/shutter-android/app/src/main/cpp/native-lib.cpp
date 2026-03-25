@@ -20,8 +20,7 @@
 // ─── Model Parameters ─────────────────────────────────────
 static const int   INPUT_H       = 256;
 static const int   INPUT_W       = 256;
-// 💡 ROI 임계값을 0.7로 높여 노이즈(세로 길쭉이)를 1차 차단합니다.
-static const float ROI_THRESHOLD = 0.7f;
+static const float ROI_THRESHOLD = 0.6f;
 // ──────────────────────────────────────────────────────────
 
 float get_ms(std::chrono::high_resolution_clock::time_point start) {
@@ -108,8 +107,12 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
 
     if (cam_h > 0 && cam_w > 0) {
         cv::Mat cam_mat(cam_h, cam_w, CV_32F, camOut.data());
+
+        // sigmoid 출력이지만 절대값이 작아 직접 threshold 불가.
+        // min-max 정규화로 상대적 활성화 패턴 기반 ROI 추출 (ONNX path와 동일).
         double minVal, maxVal;
         cv::minMaxLoc(cam_mat, &minVal, &maxVal);
+        LOGD("[CAM] min=%.4f max=%.4f range=%.4f", (float)minVal, (float)maxVal, (float)(maxVal - minVal));
 
         if (maxVal - minVal > 1e-6) {
             cv::Mat cam_norm = (cam_mat - minVal) / (maxVal - minVal);
@@ -122,6 +125,7 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
 
             cv::Mat labels, stats, centroids;
             int num_labels = cv::connectedComponentsWithStats(binary, labels, stats, centroids);
+            LOGD("[CAM] components=%d", num_labels - 1);
 
             float norm = 1.0f / (float)INPUT_W;
             float best_score = -1.f;
@@ -132,11 +136,6 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
                 int w      = stats.at<int>(i, cv::CC_STAT_WIDTH);
                 int h      = stats.at<int>(i, cv::CC_STAT_HEIGHT);
                 int area   = stats.at<int>(i, cv::CC_STAT_AREA);
-
-                // 💡 노이즈 필터: 가로세로 비율이 너무 안 맞거나 너무 작으면 스킵
-                float aspect_ratio = (float)h / (float)w;
-                if (aspect_ratio > 3.0f || aspect_ratio < 0.3f) continue;
-                if (area < 500) continue;
 
                 float score_sum = 0.f;
                 for (int r = top; r < top + h; r++)
@@ -154,6 +153,8 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
                     results[8] = mean_score;
                 }
             }
+            LOGD("[CAM] ROI=[%.3f,%.3f,%.3f,%.3f] score=%.4f",
+                 results[4], results[5], results[6], results[7], best_score);
         }
     }
 
@@ -232,48 +233,35 @@ static bool ort_init_session(const char* model_path) {
     OrtSessionOptions* opts = nullptr;
     ORT_CHECK(g_ort->CreateSessionOptions(&opts));
 
-    // 💡 [핵심] GPU(NNAPI) 가속 활성화!
-    uint32_t nnapi_flags = 0;
-    // Android 기기의 NPU/GPU를 사용하도록 설정합니다.
-    OrtStatus* nnapi_status = OrtSessionOptionsAppendExecutionProvider_Nnapi(opts, nnapi_flags);
-    if (nnapi_status) {
-        LOGW("NNAPI not available, falling back to CPU. Error: %s", g_ort->GetErrorMessage(nnapi_status));
-        g_ort->ReleaseStatus(nnapi_status);
-    } else {
-        LOGD("NNAPI GPU/NPU acceleration enabled!");
-    }
+    // TODO: NNAPI GPU/NPU 가속 — 영상통화 중 GPU 자원 충돌로 프로세스 kill 발생
+    //  영상통화 앱이 GPU 점유 중일 때 NNAPI가 GPU를 추가 요청하면 드라이버 fault → 프로세스 kill
+    //  QNN HTP 재컴파일 완료 후 아래 주석 해제 + CPU 코드 제거
+    //  (QNN HTP는 카메라/GPU와 독립적인 DSP 자원 사용으로 충돌 없음)
+    // uint32_t nnapi_flags = 0;
+    // OrtStatus* nnapi_status = OrtSessionOptionsAppendExecutionProvider_Nnapi(opts, nnapi_flags);
+    // if (nnapi_status) {
+    //     LOGW("NNAPI not available, falling back to CPU. Error: %s", g_ort->GetErrorMessage(nnapi_status));
+    //     g_ort->ReleaseStatus(nnapi_status);
+    // } else {
+    //     LOGD("NNAPI GPU/NPU acceleration enabled!");
+    // }
 
-    g_ort->SetIntraOpNumThreads(opts, 4);
+    // [임시] CPU 전용 추론 — NNAPI GPU 충돌 방지용 (QNN 재컴파일 전까지 사용)
+    LOGD("ONNX CPU 전용 추론 모드 (임시 — NNAPI 비활성화)");
+
+    g_ort->SetIntraOpNumThreads(opts, 2);
     ORT_CHECK(g_ort->CreateSession(g_ort_env, model_path, opts, &g_ort_session));
     g_ort->ReleaseSessionOptions(opts);
 
-    OrtMemoryInfo* mem_info = nullptr;
-    ORT_CHECK(g_ort->CreateCpuMemoryInfo(OrtArenaAllocator, OrtMemTypeDefault, &mem_info));
-    std::vector<float> dummy(1 * 3 * INPUT_H * INPUT_W, 0.f);
-    int64_t in_shape[] = {1, 3, INPUT_H, INPUT_W};
-    OrtValue* in_tensor = nullptr;
-    ORT_CHECK(g_ort->CreateTensorWithDataAsOrtValue(mem_info, dummy.data(), dummy.size() * sizeof(float), in_shape, 4, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, &in_tensor));
-    g_ort->ReleaseMemoryInfo(mem_info);
-
-    const char* in_names[]  = {"input"};
-    const char* out_names[] = {"logits", "cam"};
-    OrtValue* out_vals[2] = {nullptr, nullptr};
-    ORT_CHECK(g_ort->Run(g_ort_session, nullptr, in_names,  (const OrtValue* const*)&in_tensor, 1, out_names, 2, out_vals));
-    g_ort->ReleaseValue(in_tensor);
-    g_ort->ReleaseValue(out_vals[0]);
-
-    OrtTensorTypeAndShapeInfo* shape_info = nullptr;
-    g_ort->GetTensorTypeAndShape(out_vals[1], &shape_info);
-    int64_t dims[4] = {0};
-    size_t  ndim    = 0;
-    g_ort->GetDimensionsCount(shape_info, &ndim);
-    g_ort->GetDimensions(shape_info, dims, ndim);
-    g_ort->ReleaseTensorTypeAndShapeInfo(shape_info);
-    g_ort->ReleaseValue(out_vals[1]);
-
-    if (ndim == 2) { g_ort_cam_h = (int)dims[0]; g_ort_cam_w = (int)dims[1]; }
-    else if (ndim >= 3) { g_ort_cam_h = (int)dims[ndim-2]; g_ort_cam_w = (int)dims[ndim-1]; }
-    LOGD("ONNX session init OK. cam: %d x %d", g_ort_cam_h, g_ort_cam_w);
+    // [수정] CAM 출력 크기 하드코딩 (ForensicsAdapter: cam [7,7]) — warmup 추론 제거로 init 속도 개선.
+    // 앱 설치 후 첫 통화 전 모델 적재 완료를 위해 init 시간을 단축.
+    // 기존 warmup 추론으로 동적 검출하던 방식은 init에 추론 1회 비용이 추가되어 적재 지연 야기.
+    // // TODO: 모델 CAM 출력 크기가 변경될 경우 아래 값 수정 (현재 ForensicsAdapter: 7x7)
+    // // 원래 warmup 코드 참고:
+    // // OrtValue* out_vals[2]; g_ort->Run(...); → dims → g_ort_cam_h/w
+    g_ort_cam_h = 7;
+    g_ort_cam_w = 7;
+    LOGD("ONNX session init OK. cam: %d x %d (hardcoded)", g_ort_cam_h, g_ort_cam_w);
     return true;
 }
 
@@ -378,8 +366,13 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
     int cam_h = g_ort_cam_h, cam_w = g_ort_cam_w;
     if (cam_h > 0 && cam_w > 0) {
         cv::Mat cam_mat(cam_h, cam_w, CV_32F, cam_ptr);
+
+        // sigmoid 출력이지만 절대값이 0.02~0.03 수준으로 작아 직접 threshold 불가.
+        // min-max 정규화로 상대적 활성화 패턴 기반 ROI 추출.
         double minVal, maxVal;
         cv::minMaxLoc(cam_mat, &minVal, &maxVal);
+
+        LOGD("[CAM] min=%.4f max=%.4f range=%.4f", (float)minVal, (float)maxVal, (float)(maxVal - minVal));
 
         if (maxVal - minVal > 1e-6) {
             cv::Mat cam_norm = (cam_mat - minVal) / (maxVal - minVal);
@@ -392,6 +385,7 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
 
             cv::Mat labels, stats, centroids;
             int num_labels = cv::connectedComponentsWithStats(binary, labels, stats, centroids);
+            LOGD("[CAM] threshold=%.1f components=%d", ROI_THRESHOLD, num_labels - 1);
 
             float norm  = 1.0f / (float)INPUT_W;
             float best_score = -1.f;
@@ -402,11 +396,6 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
                 int w    = stats.at<int>(i, cv::CC_STAT_WIDTH);
                 int h    = stats.at<int>(i, cv::CC_STAT_HEIGHT);
                 int area = stats.at<int>(i, cv::CC_STAT_AREA);
-
-                // 💡 노이즈 필터: 가로세로 비율이 너무 안 맞거나 너무 작으면 스킵
-                float aspect_ratio = (float)h / (float)w;
-                if (aspect_ratio > 3.0f || aspect_ratio < 0.3f) continue;
-                if (area < 500) continue;
 
                 float score_sum = 0.f;
                 for (int r = top; r < top + h; r++)
@@ -424,6 +413,8 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
                     results[8]    = mean_score;
                 }
             }
+            LOGD("[CAM] ROI=[%.3f,%.3f,%.3f,%.3f] score=%.4f",
+                 results[4], results[5], results[6], results[7], best_score);
         }
     }
     g_ort->ReleaseValue(out_vals[1]);

@@ -18,7 +18,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
-data class KakaoFriendItem(val id: Long, val uuid: String, val name: String)
+data class KakaoFriendItem(val id: Long, val uuid: String, val name: String, val profileImageUrl: String? = null)
 
 sealed class RegistrationUiState {
     object Idle : RegistrationUiState()
