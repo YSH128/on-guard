@@ -23,3 +23,4 @@ pip install torchtoolbox==0.1.8.2
 pip install tensorboard==2.10.1
 pip install "numpy<2.0.0"
 pip install ftfy
+pip install onnx onnxruntime
