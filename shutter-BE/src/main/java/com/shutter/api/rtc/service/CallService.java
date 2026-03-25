@@ -53,7 +53,7 @@ public class CallService {
         String channelName = agoraTokenService.generateChannelName(callerId, calleeId);
         
         // 5. 토큰 발급 (uid는 callerId)
-        int uid = callerId.intValue();
+        int uid = Math.toIntExact(callerId);
         String token = agoraTokenService.createToken(channelName, uid);
         
         // 6. Redis 콜 세션 저장 (TTL 30초)
@@ -98,13 +98,10 @@ public class CallService {
         }
 
         // 3. 토큰 발급 (수신자용)
-        int uid = userId.intValue();
+        int uid = Math.toIntExact(userId);
         String token = agoraTokenService.createToken(channelName, uid);
 
-        // 4. Redis 세션 삭제 (수락되었으므로 링잉(대기) 상태 해제)
-        callSessionService.deleteSession(channelName);
-
-        // 5. 발신자 조회 -> kakaoId 획득
+        // 4. 발신자 조회 -> kakaoId 획득
         User caller = userRepository.findById(session.getCallerId())
                 .orElseThrow(() -> new CallException(ErrorCode.USER_NOT_FOUND));
 
@@ -122,7 +119,10 @@ public class CallService {
             throw new CallException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
 
-        // 7. 결과 반환
+        // 7. Redis 세션 삭제 (푸시 성공 후 삭제)
+        callSessionService.deleteSession(channelName);
+
+        // 8. 결과 반환
         return CallResponse.builder()
                 .channelName(channelName)
                 .token(token)
