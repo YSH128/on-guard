@@ -52,9 +52,8 @@ public class CallService {
         // 5. 중복 호출 방지를 위한 발신자 락 저장 (따닥 방지)
         callSessionService.saveCallerLock(callerId, channelName);
         
-        // 6. 토큰 발급 (uid는 callerId)
-        int uid = Math.toIntExact(callerId);
-        String token = agoraTokenService.createToken(channelName, uid);
+        // 6. 토큰 발급 (uid=0: 어떤 uid로도 join 가능한 범용 토큰)
+        String token = agoraTokenService.createToken(channelName, 0);
         
         // 7. Redis 콜 세션 저장 (TTL 60초)
         callSessionService.saveSession(channelName, callerId, calleeId);
@@ -91,9 +90,8 @@ public class CallService {
             throw new CallException(ErrorCode.UNAUTHORIZED_ACCESS);
         }
 
-        // 3. 토큰 발급 (수신자용)
-        int uid = Math.toIntExact(userId);
-        String token = agoraTokenService.createToken(channelName, uid);
+        // 3. 토큰 발급 (uid=0: 어떤 uid로도 join 가능한 범용 토큰)
+        String token = agoraTokenService.createToken(channelName, 0);
 
         // 4. 발신자 조회 -> kakaoId 획득
         User caller = userRepository.findById(session.getCallerId())
