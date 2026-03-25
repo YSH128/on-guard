@@ -63,7 +63,7 @@ val bottomNavItems = listOf(
 )
 
 // ── 색상 상수 ──
-private val NavBgColor = Color(0xCCFFFFFF)
+private val NavBgColor = Color(0xFFFFFFFF)
 private val NavActiveColor = Color(0xFF1A1A1A)
 private val NavInactiveColor = Color(0xFF64666E)
 
@@ -100,25 +100,12 @@ fun AppScaffold(
             }
 
             pendingDeepLinkScreen?.startsWith("video_call:") == true -> {
-
-                // limit=5: video_call:channelName:callerName:opponentKakaoId:token
-                // token이 ":" 포함할 수 있으므로 마지막 위치
-                val parts = pendingDeepLinkScreen.split(":", limit = 5)
-
+                // format: video_call:channelName:callerName:opponentKakaoId
+                val parts = pendingDeepLinkScreen.split(":", limit = 4)
                 val channelName = parts.getOrElse(1) { "" }
                 val callerName = parts.getOrElse(2) { "" }
                 val opponentKakaoId = parts.getOrElse(3) { "0" }.toLongOrNull() ?: 0L
-                val agoraToken = parts.getOrElse(4) { "" }
-
-                navController.navigate(
-                    Screen.VideoCall.createRoute(
-                        channelName,
-                        callerName,
-                        opponentKakaoId,
-                        agoraToken
-                    )
-                )
-
+                navController.navigate(Screen.VideoCall.createRoute(channelName, callerName, opponentKakaoId))
                 onDeepLinkHandled()
             }
         }
@@ -131,14 +118,12 @@ fun AppScaffold(
     // 보호자 등록 성공 시 SettingsScreen 목록을 갱신하기 위한 키
     var settingsRefreshKey by rememberSaveable { mutableIntStateOf(0) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        // 콘텐츠 영역
+    Column(modifier = Modifier.fillMaxSize()) {
+        // 콘텐츠 영역 — 네비게이션 바 위 공간만 차지
         NavHost(
             navController = navController,
             startDestination = Screen.Home.route,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = if (showBottomBar) 72.dp else 0.dp)
+            modifier = Modifier.weight(1f)
         ) {
             composable(Screen.Home.route) {
                 HomeScreen(
@@ -150,8 +135,8 @@ fun AppScaffold(
                     onRequestPermissions = onRequestPermissions,
                     onRequestOverlayPermission = onRequestOverlayPermission,
                     onRequestAccessibilityPermission = onRequestAccessibilityPermission,
-                    onNavigateToVideoCall = { channelId, callerName, opponentKakaoId, agoraToken ->
-                        navController.navigate(Screen.VideoCall.createRoute(channelId, callerName, opponentKakaoId, agoraToken))
+                    onNavigateToVideoCall = { channelId, callerName, opponentKakaoId ->
+                        navController.navigate(Screen.VideoCall.createRoute(channelId, callerName, opponentKakaoId))
                     },
                 )
             }
@@ -180,18 +165,13 @@ fun AppScaffold(
                 )
             }
             composable(Screen.VideoCall.route) { backStackEntry ->
-
                 val channelId = backStackEntry.arguments?.getString("channelId") ?: ""
                 val callerName = backStackEntry.arguments?.getString("callerName")?.let {
                     java.net.URLDecoder.decode(it, "UTF-8")
                 } ?: ""
                 val opponentKakaoId = backStackEntry.arguments?.getString("opponentKakaoId")?.toLongOrNull() ?: 0L
-                // token은 NavController가 이미 디코딩하므로 추가 디코딩 금지 (+가 공백으로 변환됨)
-                val agoraToken = backStackEntry.arguments?.getString("token") ?: ""
-
                 VideoCallScreen(
                     channelId = channelId,
-                    agoraToken = agoraToken,
                     callerName = callerName,
                     opponentKakaoId = opponentKakaoId,
                     onCallEnded = { navController.popBackStack() }
@@ -201,22 +181,26 @@ fun AppScaffold(
 
         // 하단 Pill 네비게이션
         if (showBottomBar) {
-            PillBottomNavigation(
-                currentDestination = currentDestination,
-                onNavigate = { route ->
-                    navController.navigate(route) {
-                        popUpTo(navController.graph.findStartDestination().id) {
-                            saveState = true
-                        }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                },
+            Box(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
                     .navigationBarsPadding()
-                    .padding(bottom = 12.dp)
-            )
+                    .padding(bottom = 12.dp, top = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                PillBottomNavigation(
+                    currentDestination = currentDestination,
+                    onNavigate = { route ->
+                        navController.navigate(route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                )
+            }
         }
     }
 }
@@ -225,8 +209,8 @@ fun AppScaffold(
 private fun PillBottomNavigation(
     currentDestination: androidx.navigation.NavDestination?,
     onNavigate: (String) -> Unit,
-    modifier: Modifier = Modifier,
 ) {
+    val modifier = Modifier
     Row(
         modifier = modifier
             .fillMaxWidth(0.85f)

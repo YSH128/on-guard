@@ -1,5 +1,6 @@
 *.png
 *.iml
+*.svg
 .gradle
 gradle/caches
 gradle/daemon

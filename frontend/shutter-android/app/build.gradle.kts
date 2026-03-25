@@ -149,7 +149,7 @@ dependencies {
     // ONNX Runtime for non-Qualcomm fallback
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.16.1")
 
-    // 이미지 로딩 (카카오 프로필 사진)
+    // 이미지 로딩 (카카오 프로필 사진, GIF)
     implementation("io.coil-kt:coil-compose:2.6.0")
     
     // WhisperKit SDK
@@ -158,6 +158,7 @@ dependencies {
     // QNN dependencies for hardware acceleration
     implementation("com.qualcomm.qti:qnn-runtime:2.34.0")
     implementation("com.qualcomm.qti:qnn-litert-delegate:2.34.0")
+    implementation("io.coil-kt:coil-gif:2.6.0")
 }
 
 

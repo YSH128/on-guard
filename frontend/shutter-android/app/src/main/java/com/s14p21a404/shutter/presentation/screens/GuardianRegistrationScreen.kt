@@ -108,6 +108,48 @@ fun GuardianRegistrationScreen(
                 )
             }
 
+            // ── 검색창 ──
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 8.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = CardBg,
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Search,
+                        contentDescription = "검색",
+                        modifier = Modifier.size(18.dp),
+                        tint = TextSecondary
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    TextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = {
+                            Text(text = "검색", fontSize = 14.sp, color = TextSecondary)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                        ),
+                        singleLine = true,
+                        textStyle = LocalTextStyle.current.copy(
+                            fontSize = 14.sp,
+                            color = TextPrimary
+                        ),
+                    )
+                }
+            }
+
             LazyColumn(
                 modifier = Modifier
                     .weight(1f)
@@ -115,63 +157,6 @@ fun GuardianRegistrationScreen(
                 verticalArrangement = Arrangement.spacedBy(0.dp),
                 contentPadding = PaddingValues(bottom = 120.dp)
             ) {
-                // ── 친구 목록 섹션 타이틀 ──
-                item {
-                    Text(
-                        text = "친구 목록에서 선택",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-
-                // ── 검색창 ──
-                item {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 12.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        color = CardBg,
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Search,
-                                contentDescription = "검색",
-                                modifier = Modifier.size(20.dp),
-                                tint = TextSecondary
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            TextField(
-                                value = searchQuery,
-                                onValueChange = { searchQuery = it },
-                                placeholder = {
-                                    Text(
-                                        text = "보호자명을 검색해보세요..",
-                                        fontSize = 14.sp,
-                                        color = TextSecondary
-                                    )
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = TextFieldDefaults.colors(
-                                    focusedContainerColor = Color.Transparent,
-                                    unfocusedContainerColor = Color.Transparent,
-                                    focusedIndicatorColor = Color.Transparent,
-                                    unfocusedIndicatorColor = Color.Transparent,
-                                ),
-                                singleLine = true,
-                                textStyle = LocalTextStyle.current.copy(
-                                    fontSize = 14.sp,
-                                    color = TextPrimary
-                                ),
-                            )
-                        }
-                    }
-                }
 
                 // ── 로딩 ──
                 if (uiState.friendsLoading) {
@@ -279,9 +264,8 @@ fun GuardianRegistrationScreen(
                         strokeWidth = 2.dp
                     )
                 } else {
-                    val count = uiState.selectedIds.size
                     Text(
-                        text = if (count > 0) "보호자 등록 (${count}명)" else "보호자 등록",
+                        text = "등록 완료",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold
                     )

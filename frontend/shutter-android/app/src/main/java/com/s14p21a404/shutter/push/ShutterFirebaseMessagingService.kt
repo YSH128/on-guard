@@ -71,6 +71,12 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
                 // 수신자가 join하면 Agora onUserJoined 이벤트로 자동 연결됨
             }
 
+            "CALL_REJECTED" -> {
+                val channelName = data["channel_name"] ?: return
+                Log.d(FCM_TAG, "CALL_REJECTED 수신 — channel: $channelName")
+                IncomingCallEventBus.notifyCallRejected()
+            }
+
             "location_request" -> {
                 Log.d(FCM_TAG, "location_request 수신 — requesterKakaoId: ${data["requesterKakaoId"]}")
                 handleLocationRequest(data)

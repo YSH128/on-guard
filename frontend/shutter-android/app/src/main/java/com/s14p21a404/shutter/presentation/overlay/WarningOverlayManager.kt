@@ -2,7 +2,6 @@ package com.s14p21a404.shutter.presentation.overlay
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
@@ -13,16 +12,22 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import com.s14p21a404.shutter.domain.model.DeepfakeDetectionResult
+import com.s14p21a404.shutter.domain.repository.VideoCallRepository
 
 /**
  * 딥페이크 감지 경고 오버레이 매니저.
  *
  * 3가지 독립 오버레이를 관리한다:
  * 1) **Scanning Pill** — "Shutter 감지 중•••" 스캐닝 상태 pill 배지 (터치 통과)
- * 2) **ROI Bounding Box** — 감지된 얼굴 ROI에 노란 border + 스캔 라인 + confidence 배지 (터치 통과)
- * 3) **Warning Bottom Sheet** — 흰색 바텀시트 모달 (전화 종료 / 재탐지 버튼, 터치 가능)
+ * 2) **ROI Bounding Box** — 감지된 얼굴 ROI에 빨간 border + 스캔 라인 + confidence 배지 (터치 통과)
+ * 3) **Warning Bottom Sheet** — 흰색 바텀시트 모달 (터치 가능)
+ *    - 인앱: 지도 + 국기 + 감지유형 + 전화종료 버튼
+ *    - 외부앱: AI 위조 감지 타이틀 + 전화종료 버튼만
  */
-class WarningOverlayManager(private val context: Context) {
+class WarningOverlayManager(
+    private val context: Context,
+    private val videoCallRepository: VideoCallRepository? = null
+) {
 
     private val windowManager =
         context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -33,8 +38,9 @@ class WarningOverlayManager(private val context: Context) {
     private var roiBoundingBoxView: RoiBoundingBoxView? = null
     private var bottomSheetView: WarningBottomSheetView? = null
 
-    // 바텀시트 뒤 반투명 dim
-    private var dimBackgroundView: View? = null
+
+    // 푸쉬 알림 pill 뷰 참조
+    private val notificationPillViews = mutableListOf<NotificationPillView>()
 
     /** 오버레이 활성화 여부 — false이면 show 호출을 무시한다. */
     @Volatile
@@ -49,6 +55,10 @@ class WarningOverlayManager(private val context: Context) {
      */
     @Volatile
     private var bottomSheetShownForSession = false
+
+    /** 수신된 상대방 국가명 (바텀시트에 표시) */
+    @Volatile
+    private var receivedCountryName: String? = null
 
     /** 콜백: 전화 종료 */
     var onEndCall: (() -> Unit)? = null
@@ -125,7 +135,7 @@ class WarningOverlayManager(private val context: Context) {
     }
 
     fun isShowing(): Boolean =
-        scanningPillView != null || roiBoundingBoxView != null || bottomSheetView != null
+        scanningPillView != null || roiBoundingBoxView != null || bottomSheetView != null || notificationPillViews.isNotEmpty()
 
     /** 기존 API 호환용. 새 UI에서는 face preview를 바텀시트 내에 포함하지 않으므로 no-op. */
     fun updateFacePreview(bitmap: Bitmap?) {
@@ -149,10 +159,10 @@ class WarningOverlayManager(private val context: Context) {
             view = pill,
             width = WindowManager.LayoutParams.WRAP_CONTENT,
             height = WindowManager.LayoutParams.WRAP_CONTENT,
-            gravity = Gravity.TOP or Gravity.START,
+            gravity = Gravity.TOP or Gravity.END,
             touchable = false, // 터치 통과
-            xOffset = dpToPx(16),
-            yOffset = dpToPx(64) // 상태바 아래
+            xOffset = dpToPx(12),
+            yOffset = dpToPx(80) // 상태바 + 통화 헤더 아래
         )
         pill.startAnimation()
         scanningPillView = pill
@@ -207,25 +217,14 @@ class WarningOverlayManager(private val context: Context) {
             Log.d(TAG, "ROI 바운딩 박스 표시: roi=${result.roi?.contentToString()}")
         }
 
-        // ── dim 배경 (바텀시트 뒤) ──
-        val dimView = View(context).apply {
-            setBackgroundColor(Color.parseColor("#66000000")) // 40% black
-            setOnTouchListener { _, _ -> true } // 터치 차단
-        }
-        addOverlayView(
-            view = dimView,
-            width = WindowManager.LayoutParams.MATCH_PARENT,
-            height = WindowManager.LayoutParams.MATCH_PARENT,
-            gravity = Gravity.TOP or Gravity.START,
-            touchable = true
-        )
-        dimBackgroundView = dimView
 
         // ── Warning Bottom Sheet (500ms 지연 후 표시) ──
         handler.postDelayed({
             if (!enabled) return@postDelayed
+            val isInApp = videoCallRepository?.isInAppCallActive() ?: false
             val sheet = WarningBottomSheetView(
                 context = context,
+                isInApp = isInApp,
                 onEndCall = {
                     Log.d(TAG, "전화 종료 버튼 클릭")
                     onEndCall?.invoke()
@@ -247,9 +246,68 @@ class WarningOverlayManager(private val context: Context) {
                 touchable = true
             )
             sheet.startEntranceAnimation()
+            // 이미 수신된 국가명이 있으면 바텀시트에 반영
+            receivedCountryName?.let { country -> sheet.updateCountry(country) }
             bottomSheetView = sheet
             Log.d(TAG, "바텀시트 표시")
+
+            // ── 푸쉬 알림 pills (바텀시트 등장 후 표시) ──
+            showNotificationPills()
         }, 500)
+    }
+
+    // ─────────────────────────────────────────────
+    // 4) Push Notification Pills
+    // ─────────────────────────────────────────────
+
+    /**
+     * 레퍼런스 기반 푸쉬 알림 pill 순차 표시:
+     * 1) "보호자 카톡 알림 완료" (0ms 딜레이)
+     * 2) "GPS 위치 공유 완료" (500ms 딜레이)
+     * 3) "금융앱 접근 차단 활성화" (1000ms 딜레이)
+     *
+     * 각 pill은 우측 상단에서 슬라이드 인 → 3.5초 유지 → 페이드 아웃 후 자동 제거.
+     */
+    private fun showNotificationPills() {
+        if (!enabled) return
+        if (!Settings.canDrawOverlays(context)) return
+
+        val types = listOf(
+            NotificationPillView.Type.KAKAO,
+            NotificationPillView.Type.GPS,
+            NotificationPillView.Type.FINANCE
+        )
+
+        types.forEachIndexed { index, type ->
+            handler.postDelayed({
+                if (!enabled) return@postDelayed
+                val pillView = NotificationPillView(context, type)
+
+                // 각 pill은 이전 pill 아래에 배치 (겹치지 않도록 yOffset 조절)
+                addOverlayView(
+                    view = pillView,
+                    width = WindowManager.LayoutParams.WRAP_CONTENT,
+                    height = WindowManager.LayoutParams.WRAP_CONTENT,
+                    gravity = Gravity.TOP or Gravity.END,
+                    touchable = false,
+                    xOffset = dpToPx(12),
+                    yOffset = dpToPx(80) + dpToPx(index * 44) // 각 pill 사이 간격
+                )
+                notificationPillViews.add(pillView)
+
+                pillView.startSlideInFadeOut {
+                    // 애니메이션 종료 후 자동 제거
+                    removeOverlayView(pillView)
+                    notificationPillViews.remove(pillView)
+                }
+                Log.d(TAG, "알림 pill 표시: $type")
+            }, (index * 500).toLong())
+        }
+    }
+
+    private fun dismissNotificationPills() {
+        notificationPillViews.forEach { removeOverlayView(it) }
+        notificationPillViews.clear()
     }
 
     /**
@@ -298,13 +356,10 @@ class WarningOverlayManager(private val context: Context) {
     }
 
     /**
-     * 바텀시트와 dim 배경만 닫는다. ROI bounding box는 유지.
+     * 바텀시트만 닫는다. ROI bounding box는 유지.
      * 사용자가 바텀시트의 X 버튼을 누르면 호출된다.
      */
     private fun dismissBottomSheetAndDim() {
-        dimBackgroundView?.let { removeOverlayView(it) }
-        dimBackgroundView = null
-
         bottomSheetView?.let {
             it.stopAnimations()
             removeOverlayView(it)
@@ -319,8 +374,6 @@ class WarningOverlayManager(private val context: Context) {
         }
         roiBoundingBoxView = null
 
-        dimBackgroundView?.let { removeOverlayView(it) }
-        dimBackgroundView = null
 
         bottomSheetView?.let {
             it.stopAnimations()
@@ -332,9 +385,24 @@ class WarningOverlayManager(private val context: Context) {
     fun dismissAll() {
         dismissScanningPill()
         dismissDetectionOverlays()
+        dismissNotificationPills()
         handler.removeCallbacksAndMessages(null)
         lastResult = null
         bottomSheetShownForSession = false
+        receivedCountryName = null
+    }
+
+    /**
+     * 상대방 위치(국가명)를 업데이트한다.
+     * 바텀시트가 이미 표시 중이면 즉시 반영하고,
+     * 아직 표시되지 않았으면 저장해두었다가 바텀시트 생성 시 반영한다.
+     */
+    fun updateCountry(country: String) {
+        receivedCountryName = country
+        handler.post {
+            bottomSheetView?.updateCountry(country)
+        }
+        Log.d(TAG, "국가명 업데이트: $country")
     }
 
     // ─────────────────────────────────────────────

@@ -39,9 +39,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
+import com.s14p21a404.shutter.data.repository.VideoCallSessionStore
 import com.s14p21a404.shutter.di.ServiceLocator
 import com.s14p21a404.shutter.presentation.service.CriminalLocationBridge
 import com.s14p21a404.shutter.presentation.service.VideoCallDetectService
+import com.s14p21a404.shutter.push.IncomingCallEventBus
 import kotlinx.coroutines.launch
 import io.agora.rtc2.*
 import io.agora.rtc2.audio.AudioParams
@@ -73,7 +75,6 @@ private val RemoteGradientBottom = Color(0xFF171717)
 @Composable
 fun VideoCallScreen(
     channelId: String,
-    agoraToken: String = "",
     callerName: String = "",
     opponentKakaoId: Long = 0L,
     onCallEnded: () -> Unit = {},
@@ -81,10 +82,13 @@ fun VideoCallScreen(
     val context = LocalContext.current
     val appId = com.s14p21a404.shutter.BuildConfig.AGORA_APP_ID
 
-    val videoCallRepository = remember {
-        ServiceLocator.getInstance(context).videoCallRepository
-    }
-    val criminalLocationApi = remember { ServiceLocator.getInstance(context).criminalLocationApi }
+    // 토큰과 uid는 세션 저장소 + TokenManager에서 가져옴
+    val serviceLocator = remember { ServiceLocator.getInstance(context) }
+    val agoraToken = remember { VideoCallSessionStore.agoraToken }
+    val agoraUid = remember { serviceLocator.tokenManager.getUserId().toInt() }
+
+    val videoCallRepository = remember { serviceLocator.videoCallRepository }
+    val criminalLocationApi = remember { serviceLocator.criminalLocationApi }
     val scope = rememberCoroutineScope()
 
     var rtcEngine by remember { mutableStateOf<RtcEngine?>(null) }
@@ -102,14 +106,16 @@ fun VideoCallScreen(
 
     // ── 범죄자 위치 추적 상태 ──
     var isRequestingLocation by remember { mutableStateOf(false) }
-    var receivedCountry by remember { mutableStateOf<String?>(null) }
+    val warningOverlayManager = remember {
+        ServiceLocator.getInstance(context).warningOverlayManager
+    }
 
-    // criminal_location FCM 수신 콜백 등록
+    // criminal_location FCM 수신 콜백 등록 (위치 데이터는 오버레이 바텀시트에 표시)
     DisposableEffect(Unit) {
         CriminalLocationBridge.onLocationReceived = { country ->
             android.util.Log.d("CriminalLocation", "위치 수신됨 — country: $country")
-            receivedCountry = country
             isRequestingLocation = false
+            warningOverlayManager.updateCountry(country)
         }
         onDispose {
             CriminalLocationBridge.onLocationReceived = null
@@ -125,6 +131,14 @@ fun VideoCallScreen(
         videoCallRepository.setInAppCallActive(false)
         VideoCallDetectService.onInAppCallEnd = null
         VideoCallDetectService.onInAppDeepfakeDetected = null
+    }
+
+    // CALL_REJECTED FCM 수신 시 통화 종료
+    LaunchedEffect(Unit) {
+        IncomingCallEventBus.callRejected.collect {
+            android.util.Log.d("VideoCall", "CALL_REJECTED — 통화 종료")
+            endCall()
+        }
     }
 
     val isConnecting = remoteUid == null && !callEnded
@@ -355,8 +369,10 @@ fun VideoCallScreen(
             autoSubscribeAudio = true
         }
 
-        val joinResult = engine.joinChannel(agoraToken, channelId, 0, options)
-        android.util.Log.d("Agora", "joinChannel result=$joinResult channel=$channelId")
+        android.util.Log.d("Agora", "joinChannel channel=$channelId uid=$agoraUid token=${if (agoraToken != null) "ok" else "null"}")
+        val joinResult = engine.joinChannel(agoraToken, channelId, agoraUid, options)
+        android.util.Log.d("Agora", "joinChannel result=$joinResult")
+        VideoCallSessionStore.clear()
 
         rtcEngine = engine
     }
@@ -386,24 +402,6 @@ fun VideoCallScreen(
         }
     }
 
-    // ── 범죄자 위치 수신 다이얼로그 ──
-    receivedCountry?.let { country ->
-        AlertDialog(
-            onDismissRequest = { receivedCountry = null },
-            title = { Text("통화 상대방 위치 확인", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("통화 상대방의 현재 위치가 확인되었습니다.")
-                    Spacer(Modifier.height(4.dp))
-                    Text(country, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1A1A1A))
-                }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { receivedCountry = null }) { Text("확인") }
-            }
-        )
-    }
 
     // ── 통화 종료 화면 ──
     if (callEnded) {
