@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.s14p21a404.shutter.data.repository.VideoCallSessionStore
 import com.s14p21a404.shutter.di.ServiceLocator
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.ChevronLeft
@@ -52,7 +53,7 @@ fun HomeScreen(
     onRequestOverlayPermission: () -> Unit = {},
     onRequestAccessibilityPermission: () -> Unit = {},
 
-    onNavigateToVideoCall: (String, String, Long, String) -> Unit = { _, _, _, _ -> },
+    onNavigateToVideoCall: (String, String, Long) -> Unit = { _, _, _ -> },
 
     homeViewModel: HomeViewModel = viewModel(),
 ) {
@@ -160,18 +161,12 @@ fun HomeScreen(
 
                     onVideoCall = {
                         coroutineScope.launch {
-
-                            val result = videoCallRepository.requestCall(friend.kakaoId)
-
-                            result.onSuccess { data ->
-
-                                onNavigateToVideoCall(
-                                    data.channelName,
-                                    friend.name,
-                                    friend.kakaoId,
-                                    data.token
-                                )
-                            }
+                            videoCallRepository.requestCall(friend.kakaoId)
+                                .onSuccess { data ->
+                                    VideoCallSessionStore.agoraToken = data.token
+                                    VideoCallSessionStore.channelName = data.channelName
+                                    onNavigateToVideoCall(data.channelName, friend.name, friend.kakaoId)
+                                }
                         }
                     }
                 )

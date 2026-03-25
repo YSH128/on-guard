@@ -1,6 +1,5 @@
 package com.s14p21a404.shutter.presentation.main
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -14,6 +13,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.s14p21a404.shutter.data.repository.VideoCallSessionStore
 import com.s14p21a404.shutter.presentation.navigation.AppScaffold
 import com.s14p21a404.shutter.di.ServiceLocator
 import kotlinx.coroutines.launch
@@ -37,24 +37,11 @@ fun MainScreen(
     pendingDeepLinkScreen: String? = null,
     onDeepLinkHandled: () -> Unit = {},
 
-    // 추가 (핵심)
-    onNavigateToVideoCall: (String, String, Long, String) -> Unit
+    onNavigateToVideoCall: (String, String, Long) -> Unit
 ) {
 
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-
-    // CALL_REJECTED 처리
-    LaunchedEffect(pendingDeepLinkScreen) {
-        if (pendingDeepLinkScreen == "call_rejected") {
-            Toast.makeText(
-                context,
-                "상대방이 통화를 거절했습니다",
-                Toast.LENGTH_SHORT
-            ).show()
-            onDeepLinkHandled()
-        }
-    }
 
     // 수신 상태
     val incomingChannel by viewModel.incomingChannelName.collectAsState()
@@ -82,16 +69,14 @@ fun MainScreen(
                         val result = repo.acceptCall(incomingChannel!!)
 
                         result.onSuccess { data ->
-
-                            // 핵심 수정 (즉시 이동)
+                            VideoCallSessionStore.agoraToken = data.token
+                            VideoCallSessionStore.channelName = data.channelName
+                            viewModel.clearIncomingCall()
                             onNavigateToVideoCall(
                                 data.channelName,
                                 incomingCaller ?: "상대방",
                                 incomingCallerKakaoId ?: 0L,
-                                data.token
                             )
-
-                            viewModel.clearIncomingCall()
                         }
                     }
 

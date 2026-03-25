@@ -90,16 +90,11 @@ class MainActivity : ComponentActivity() {
                             onToggleService = { toggleService() },
                             onLogout = { loginViewModel.logout() },
 
-                            // 영상통화 진입
-                            onNavigateToVideoCall = { channelId, callerName, opponentKakaoId, token ->
-
+                                            // 영상통화 진입
+                            onNavigateToVideoCall = { channelId, callerName, opponentKakaoId ->
                                 Log.d(TAG, "영상통화 진입: $channelId")
-
                                 isInCall = true
-
-                                viewModel.setDeepLinkScreen(
-                                    "video_call:$channelId:$callerName:$opponentKakaoId:$token"
-                                )
+                                viewModel.setDeepLinkScreen("video_call:$channelId:$callerName:$opponentKakaoId")
                             }
                         )
                     }
@@ -148,17 +143,8 @@ class MainActivity : ComponentActivity() {
             }
 
             "call_accepted" -> {
-
-                val channelName = intent?.getStringExtra("channel_name") ?: return
-                val token = intent?.getStringExtra("token") ?: return   // 🔥 추가
-
-                Log.d(TAG, "CALL_ACCEPTED 처리: $channelName / token=$token")
-
-                isInCall = true
-
-                viewModel.setDeepLinkScreen(
-                    "video_call:$channelName:상대방:$token"
-                )
+                // 발신자는 이미 채널에 있으므로 Agora onUserJoined로 자동 연결됨 — 별도 처리 없음
+                Log.d(TAG, "CALL_ACCEPTED 처리 — Agora가 자동 연결함")
             }
 
             else -> {
