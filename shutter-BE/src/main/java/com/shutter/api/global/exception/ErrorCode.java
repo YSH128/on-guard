@@ -44,6 +44,7 @@ public enum ErrorCode {
     // 통화 관련
     CALL_NOT_FOUND(HttpStatus.NOT_FOUND, "CALL_NOT_FOUND", "통화 세션이 만료되었거나 존재하지 않습니다."),
     SELF_CALL_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "SELF_CALL_NOT_ALLOWED", "본인에게 통화를 요청할 수 없습니다."),
+    CALLEE_NOT_FOUND(HttpStatus.NOT_FOUND, "CALLEE_NOT_FOUND", "수신자가 앱에 가입되어 있지 않습니다."),
 
     // 서버 관련
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "서버 오류가 발생했습니다.");

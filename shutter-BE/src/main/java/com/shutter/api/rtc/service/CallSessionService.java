@@ -21,7 +21,7 @@ public class CallSessionService {
     private final ObjectMapper objectMapper;
 
     private static final String REDIS_KEY_PREFIX = "call:";
-    private static final int CALL_RINGING_TTL_SECONDS = 30;
+    private static final int CALL_RINGING_TTL_SECONDS = 60;
 
     /**
      * 채널명으로 통화 세션을 생성하고 Redis에 30초 TTL로 기록.
