@@ -2,6 +2,7 @@ package com.shutter.api.notification.domain;
 
 public enum NotificationEventType {
     DEEPFAKE("MESSAGE", "자동 발송", "%s님이 딥페이크 의심 통화 중입니다."),
+    VOICE_PHISHING("MESSAGE", "피싱 주의", "%s님이 보이스피싱 의심 통화 중입니다."),
     LOCATION("LOCATION", "위치 공유", "%s님의 위치 정보 공유가 시작되었습니다."),
     MESSAGE("MESSAGE", "자동 발송", "%s님에게 알림이 발생했습니다.");
 
@@ -25,5 +26,12 @@ public enum NotificationEventType {
 
     public String getPushMessage(String wardName) {
         return String.format(pushMessageTemplate, wardName);
+    }
+
+    public String getPushMessage(String wardName, String phishingType) {
+        if (this == VOICE_PHISHING && phishingType != null && !phishingType.isBlank()) {
+            return String.format("%s님이 보이스피싱(%s) 의심 통화 중입니다.", wardName, phishingType);
+        }
+        return getPushMessage(wardName);
     }
 }
