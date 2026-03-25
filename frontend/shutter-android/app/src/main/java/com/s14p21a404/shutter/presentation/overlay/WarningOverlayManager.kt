@@ -13,16 +13,22 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import com.s14p21a404.shutter.domain.model.DeepfakeDetectionResult
+import com.s14p21a404.shutter.domain.repository.VideoCallRepository
 
 /**
  * 딥페이크 감지 경고 오버레이 매니저.
  *
  * 3가지 독립 오버레이를 관리한다:
  * 1) **Scanning Pill** — "Shutter 감지 중•••" 스캐닝 상태 pill 배지 (터치 통과)
- * 2) **ROI Bounding Box** — 감지된 얼굴 ROI에 노란 border + 스캔 라인 + confidence 배지 (터치 통과)
- * 3) **Warning Bottom Sheet** — 흰색 바텀시트 모달 (전화 종료 / 재탐지 버튼, 터치 가능)
+ * 2) **ROI Bounding Box** — 감지된 얼굴 ROI에 빨간 border + 스캔 라인 + confidence 배지 (터치 통과)
+ * 3) **Warning Bottom Sheet** — 흰색 바텀시트 모달 (터치 가능)
+ *    - 인앱: 지도 + 국기 + 감지유형 + 전화종료 버튼
+ *    - 외부앱: AI 위조 감지 타이틀 + 전화종료 버튼만
  */
-class WarningOverlayManager(private val context: Context) {
+class WarningOverlayManager(
+    private val context: Context,
+    private val videoCallRepository: VideoCallRepository? = null
+) {
 
     private val windowManager =
         context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -224,8 +230,10 @@ class WarningOverlayManager(private val context: Context) {
         // ── Warning Bottom Sheet (500ms 지연 후 표시) ──
         handler.postDelayed({
             if (!enabled) return@postDelayed
+            val isInApp = videoCallRepository?.isInAppCallActive() ?: false
             val sheet = WarningBottomSheetView(
                 context = context,
+                isInApp = isInApp,
                 onEndCall = {
                     Log.d(TAG, "전화 종료 버튼 클릭")
                     onEndCall?.invoke()

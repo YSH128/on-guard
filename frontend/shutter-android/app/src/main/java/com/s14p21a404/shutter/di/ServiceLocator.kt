@@ -105,7 +105,7 @@ class ServiceLocator private constructor(context: Context) {
 
     // ── Presentation Layer ──
 
-    val warningOverlayManager = WarningOverlayManager(context)
+    val warningOverlayManager = WarningOverlayManager(context, videoCallRepository)
     val financialBlockOverlayManager = FinancialBlockOverlayManager(context)
     val alertSoundManager = AlertSoundManager(context)
     val guardianUuidStore = GuardianUuidStore(context)
