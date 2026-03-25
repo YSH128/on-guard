@@ -195,7 +195,8 @@ class VideoCallDetectService : Service() {
                 if (result.detected) {
                     // ── 딥페이크 최초 감지 ──
                     isDeepfakeDetected = true
-                    //alertSoundManager.startAlert()
+                    //
+                    // rmsep sork alertSoundManager.startAlert()
                     financialBlockOverlayManager.setEnabled(true)
                     startFinancialAppMonitoring()
                     if (!alertSentForCurrentSession) {

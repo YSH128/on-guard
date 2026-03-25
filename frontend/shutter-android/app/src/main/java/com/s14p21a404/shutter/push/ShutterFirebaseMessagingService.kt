@@ -65,7 +65,7 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
                 handleLocationRequest(message.data)
             }
             "criminal_location" -> {
-                Log.d(TAG, "criminal_location 수신 — lat: ${message.data["lat"]}, lng: ${message.data["lng"]}")
+                Log.d(TAG, "criminal_location 수신 — country: ${message.data["country"]}")
                 handleCriminalLocation(message.data)
             }
             else -> {
@@ -121,25 +121,23 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
      * 범죄자 위치 FCM 수신: UI 콜백 호출 + 푸시 알림 표시.
      */
     private fun handleCriminalLocation(data: Map<String, String>) {
-        val lat = data["lat"]?.toDoubleOrNull() ?: run {
-            Log.w(TAG, "lat 없음")
+        val country = data["country"] ?: run {
+            Log.w(TAG, "country 없음")
             return
         }
-        val lng = data["lng"]?.toDoubleOrNull() ?: run {
-            Log.w(TAG, "lng 없음")
-            return
-        }
+
+        Log.d(TAG, "criminal_location 국가: $country")
 
         // 1. VideoCallScreen UI에 콜백 (메인 스레드에서 실행)
         Handler(Looper.getMainLooper()).post {
-            CriminalLocationBridge.onLocationReceived?.invoke(lat, lng)
+            CriminalLocationBridge.onLocationReceived?.invoke(country)
         }
 
         // 2. 푸시 알림 표시
-        showCriminalLocationNotification(lat, lng)
+        showCriminalLocationNotification(country)
     }
 
-    private fun showCriminalLocationNotification(lat: Double, lng: Double) {
+    private fun showCriminalLocationNotification(country: String) {
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -150,11 +148,7 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setContentTitle("통화 상대방 위치 확인")
-            .setContentText("위도: %.6f, 경도: %.6f".format(lat, lng))
-            .setStyle(
-                NotificationCompat.BigTextStyle()
-                    .bigText("통화 상대방의 위치가 감지되었습니다.\n위도: %.6f\n경도: %.6f".format(lat, lng))
-            )
+            .setContentText("통화 상대방 위치: $country")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)

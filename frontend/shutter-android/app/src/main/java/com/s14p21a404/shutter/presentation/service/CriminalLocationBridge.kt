@@ -7,5 +7,5 @@ package com.s14p21a404.shutter.presentation.service
  * VideoCallScreen에서 등록/해제한다.
  */
 object CriminalLocationBridge {
-    var onLocationReceived: ((lat: Double, lng: Double) -> Unit)? = null
+    var onLocationReceived: ((country: String) -> Unit)? = null
 }

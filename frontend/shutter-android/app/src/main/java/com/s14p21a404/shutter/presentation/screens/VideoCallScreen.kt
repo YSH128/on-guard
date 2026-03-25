@@ -102,13 +102,13 @@ fun VideoCallScreen(
 
     // ── 범죄자 위치 추적 상태 ──
     var isRequestingLocation by remember { mutableStateOf(false) }
-    var receivedLocation by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var receivedCountry by remember { mutableStateOf<String?>(null) }
 
     // criminal_location FCM 수신 콜백 등록
     DisposableEffect(Unit) {
-        CriminalLocationBridge.onLocationReceived = { lat, lng ->
-            android.util.Log.d("CriminalLocation", "위치 수신됨 — lat: $lat, lng: $lng")
-            receivedLocation = Pair(lat, lng)
+        CriminalLocationBridge.onLocationReceived = { country ->
+            android.util.Log.d("CriminalLocation", "위치 수신됨 — country: $country")
+            receivedCountry = country
             isRequestingLocation = false
         }
         onDispose {
@@ -334,29 +334,20 @@ fun VideoCallScreen(
     }
 
     // ── 범죄자 위치 수신 다이얼로그 ──
-    receivedLocation?.let { (lat, lng) ->
+    receivedCountry?.let { country ->
         AlertDialog(
-            onDismissRequest = { receivedLocation = null },
+            onDismissRequest = { receivedCountry = null },
             title = { Text("통화 상대방 위치 확인", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("통화 상대방의 현재 위치가 확인되었습니다.")
                     Spacer(Modifier.height(4.dp))
-                    Text("위도: $lat", fontSize = 13.sp, color = Color(0xFF6B7280))
-                    Text("경도: $lng", fontSize = 13.sp, color = Color(0xFF6B7280))
+                    Text(country, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1A1A1A))
                 }
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    val intent = Intent(
-                        Intent.ACTION_VIEW,
-                        Uri.parse("geo:${lat},${lng}?q=${lat},${lng}(의심 위치)")
-                    )
-                    context.startActivity(intent)
-                }) { Text("지도에서 보기") }
-            },
+            confirmButton = {},
             dismissButton = {
-                TextButton(onClick = { receivedLocation = null }) { Text("닫기") }
+                TextButton(onClick = { receivedCountry = null }) { Text("확인") }
             }
         )
     }
