@@ -201,7 +201,7 @@ private fun HeaderSection() {
             model = R.drawable.logo_gif,
             contentDescription = "Shutter",
             imageLoader = gifImageLoader,
-            modifier = Modifier.size(150.dp),
+            modifier = Modifier.size(100.dp),
             contentScale = ContentScale.Fit
         )
 
