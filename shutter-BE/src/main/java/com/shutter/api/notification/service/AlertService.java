@@ -123,16 +123,18 @@ public class AlertService {
      */
     public void sendAlertToUser(Long kakaoId, String payloadJson) {
         PushResult pushResult = kakaoPushClient.sendPush(kakaoId, NotificationEventType.MESSAGE, payloadJson);
-        
+
         if (pushResult == PushResult.CONFIG_ERROR) {
-            log.error("CRITICAL: Kakao Push configuration error detected.");
+            log.error("❌ [PUSH FAIL] kakaoId={}, payload={}, error=KAKAO_PUSH_CONFIG_ERROR", kakaoId, payloadJson);
             throw new AlertException(ErrorCode.KAKAO_PUSH_CONFIG_ERROR);
         }
-        
+
         if (pushResult != PushResult.SUCCESS) {
-            log.error("Alert push failed for kakaoId: {}", kakaoId);
+            log.error("❌ [PUSH FAIL] kakaoId={}, payload={}, error={}", kakaoId, payloadJson, pushResult);
             throw new AlertException(ErrorCode.FCM_SEND_FAILED);
         }
+
+        log.info("✅ [PUSH SUCCESS] kakaoId={}, payload={}", kakaoId, payloadJson);
     }
 
     /**
