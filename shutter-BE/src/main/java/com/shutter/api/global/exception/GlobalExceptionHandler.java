@@ -22,6 +22,16 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse(errorCode.getCode(), ex.getMessage()));
     }
 
+    /** 통화 예외 */
+    @ExceptionHandler(CallException.class)
+    public ResponseEntity<ErrorResponse> handleCall(CallException ex) {
+        ErrorCode errorCode = ex.getErrorCode();
+        log.warn("CallException 발생: {}", ex.getMessage());
+        return ResponseEntity
+                .status(errorCode.getHttpStatus())
+                .body(new ErrorResponse(errorCode.getCode(), ex.getMessage()));
+    }
+
     /** 알림 예외 */
     @ExceptionHandler(AlertException.class)
     public ResponseEntity<ErrorResponse> handleAlert(AlertException ex) {
