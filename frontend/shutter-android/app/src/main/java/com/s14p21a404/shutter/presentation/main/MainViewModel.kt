@@ -107,7 +107,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         Log.d(TAG, "권한 상태 확인 완료")
     }
 
-    **
+    /**
      * 서비스 실행 상태 업데이트
      */
     fun setServiceRunning(running: Boolean) {
@@ -125,13 +125,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _incomingCallerName = MutableStateFlow<String?>(null)
     val incomingCallerName: StateFlow<String?> = _incomingCallerName.asStateFlow()
 
-    fun onIncomingCall(channelName: String, callerName: String) {
+    private val _incomingCallerKakaoId = MutableStateFlow<Long?>(null)
+    val incomingCallerKakaoId: StateFlow<Long?> = _incomingCallerKakaoId.asStateFlow()
+
+    fun onIncomingCall(channelName: String, callerName: String, callerKakaoId: Long = 0L) {
         _incomingChannelName.value = channelName
         _incomingCallerName.value = callerName
+        _incomingCallerKakaoId.value = callerKakaoId
     }
 
     fun clearIncomingCall() {
         _incomingChannelName.value = null
         _incomingCallerName.value = null
+        _incomingCallerKakaoId.value = null
     }
 }

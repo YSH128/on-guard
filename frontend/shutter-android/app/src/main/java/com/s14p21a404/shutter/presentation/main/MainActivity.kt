@@ -91,14 +91,14 @@ class MainActivity : ComponentActivity() {
                             onLogout = { loginViewModel.logout() },
 
                             // 영상통화 진입
-                            onNavigateToVideoCall = { channelId, callerName, token ->
+                            onNavigateToVideoCall = { channelId, callerName, opponentKakaoId, token ->
 
                                 Log.d(TAG, "영상통화 진입: $channelId")
 
                                 isInCall = true
 
                                 viewModel.setDeepLinkScreen(
-                                    "video_call:$channelId:$callerName:$token"
+                                    "video_call:$channelId:$callerName:$opponentKakaoId:$token"
                                 )
                             }
                         )
@@ -134,10 +134,11 @@ class MainActivity : ComponentActivity() {
             "incoming_call" -> {
                 val channelName = intent?.getStringExtra("channel_name") ?: return
                 val callerName = intent?.getStringExtra("caller_name") ?: "알 수 없음"
+                val callerKakaoId = intent?.getLongExtra("caller_kakao_id", 0L) ?: 0L
 
-                Log.d(TAG, "incoming_call 처리: $channelName / $callerName")
+                Log.d(TAG, "incoming_call 처리: $channelName / $callerName / kakaoId=$callerKakaoId")
 
-                viewModel.onIncomingCall(channelName, callerName)
+                viewModel.onIncomingCall(channelName, callerName, callerKakaoId)
                 viewModel.setDeepLinkScreen("incoming_call")
             }
 

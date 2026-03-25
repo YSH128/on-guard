@@ -52,7 +52,7 @@ fun HomeScreen(
     onRequestOverlayPermission: () -> Unit = {},
     onRequestAccessibilityPermission: () -> Unit = {},
 
-    onNavigateToVideoCall: (String, String, String) -> Unit = { _, _, _ -> },
+    onNavigateToVideoCall: (String, String, Long, String) -> Unit = { _, _, _, _ -> },
 
     homeViewModel: HomeViewModel = viewModel(),
 ) {
@@ -168,6 +168,7 @@ fun HomeScreen(
                                 onNavigateToVideoCall(
                                     data.channelName,
                                     friend.name,
+                                    friend.kakaoId,
                                     data.token
                                 )
                             }

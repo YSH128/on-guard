@@ -101,21 +101,20 @@ fun AppScaffold(
 
             pendingDeepLinkScreen?.startsWith("video_call:") == true -> {
 
-                // limit=4 로 분리해야 token 안에 ":" 가 있어도 잘리지 않음
-                val parts = pendingDeepLinkScreen.split(":", limit = 4)
+                // limit=5: video_call:channelName:callerName:opponentKakaoId:token
+                // token이 ":" 포함할 수 있으므로 마지막 위치
+                val parts = pendingDeepLinkScreen.split(":", limit = 5)
 
                 val channelName = parts.getOrElse(1) { "" }
                 val callerName = parts.getOrElse(2) { "" }
-                val agoraToken = parts.getOrElse(3) { "" }
-
-                android.util.Log.d("NAV_FIX", "channel=$channelName")
-                android.util.Log.d("NAV_FIX", "caller=$callerName")
-                android.util.Log.d("NAV_FIX", "token=$agoraToken")
+                val opponentKakaoId = parts.getOrElse(3) { "0" }.toLongOrNull() ?: 0L
+                val agoraToken = parts.getOrElse(4) { "" }
 
                 navController.navigate(
                     Screen.VideoCall.createRoute(
                         channelName,
                         callerName,
+                        opponentKakaoId,
                         agoraToken
                     )
                 )
@@ -151,8 +150,8 @@ fun AppScaffold(
                     onRequestPermissions = onRequestPermissions,
                     onRequestOverlayPermission = onRequestOverlayPermission,
                     onRequestAccessibilityPermission = onRequestAccessibilityPermission,
-                    onNavigateToVideoCall = { channelId, callerName, agoraToken ->
-                        navController.navigate(Screen.VideoCall.createRoute(channelId, callerName, agoraToken))
+                    onNavigateToVideoCall = { channelId, callerName, opponentKakaoId, agoraToken ->
+                        navController.navigate(Screen.VideoCall.createRoute(channelId, callerName, opponentKakaoId, agoraToken))
                     },
                 )
             }
@@ -183,20 +182,13 @@ fun AppScaffold(
             composable(Screen.VideoCall.route) { backStackEntry ->
 
                 val channelId = backStackEntry.arguments?.getString("channelId") ?: ""
-
-                // NavController가 path argument를 Uri.decode()로 자동 decode하므로
-                // URLDecoder.decode를 추가로 쓰면 + → 공백 변환이 일어나 토큰이 손상됨
-                val callerName = backStackEntry.arguments?.getString("callerName") ?: ""
-                val agoraToken = backStackEntry.arguments?.getString("token") ?: ""
-
-                android.util.Log.d("NAV_DEBUG", "channelId=$channelId")
-                android.util.Log.d("NAV_DEBUG", "callerName=$callerName")
-                android.util.Log.d("NAV_DEBUG", "token=$agoraToken")
-
                 val callerName = backStackEntry.arguments?.getString("callerName")?.let {
                     java.net.URLDecoder.decode(it, "UTF-8")
                 } ?: ""
                 val opponentKakaoId = backStackEntry.arguments?.getString("opponentKakaoId")?.toLongOrNull() ?: 0L
+                // token은 NavController가 이미 디코딩하므로 추가 디코딩 금지 (+가 공백으로 변환됨)
+                val agoraToken = backStackEntry.arguments?.getString("token") ?: ""
+
                 VideoCallScreen(
                     channelId = channelId,
                     agoraToken = agoraToken,

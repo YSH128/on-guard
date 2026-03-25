@@ -71,8 +71,9 @@ private val RemoteGradientBottom = Color(0xFF171717)
 @Composable
 fun VideoCallScreen(
     channelId: String,
-    agoraToken: String,
+    agoraToken: String = "",
     callerName: String = "",
+    opponentKakaoId: Long = 0L,
     onCallEnded: () -> Unit = {},
 ) {
     val context = LocalContext.current

@@ -23,17 +23,18 @@ sealed class Screen(val route: String) {
     object GuardianRegistration : Screen("guardian_registration")
 
     /** 영상 통화 */
-    object VideoCall : Screen("video_call/{channelId}/{callerName}/{token}") {
+    object VideoCall : Screen("video_call/{channelId}/{callerName}/{opponentKakaoId}/{token}") {
 
         fun createRoute(
             channelId: String,
             callerName: String,
+            opponentKakaoId: Long,
             token: String
         ): String {
             return "video_call/$channelId/${
                 java.net.URLEncoder.encode(callerName, "UTF-8")
-            }/${
-                java.net.URLEncoder.encode(token, "UTF-8")   // 🔥 추가
+            }/$opponentKakaoId/${
+                java.net.URLEncoder.encode(token, "UTF-8")
             }"
         }
     }

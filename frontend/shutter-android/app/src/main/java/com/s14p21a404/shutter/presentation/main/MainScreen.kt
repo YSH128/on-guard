@@ -38,7 +38,7 @@ fun MainScreen(
     onDeepLinkHandled: () -> Unit = {},
 
     // 추가 (핵심)
-    onNavigateToVideoCall: (String, String, String) -> Unit
+    onNavigateToVideoCall: (String, String, Long, String) -> Unit
 ) {
 
     val context = LocalContext.current
@@ -59,6 +59,7 @@ fun MainScreen(
     // 수신 상태
     val incomingChannel by viewModel.incomingChannelName.collectAsState()
     val incomingCaller by viewModel.incomingCallerName.collectAsState()
+    val incomingCallerKakaoId by viewModel.incomingCallerKakaoId.collectAsState()
 
     // 수신 Dialog
     if (incomingChannel != null) {
@@ -86,6 +87,7 @@ fun MainScreen(
                             onNavigateToVideoCall(
                                 data.channelName,
                                 incomingCaller ?: "상대방",
+                                incomingCallerKakaoId ?: 0L,
                                 data.token
                             )
 

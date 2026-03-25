@@ -26,7 +26,6 @@ import kotlinx.coroutines.launch
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.json.JSONObject
 
 /**
  * FCM 토큰 갱신 및 푸시 메시지 수신 처리.
@@ -39,11 +38,11 @@ import org.json.JSONObject
 class ShutterFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
-        Log.d(TAG, "FCM 토큰 갱신: $token")
+        Log.d(FCM_TAG, "FCM 토큰 갱신: $token")
 
         val tokenManager = TokenManager(applicationContext)
         if (!tokenManager.hasToken()) {
-            Log.d(TAG, "로그인 전 — 카카오 푸시 토큰 등록 생략")
+            Log.d(FCM_TAG, "로그인 전 — 카카오 푸시 토큰 등록 생략")
             return
         }
 
@@ -61,15 +60,31 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
 
             "INCOMING_CALL" -> {
                 val callerId = data["caller_id"]?.toLongOrNull() ?: return
+                val callerKakaoId = data["caller_kakao_id"]?.toLongOrNull() ?: 0L
                 val callerName = data["caller_name"] ?: return
                 val channelName = data["channel_name"] ?: return
-
-                handleIncomingCall(callerId, callerName, channelName)
+                handleIncomingCall(callerId, callerKakaoId, callerName, channelName)
             }
 
             "CALL_ACCEPTED" -> {
                 // 발신자는 이미 채널에 joinChannel 되어 있으므로
                 // 수신자가 join하면 Agora onUserJoined 이벤트로 자동 연결됨
+            }
+
+            "location_request" -> {
+                Log.d(FCM_TAG, "location_request 수신 — requesterKakaoId: ${data["requesterKakaoId"]}")
+                handleLocationRequest(data)
+            }
+
+            "criminal_location" -> {
+                Log.d(FCM_TAG, "criminal_location 수신 — country: ${data["country"]}")
+                handleCriminalLocation(data)
+            }
+
+            else -> {
+                val title = message.notification?.title ?: data["title"] ?: "Shutter 알림"
+                val body = message.notification?.body ?: data["body"] ?: ""
+                showNotification(title, body)
             }
         }
     }
@@ -78,7 +93,7 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
      * INCOMING_CALL 수신 시 MainActivity를 통화 수신 화면으로 이동.
      * 앱이 포그라운드/백그라운드 모두 동작.
      */
-    private fun handleIncomingCall(callerId: Long, callerName: String, channelName: String) {
+    private fun handleIncomingCall(callerId: Long, callerKakaoId: Long, callerName: String, channelName: String) {
         // 1) 풀스크린 알림용 채널 생성
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         val channel = NotificationChannel(
@@ -96,6 +111,7 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("screen", "incoming_call")
             putExtra("caller_id", callerId)
+            putExtra("caller_kakao_id", callerKakaoId)
             putExtra("caller_name", callerName)
             putExtra("channel_name", channelName)
         }
@@ -139,15 +155,51 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
 
         // 4) 앱이 포그라운드일 때도 즉시 화면 전환
         startActivity(intent)
+    }
+
+    private fun handleLocationRequest(data: Map<String, String>) {
+        val requesterKakaoId = data["requesterKakaoId"]?.toLongOrNull() ?: run {
+            Log.w(FCM_TAG, "requesterKakaoId 없음 — 위치 신고 생략")
+            return
+        }
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.w(FCM_TAG, "위치 권한 없음 — 위치 신고 생략")
+            return
+        }
+
+        val locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
+        val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+        val location = providers.firstNotNullOfOrNull { provider ->
+            runCatching { locationManager.getLastKnownLocation(provider) }.getOrNull()
+        }
+
+        if (location == null) {
+            Log.w(FCM_TAG, "위치 없음 — 위치 신고 생략")
+            return
+        }
+
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            ServiceLocator.getInstance(applicationContext)
+                .criminalLocationApi
+                .reportLocation(requesterKakaoId, location.latitude, location.longitude)
+                .onSuccess { Log.d(FCM_TAG, "위치 신고 완료 (요청자: $requesterKakaoId)") }
+                .onFailure { Log.e(FCM_TAG, "위치 신고 실패", it) }
+        }
+    }
+
+    /**
      * 범죄자 위치 FCM 수신: UI 콜백 호출 + 푸시 알림 표시.
      */
     private fun handleCriminalLocation(data: Map<String, String>) {
         val country = data["country"] ?: run {
-            Log.w(TAG, "country 없음")
+            Log.w(FCM_TAG, "country 없음")
             return
         }
 
-        Log.d(TAG, "criminal_location 국가: $country")
+        Log.d(FCM_TAG, "criminal_location 국가: $country")
 
         // 1. VideoCallScreen UI에 콜백 (메인 스레드에서 실행)
         Handler(Looper.getMainLooper()).post {
@@ -211,22 +263,15 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
         notificationManager.notify(NOTIFICATION_ID, notification)
     }
 
-    /** body가 JSON이면 파싱, 아니면 null 반환 */
-    private fun tryParseJson(body: String): JSONObject? = try {
-        if (body.trimStart().startsWith("{")) JSONObject(body) else null
-    } catch (e: Exception) {
-        null
-    }
-
     companion object {
-        private const val TAG = "ShutterFCMService"
+        private const val FCM_TAG = "ShutterFCMService"
         private const val CHANNEL_ID = "shutter_push_channel_v2"
         private const val CALL_CHANNEL_ID = "shutter_call_channel_v1"
         private const val NOTIFICATION_ID = 2001
         private const val CALL_NOTIFICATION_ID = 2002
         private const val CALL_REQUEST_CODE = 3001
         private const val CALL_REJECT_REQUEST_CODE = 3002
-        private const val CRIMINAL_LOCATION_NOTIFICATION_ID = 2002
+        private const val CRIMINAL_LOCATION_NOTIFICATION_ID = 2003
         private const val KAKAO_PUSH_REGISTER_URL = "https://kapi.kakao.com/v1/push/register"
 
         private val okHttpClient = OkHttpClient()
@@ -235,12 +280,12 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
             val kakaoAccessToken = try {
                 AuthApiClient.instance.tokenManagerProvider.manager.getToken()?.accessToken
             } catch (e: Exception) {
-                Log.e(TAG, "카카오 액세스 토큰 조회 실패", e)
+                Log.e(FCM_TAG, "카카오 액세스 토큰 조회 실패", e)
                 null
             }
 
             if (kakaoAccessToken == null) {
-                Log.w(TAG, "카카오 액세스 토큰 없음 — FCM 토큰 등록 생략")
+                Log.w(FCM_TAG, "카카오 액세스 토큰 없음 — FCM 토큰 등록 생략")
                 return
             }
 
@@ -261,13 +306,13 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
                     val response = okHttpClient.newCall(request).execute()
                     val responseBody = response.body?.string() ?: "(empty)"
                     if (response.isSuccessful) {
-                        Log.d(TAG, "카카오 푸시 토큰 등록 성공 [${response.code}]: $responseBody")
+                        Log.d(FCM_TAG, "카카오 푸시 토큰 등록 성공 [${response.code}]: $responseBody")
                     } else {
-                        Log.e(TAG, "카카오 푸시 토큰 등록 실패 [${response.code}]: $responseBody")
+                        Log.e(FCM_TAG, "카카오 푸시 토큰 등록 실패 [${response.code}]: $responseBody")
                     }
                     response.close()
                 } catch (e: Exception) {
-                    Log.e(TAG, "카카오 푸시 토큰 등록 요청 실패", e)
+                    Log.e(FCM_TAG, "카카오 푸시 토큰 등록 요청 실패", e)
                 }
             }.start()
         }
