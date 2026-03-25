@@ -1,11 +1,15 @@
 import torch
 from model.ds import DS  # 실제 프로젝트 경로에 맞게 임포트
+import numpy as np
+from pathlib import Path
 
 # ---- 모델 설정 (모델 바꿀 때 수정) -------------
 MODEL_PATH = "weights/ckpt_best.pth"
 OUTPUT_PATH = "./ds_model.onnx"
+OUTPUT_PATH_QUANTIZED = "./ds_model_quantized.onnx"
 INPUT_SIZE_H = 256
 INPUT_SIZE_W = 256
+QUANTIZATION_TYPE = "float16"  # "dynamic" 또는 "static", "float16"
 # ────────────────────────────────────────────────────────────
 
 class DSModel_ONNXWrapper(torch.nn.Module):
@@ -101,7 +105,7 @@ def convert_ds_to_onnx():
                 replace_stochastic_layers(child)
                 
     replace_stochastic_layers(wrapped_model)
-            
+    
     print("4. ONNX Export 진행 중 (PyTorch 2.4 최적화 TorchScript 추적)...")
     example_input = torch.rand(1, 3, INPUT_SIZE_H, INPUT_SIZE_W)
     
@@ -120,7 +124,7 @@ def convert_ds_to_onnx():
             example_input,
             OUTPUT_PATH,
             export_params=True,
-            opset_version=15, # 기존 17,
+            opset_version=15,
             do_constant_folding=True,
             input_names=["input"],
             output_names=["logits", "cam"]
@@ -130,7 +134,213 @@ def convert_ds_to_onnx():
         F.dropout = _old_dropout
         F.dropout2d = _old_dropout2d
         
-    print(f"ONNX 추출 완료 -> {OUTPUT_PATH}")
+    print(f"✓ ONNX 추출 완료 -> {OUTPUT_PATH}")
+
+
+def quantize_onnx_dynamic(onnx_model_path, output_path):
+    """
+    [권장] ONNX 모델을 Dynamic Quantization으로 변환
+    - 추가 데이터 불필요
+    - 성능 손실 최소 (~1% 이하)
+    - 파일 크기: ~30-40% 감소
+    """
+    print("\n" + "="*60)
+    print("양자화: Dynamic INT8 Quantization 진행 중...")
+    print("="*60)
+    
+    try:
+        from onnxruntime.transformers import optimizer
+        from onnxruntime.quantization import quantize_dynamic, QuantType
+        
+        # Dynamic quantization 적용 (INT8)
+        quantize_dynamic(
+            model_input=onnx_model_path,
+            model_output=output_path,
+            optimize_model=True,  # 모델 최적화도 함께 수행
+            per_channel=False,     # False = 더 빠른 추론, True = 약간 높은 정확도
+            reduce_type=QuantType.QUInt8,
+            weight_type=QuantType.QUInt8
+        )
+        print(f"✓ Dynamic 양자화 완료: {output_path}")
+        print_model_size(onnx_model_path, output_path)
+        
+    except ImportError:
+        print("⚠️  onnxruntime이 설치되어 있지 않습니다.")
+        print("설치: pip install onnx onnxruntime")
+        return False
+    
+    return True
+
+
+def quantize_onnx_static(onnx_model_path, output_path, calibration_data_dir=None):
+    """
+    [고급] ONNX 모델을 Static Quantization으로 변환
+    - 캘리브레이션 데이터로 정확한 범위 계산
+    - 성능 손실 거의 없음
+    - 추론 속도: Dynamic보다 빠름
+    """
+    print("\n" + "="*60)
+    print("양자화: Static INT8 Quantization 진행 중...")
+    print("="*60)
+    
+    if calibration_data_dir is None:
+        print("⚠️  Static 양자화는 캘리브레이션 데이터가 필요합니다.")
+        print("   valid_data/ 디렉토리의 이미지를 활용해주세요.")
+        return False
+    
+    try:
+        from onnxruntime.quantization import quantize_static, QuantFormat, QuantType
+        from onnxruntime.quantization.calibrate import create_calibrator
+        import glob
+        import cv2
+        
+        # 캘리브레이션 데이터 수집
+        image_files = glob.glob(f"{calibration_data_dir}/**/*.jpg", recursive=True)[:100]
+        if not image_files:
+            print(f"❌ 캘리브레이션 이미지를 찾을 수 없습니다: {calibration_data_dir}")
+            return False
+        
+        print(f"캘리브레이션 이미지: {len(image_files)}개")
+        
+        def calibration_data_generator():
+            """캘리브레이션 데이터 생성기"""
+            for img_path in image_files:
+                try:
+                    img = cv2.imread(img_path)
+                    if img is None:
+                        continue
+                    img = cv2.resize(img, (INPUT_SIZE_W, INPUT_SIZE_H))
+                    # 정규화
+                    img = img.astype(np.float32) / 255.0
+                    img = np.transpose(img, (2, 0, 1))  # HWC -> CHW
+                    yield {"input": np.expand_dims(img, 0)}  # Batch 차원 추가
+                except Exception as e:
+                    print(f"⚠️  이미지 로드 실패: {img_path} - {e}")
+                    continue
+        
+        # Static quantization 적용
+        quantize_static(
+            model_input=onnx_model_path,
+            model_output=output_path,
+            calibration_data_reader=calibration_data_generator(),
+            quant_format=QuantFormat.QDQ,  # QDQ (Quantize-DeQuantize) 포맷 사용
+            per_channel=True,
+            reduce_type=QuantType.QUInt8,
+            weight_type=QuantType.QUInt8
+        )
+        print(f"✓ Static 양자화 완료: {output_path}")
+        print_model_size(onnx_model_path, output_path)
+        
+    except ImportError:
+        print("⚠️  onnxruntime이 설치되어 있지 않습니다.")
+        print("설치: pip install onnx onnxruntime")
+        return False
+    
+    return True
+
+
+def quantize_onnx_float16(onnx_model_path, output_path):
+    """
+    ONNX 모델을 Float16으로 변환
+    - 성능 손실 거의 없음
+    - 파일 크기: ~50% 감소
+    - INT8보다 느릴 수 있음 (하지만 대부분 충분히 빠름)
+    """
+    print("\n" + "="*60)
+    print("양자화: Float16 변환 진행 중...")
+    print("="*60)
+    
+    try:
+        from onnx import load, save, TensorProto
+        from onnx.helper import tensor_dtype_to_np_dtype
+        import onnx
+        
+        model = load(onnx_model_path)
+        
+        # 모든 Float32 타입을 Float16으로 변환
+        for initializer in model.graph.initializer:
+            if initializer.data_type == TensorProto.FLOAT:
+                # Float32 -> Float16
+                float_data = np.frombuffer(initializer.raw_data, dtype=np.float32)
+                float16_data = float_data.astype(np.float16)
+                initializer.raw_data = float16_data.tobytes()
+                initializer.data_type = TensorProto.FLOAT16
+        
+        # 모든 값 초기화의 dtype 업데이트
+        for tensor in model.graph.initializer:
+            if tensor.data_type == TensorProto.FLOAT16:
+                del tensor.float_data[:]
+                del tensor.int32_data[:]
+                del tensor.int64_data[:]
+        
+        # 그래프의 입출력 타입 업데이트
+        for value_info in model.graph.value_info:
+            if value_info.type.tensor_type.elem_type == TensorProto.FLOAT:
+                value_info.type.tensor_type.elem_type = TensorProto.FLOAT16
+        
+        # 노드 output 타입 업데이트 (선택사항)
+        for node in model.graph.node:
+            for output in node.output:
+                for value_info in model.graph.value_info:
+                    if value_info.name == output and value_info.type.tensor_type.elem_type == TensorProto.FLOAT:
+                        value_info.type.tensor_type.elem_type = TensorProto.FLOAT16
+        
+        # 모델 저장
+        save(model, output_path)
+        
+        print(f"✓ Float16 변환 완료: {output_path}")
+        print_model_size(onnx_model_path, output_path)
+        
+    except Exception as e:
+        print(f"❌ Float16 변환 실패: {e}")
+        print("필요한 라이브러리: pip install onnx")
+        return False
+    
+    return True
+
+
+def print_model_size(original_path, quantized_path):
+    """모델 크기 비교"""
+    try:
+        orig_size = Path(original_path).stat().st_size / (1024 * 1024)  # MB
+        quant_size = Path(quantized_path).stat().st_size / (1024 * 1024)  # MB
+        reduction = (1 - quant_size / orig_size) * 100
+        
+        print(f"\n📊 모델 크기 비교:")
+        print(f"   원본:      {orig_size:.2f} MB")
+        print(f"   양자화:    {quant_size:.2f} MB")
+        print(f"   감소율:    {reduction:.1f}%")
+    except Exception as e:
+        print(f"⚠️  파일 크기 계산 실패: {e}")
+
 
 if __name__ == "__main__":
     convert_ds_to_onnx()
+    
+    # ============ 양자화 (선택사항) ============
+    print("\n" + "="*60)
+    print("ONNX 모델 양자화")
+    print("="*60)
+    print(f"양자화 타입: {QUANTIZATION_TYPE}")
+    print("\n💡 양자화 옵션:")
+    print("   - 'dynamic'  : Dynamic INT8 (권장, 간단함, 성능손실 1% 이하)")
+    print("   - 'static'   : Static INT8 (캘리브레이션 필요, 성능 최고)")
+    print("   - 'float16'  : Float16 (성능손실 거의 없음, 파일 50% 감소)")
+    
+    if QUANTIZATION_TYPE == "dynamic":
+        quantize_onnx_dynamic(OUTPUT_PATH, OUTPUT_PATH_QUANTIZED)
+    elif QUANTIZATION_TYPE == "static":
+        # valid_data 디렉토리에 실제 deepfake 탐지 데이터가 있다고 가정
+        success = quantize_onnx_static(OUTPUT_PATH, OUTPUT_PATH_QUANTIZED, 
+                                       calibration_data_dir="valid_data")
+        if not success:
+            print("\n💡 Tip: valid_data 디렉토리에 이미지를 추가하고 다시 실행하세요.")
+            print("   또는 QUANTIZATION_TYPE을 'dynamic'으로 변경하세요.")
+    elif QUANTIZATION_TYPE == "float16":
+        quantize_onnx_float16(OUTPUT_PATH, OUTPUT_PATH_QUANTIZED)
+    else:
+        print(f"❌ 지원하지 않는 양자화 타입: {QUANTIZATION_TYPE}")
+    
+    print("\n" + "="*60)
+    print("✓ 변환 완료!")
+    print("="*60)
