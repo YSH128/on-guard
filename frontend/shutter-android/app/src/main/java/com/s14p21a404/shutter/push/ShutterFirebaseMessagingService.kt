@@ -1,16 +1,28 @@
 package com.s14p21a404.shutter.push
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.location.LocationManager
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.kakao.sdk.auth.AuthApiClient
 import com.s14p21a404.shutter.data.token.TokenManager
+import com.s14p21a404.shutter.di.ServiceLocator
 import com.s14p21a404.shutter.presentation.main.MainActivity
+import com.s14p21a404.shutter.presentation.service.CriminalLocationBridge
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -42,19 +54,106 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
 
     /**
      * 푸시 메시지 수신 시 호출.
-     * 알림을 상단바에 표시한다.
+     * type 필드에 따라 처리를 분기한다.
      */
     override fun onMessageReceived(message: RemoteMessage) {
         Log.d(TAG, "푸시 수신 — from: ${message.from}, data: ${message.data}")
 
-        val title = message.notification?.title
-            ?: message.data["title"]
-            ?: "Shutter 알림"
-        val body = message.notification?.body
-            ?: message.data["body"]
-            ?: ""
+        when (message.data["type"]) {
+            "location_request" -> {
+                Log.d(TAG, "location_request 수신 — requesterKakaoId: ${message.data["requesterKakaoId"]}")
+                handleLocationRequest(message.data)
+            }
+            "criminal_location" -> {
+                Log.d(TAG, "criminal_location 수신 — country: ${message.data["country"]}")
+                handleCriminalLocation(message.data)
+            }
+            else -> {
+                val title = message.notification?.title
+                    ?: message.data["title"]
+                    ?: "Shutter 알림"
+                val body = message.notification?.body
+                    ?: message.data["body"]
+                    ?: ""
+                showNotification(title, body)
+            }
+        }
+    }
 
-        showNotification(title, body)
+    /**
+     * 위치 요청 FCM 수신: 내 GPS를 1회 읽어 서버에 신고한다.
+     * 상대방(요청자) kakaoId는 requesterKakaoId 필드로 수신한다.
+     */
+    private fun handleLocationRequest(data: Map<String, String>) {
+        val requesterKakaoId = data["requesterKakaoId"]?.toLongOrNull() ?: run {
+            Log.w(TAG, "requesterKakaoId 없음 — 위치 신고 생략")
+            return
+        }
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.w(TAG, "위치 권한 없음 — 위치 신고 생략")
+            return
+        }
+
+        val locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
+        val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+        val location = providers.firstNotNullOfOrNull { provider ->
+            runCatching { locationManager.getLastKnownLocation(provider) }.getOrNull()
+        }
+
+        if (location == null) {
+            Log.w(TAG, "위치 없음 — 위치 신고 생략")
+            return
+        }
+
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            ServiceLocator.getInstance(applicationContext)
+                .criminalLocationApi
+                .reportLocation(requesterKakaoId, location.latitude, location.longitude)
+                .onSuccess { Log.d(TAG, "위치 신고 완료 (요청자: $requesterKakaoId)") }
+                .onFailure { Log.e(TAG, "위치 신고 실패", it) }
+        }
+    }
+
+    /**
+     * 범죄자 위치 FCM 수신: UI 콜백 호출 + 푸시 알림 표시.
+     */
+    private fun handleCriminalLocation(data: Map<String, String>) {
+        val country = data["country"] ?: run {
+            Log.w(TAG, "country 없음")
+            return
+        }
+
+        Log.d(TAG, "criminal_location 국가: $country")
+
+        // 1. VideoCallScreen UI에 콜백 (메인 스레드에서 실행)
+        Handler(Looper.getMainLooper()).post {
+            CriminalLocationBridge.onLocationReceived?.invoke(country)
+        }
+
+        // 2. 푸시 알림 표시
+        showCriminalLocationNotification(country)
+    }
+
+    private fun showCriminalLocationNotification(country: String) {
+        val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this, 1, intent, PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle("통화 상대방 위치 확인")
+            .setContentText("통화 상대방 위치: $country")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+        nm.notify(CRIMINAL_LOCATION_NOTIFICATION_ID, notification)
     }
 
     private fun showNotification(title: String, body: String) {
@@ -94,8 +193,9 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
 
     companion object {
         private const val TAG = "ShutterFCMService"
-        private const val CHANNEL_ID = "shutter_push_channel"
+        private const val CHANNEL_ID = "shutter_push_channel_v2"
         private const val NOTIFICATION_ID = 2001
+        private const val CRIMINAL_LOCATION_NOTIFICATION_ID = 2002
         private const val KAKAO_PUSH_REGISTER_URL = "https://kapi.kakao.com/v1/push/register"
 
         private val okHttpClient = OkHttpClient()

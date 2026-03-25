@@ -202,6 +202,23 @@ data class TimelineResponse(
     val data: TimelineData,
 )
 
+// ── 범죄자 위치 요청/신고 ──────────────────────────────────────────────────────
+
+data class CriminalLocationRequestBody(
+    @SerializedName("opponent_kakao_id") val opponentKakaoId: Long,
+)
+
+data class CriminalLocationReportBody(
+    @SerializedName("requester_kakao_id") val requesterKakaoId: Long,
+    val lat: Double,
+    val lng: Double,
+)
+
+data class MessageResponse(
+    val success: Boolean,
+    val message: String,
+)
+
 // ── 인터페이스 ─────────────────────────────────────────────────────────────────
 
 interface ApiService {
@@ -238,4 +255,10 @@ interface ApiService {
 
     @GET("api/v1/timeline/{wardId}")
     suspend fun getTimeline(@Path("wardId") wardId: Long): TimelineResponse
+
+    @POST("api/v1/location/criminal-request")
+    suspend fun requestCriminalLocation(@Body request: CriminalLocationRequestBody): MessageResponse
+
+    @POST("api/v1/location/criminal-report")
+    suspend fun reportCriminalLocation(@Body request: CriminalLocationReportBody): MessageResponse
 }

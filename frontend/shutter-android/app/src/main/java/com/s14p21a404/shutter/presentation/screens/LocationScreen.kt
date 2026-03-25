@@ -8,6 +8,15 @@ import android.graphics.Shader
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -18,12 +27,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Path
@@ -54,6 +65,7 @@ import com.kakao.vectormap.label.LabelOptions
 import com.kakao.vectormap.label.LabelStyle
 import com.kakao.vectormap.label.LabelStyles
 import com.s14p21a404.shutter.R
+import kotlinx.coroutines.delay
 
 private const val PULSE_FRAME_COUNT = 40
 private const val PULSE_INTERVAL_MS = 40L
@@ -168,12 +180,14 @@ fun LocationScreen(
                         .background(BgColor),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (hasActiveLocation && selectedWard != null) {
-                        KakaoMapWithMarker(
-                            latitude = selectedWard.latitude!!,
-                            longitude = selectedWard.longitude!!
-                        )
-                    } else {
+                    // 지도를 항상 유지하되, 위치가 없으면 숨기기만 한다 (파괴하지 않음)
+                    KakaoMapWithMarker(
+                        wardId = selectedId,
+                        latitude = if (hasActiveLocation) selectedWard?.latitude else null,
+                        longitude = if (hasActiveLocation) selectedWard?.longitude else null,
+                        visible = hasActiveLocation,
+                    )
+                    if (!hasActiveLocation) {
                         EmptyLocationState()
                     }
                 }
@@ -308,8 +322,10 @@ private fun GuardianAvatar(
 
 @Composable
 private fun KakaoMapWithMarker(
-    latitude: Double,
-    longitude: Double,
+    wardId: String?,
+    latitude: Double?,
+    longitude: Double?,
+    visible: Boolean,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -326,14 +342,136 @@ private fun KakaoMapWithMarker(
     var kakaoMapRef by remember { mutableStateOf<KakaoMap?>(null) }
     var pulseLabelRef by remember { mutableStateOf<Label?>(null) }
     var shieldLabelRef by remember { mutableStateOf<Label?>(null) }
+    // 파장 스타일을 remember에 보관해 마커 재생성 시 재사용
+    var pulseStylesRef by remember { mutableStateOf<List<LabelStyles?>>(emptyList()) }
+    var shieldStyleRef by remember { mutableStateOf<LabelStyles?>(null) }
+    var animStarted by remember { mutableStateOf(false) }
 
-    // 위치 변경 시 카메라 이동 + 마커 위치 갱신
+    // 스켈레톤 표시 여부: 초기 지도 로딩 + 피보호자 전환 시 모두 표시
+    var showSkeleton by remember { mutableStateOf(true) }
+
+    // 기존 마커만 제거
+    fun clearMarkers() {
+        pulseLabelRef?.remove()
+        shieldLabelRef?.remove()
+        pulseLabelRef = null
+        shieldLabelRef = null
+    }
+
+    // 마커를 (재)생성하는 함수 — 카메라는 건드리지 않음
+    fun placeMarkers(kakaoMap: KakaoMap, lat: Double, lng: Double) {
+        val targetLatLng = LatLng.from(lat, lng)
+        val labelLayer = kakaoMap.labelManager?.layer ?: return
+
+        // 파장 스타일이 아직 없으면 등록
+        if (pulseStylesRef.isEmpty()) {
+            pulseStylesRef = pulseFrames.map { frame ->
+                kakaoMap.labelManager?.addLabelStyles(
+                    LabelStyles.from(
+                        LabelStyle.from(frame).setAnchorPoint(0.5f, 0.5f)
+                    )
+                )
+            }
+        }
+        if (shieldStyleRef == null) {
+            shieldStyleRef = kakaoMap.labelManager?.addLabelStyles(
+                LabelStyles.from(
+                    LabelStyle.from(markerBitmap).setAnchorPoint(0.5f, 1.0f)
+                )
+            )
+        }
+
+        labelLayer.zOrder = 10001
+
+        // 파장 라벨
+        val firstPulseStyle = pulseStylesRef.firstOrNull()
+        if (firstPulseStyle != null) {
+            pulseLabelRef = labelLayer.addLabel(
+                LabelOptions.from("pulse", targetLatLng)
+                    .setStyles(firstPulseStyle)
+                    .setRank(1L)
+            )
+        }
+
+        // 파장 애니메이션 (한 번만 시작)
+        if (!animStarted) {
+            animStarted = true
+            var frameIndex = 0
+            val animRunnable = object : Runnable {
+                override fun run() {
+                    frameIndex = (frameIndex + 1) % PULSE_FRAME_COUNT
+                    val nextStyle = pulseStylesRef.getOrNull(frameIndex)
+                    if (nextStyle != null && pulseLabelRef != null) {
+                        pulseLabelRef!!.changeStyles(nextStyle)
+                    }
+                    animHandler.postDelayed(this, PULSE_INTERVAL_MS)
+                }
+            }
+            animHandler.postDelayed(animRunnable, PULSE_INTERVAL_MS)
+        }
+
+        // 방패 마커
+        val sStyle = shieldStyleRef
+        if (sStyle != null) {
+            shieldLabelRef = labelLayer.addLabel(
+                LabelOptions.from(targetLatLng)
+                    .setStyles(sStyle)
+                    .setRank(Long.MAX_VALUE)
+            )
+        }
+    }
+
+    // ── 피보호자 전환 감지: 즉시 전환 (디졸브 없음) ──
+    // 초기 컴포지션을 구분하기 위한 플래그
+    var isFirstComposition by remember { mutableStateOf(true) }
+
+    LaunchedEffect(wardId) {
+        if (isFirstComposition) {
+            // 최초 진입은 onMapReady에서 스켈레톤 해제 처리
+            isFirstComposition = false
+            return@LaunchedEffect
+        }
+
+        // 피보호자 전환 시 스켈레톤 즉시 표시
+        showSkeleton = true
+
+        // 스켈레톤이 최소 1프레임 이상 그려지도록 대기
+        delay(400)
+
+        val map = kakaoMapRef ?: run {
+            showSkeleton = false
+            return@LaunchedEffect
+        }
+
+        // 이전 마커 즉시 제거
+        clearMarkers()
+
+        if (latitude != null && longitude != null) {
+            // 카메라를 애니메이션 없이 즉시 점프
+            map.moveCamera(CameraUpdateFactory.newCenterPosition(LatLng.from(latitude, longitude), 16))
+            // 새 위치에 마커 배치
+            placeMarkers(map, latitude, longitude)
+        }
+
+        // 전환 완료 후 스켈레톤 숨김
+        showSkeleton = false
+    }
+
+    // ── 같은 피보호자의 실시간 위치 업데이트: 부드럽게 이동 ──
     LaunchedEffect(latitude, longitude) {
         val map = kakaoMapRef ?: return@LaunchedEffect
+        if (latitude == null || longitude == null) {
+            clearMarkers()
+            return@LaunchedEffect
+        }
+        // wardId 전환 직후에는 위 LaunchedEffect(wardId)가 처리하므로 스킵
+        // 여기서는 같은 ward 내 좌표 변동만 처리
         val newLatLng = LatLng.from(latitude, longitude)
-        map.moveCamera(CameraUpdateFactory.newCenterPosition(newLatLng, 16))
-        pulseLabelRef?.moveTo(newLatLng)
-        shieldLabelRef?.moveTo(newLatLng)
+        if (pulseLabelRef != null && shieldLabelRef != null) {
+            map.moveCamera(CameraUpdateFactory.newCenterPosition(newLatLng, 16))
+            pulseLabelRef?.moveTo(newLatLng)
+            shieldLabelRef?.moveTo(newLatLng)
+        }
     }
 
     DisposableEffect(lifecycleOwner) {
@@ -352,91 +490,138 @@ private fun KakaoMapWithMarker(
         }
     }
 
-    AndroidView(
-        factory = {
-            mapView.apply {
-                addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
-                    override fun onViewAttachedToWindow(v: android.view.View) {
-                        if (!mapStarted) {
-                            mapStarted = true
-                            start(
-                                object : MapLifeCycleCallback() {
-                                    override fun onMapDestroy() { Log.d("KakaoMap", "지도 파괴됨") }
-                                    override fun onMapError(error: Exception?) {
-                                        Log.e("KakaoMap", "지도 에러: ${error?.message}", error)
-                                    }
-                                },
-                                object : KakaoMapReadyCallback() {
-                                    override fun onMapReady(kakaoMap: KakaoMap) {
-                                        Log.d("KakaoMap", "지도 준비 완료")
-                                        kakaoMapRef = kakaoMap
-
-                                        val targetLatLng = LatLng.from(latitude, longitude)
-                                        kakaoMap.moveCamera(
-                                            CameraUpdateFactory.newCenterPosition(targetLatLng, 16)
-                                        )
-
-                                        val labelLayer = kakaoMap.labelManager?.layer
-                                        labelLayer?.zOrder = 10001
-
-                                        // 파장 스타일 등록
-                                        val pulseStyles = pulseFrames.map { frame ->
-                                            kakaoMap.labelManager?.addLabelStyles(
-                                                LabelStyles.from(
-                                                    LabelStyle.from(frame).setAnchorPoint(0.5f, 0.5f)
-                                                )
-                                            )
-                                        }
-
-                                        if (pulseStyles.firstOrNull() != null) {
-                                            pulseLabelRef = labelLayer?.addLabel(
-                                                LabelOptions.from("pulse", targetLatLng)
-                                                    .setStyles(pulseStyles.first()!!)
-                                                    .setRank(1L)
-                                            )
-                                        }
-
-                                        // 파장 애니메이션
-                                        var frameIndex = 0
-                                        val animRunnable = object : Runnable {
-                                            override fun run() {
-                                                frameIndex = (frameIndex + 1) % PULSE_FRAME_COUNT
-                                                val nextStyle = pulseStyles.getOrNull(frameIndex)
-                                                if (nextStyle != null && pulseLabelRef != null) {
-                                                    pulseLabelRef!!.changeStyles(nextStyle)
-                                                }
-                                                animHandler.postDelayed(this, PULSE_INTERVAL_MS)
-                                            }
-                                        }
-                                        animHandler.postDelayed(animRunnable, PULSE_INTERVAL_MS)
-
-                                        // 방패 마커
-                                        val shieldStyle = kakaoMap.labelManager?.addLabelStyles(
-                                            LabelStyles.from(
-                                                LabelStyle.from(markerBitmap).setAnchorPoint(0.5f, 1.0f)
-                                            )
-                                        )
-                                        if (shieldStyle != null) {
-                                            shieldLabelRef = labelLayer?.addLabel(
-                                                LabelOptions.from(targetLatLng)
-                                                    .setStyles(shieldStyle)
-                                                    .setRank(Long.MAX_VALUE)
-                                            )
-                                        }
-                                    }
-                                }
+    // 지도 start()를 실행하는 공통 함수
+    fun MapView.startMapIfNeeded() {
+        if (mapStarted) return
+        mapStarted = true
+        start(
+            object : MapLifeCycleCallback() {
+                override fun onMapDestroy() { Log.d("KakaoMap", "지도 파괴됨") }
+                override fun onMapError(error: Exception?) {
+                    Log.e("KakaoMap", "지도 에러: ${error?.message}", error)
+                }
+            },
+            object : KakaoMapReadyCallback() {
+                override fun onMapReady(kakaoMap: KakaoMap) {
+                    Log.d("KakaoMap", "지도 준비 완료")
+                    kakaoMapRef = kakaoMap
+                    if (latitude != null && longitude != null) {
+                        kakaoMap.moveCamera(
+                            CameraUpdateFactory.newCenterPosition(
+                                LatLng.from(latitude, longitude), 16
                             )
-                            resume()
-                        }
+                        )
+                        placeMarkers(kakaoMap, latitude, longitude)
                     }
-                    override fun onViewDetachedFromWindow(v: android.view.View) {
-                        Log.d("KakaoMap", "MapView detached")
-                    }
-                })
+                    showSkeleton = false
+                }
             }
-        },
-        modifier = Modifier.fillMaxSize()
+        )
+        resume()
+    }
+
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        AndroidView(
+            factory = {
+                mapView.apply {
+                    addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
+                        override fun onViewAttachedToWindow(v: android.view.View) {
+                            startMapIfNeeded()
+                        }
+                        override fun onViewDetachedFromWindow(v: android.view.View) {
+                            Log.d("KakaoMap", "MapView detached")
+                        }
+                    })
+                    if (isAttachedToWindow) {
+                        startMapIfNeeded()
+                    }
+                }
+            },
+            update = { view ->
+                view.visibility = if (visible) android.view.View.VISIBLE else android.view.View.GONE
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        // 지도 로딩 중 또는 피보호자 전환 중 shimmer 스켈레톤 오버레이
+        AnimatedVisibility(
+            visible = showSkeleton,
+            enter = fadeIn(animationSpec = tween(150)),
+            exit = fadeOut(animationSpec = tween(300)),
+        ) {
+            MapSkeletonOverlay()
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════
+// 지도 로딩 스켈레톤 (shimmer)
+// ════════════════════════════════════════════════════════════
+
+@Composable
+private fun MapSkeletonOverlay() {
+    val shimmerColors = listOf(
+        Color(0xFFE8ECF1),
+        Color(0xFFF5F7FA),
+        Color(0xFFE8ECF1),
     )
+
+    val transition = rememberInfiniteTransition(label = "mapShimmer")
+    val translateAnim by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 2000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "mapShimmerTranslate",
+    )
+
+    val brush = Brush.linearGradient(
+        colors = shimmerColors,
+        start = Offset(translateAnim - 400f, translateAnim - 400f),
+        end = Offset(translateAnim, translateAnim),
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(16.dp))
+            .background(brush),
+        contentAlignment = Alignment.Center,
+    ) {
+        // 중앙에 작은 위치 아이콘 모양의 스켈레톤 플레이스홀더
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            // 핀 아이콘 자리
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFD6DCE8))
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            // 텍스트 줄 자리
+            Box(
+                modifier = Modifier
+                    .width(120.dp)
+                    .height(14.dp)
+                    .clip(RoundedCornerShape(7.dp))
+                    .background(Color(0xFFD6DCE8))
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Box(
+                modifier = Modifier
+                    .width(80.dp)
+                    .height(14.dp)
+                    .clip(RoundedCornerShape(7.dp))
+                    .background(Color(0xFFD6DCE8))
+            )
+        }
+    }
 }
 
 /**

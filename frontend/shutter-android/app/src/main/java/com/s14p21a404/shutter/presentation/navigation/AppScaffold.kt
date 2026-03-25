@@ -16,6 +16,7 @@ import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -80,10 +81,23 @@ fun AppScaffold(
     onRequestPermissions: () -> Unit = {},
     onRequestOverlayPermission: () -> Unit = {},
     onRequestAccessibilityPermission: () -> Unit = {},
+    pendingDeepLinkScreen: String? = null,
+    onDeepLinkHandled: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+
+    LaunchedEffect(pendingDeepLinkScreen) {
+        if (pendingDeepLinkScreen == "location") {
+            navController.navigate(Screen.Location.route) {
+                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+            onDeepLinkHandled()
+        }
+    }
 
     // 보호자 등록·영상통화 화면에서는 하단 바를 숨김
     val showBottomBar = currentDestination?.route != Screen.GuardianRegistration.route
@@ -111,9 +125,9 @@ fun AppScaffold(
                     onRequestPermissions = onRequestPermissions,
                     onRequestOverlayPermission = onRequestOverlayPermission,
                     onRequestAccessibilityPermission = onRequestAccessibilityPermission,
-                    onNavigateToVideoCall = { channelId, callerName ->
-            navController.navigate(Screen.VideoCall.createRoute(channelId, callerName))
-        },
+                    onNavigateToVideoCall = { channelId, callerName, opponentKakaoId ->
+                        navController.navigate(Screen.VideoCall.createRoute(channelId, callerName, opponentKakaoId))
+                    },
                 )
             }
             composable(Screen.RecentRecords.route) {
@@ -145,9 +159,11 @@ fun AppScaffold(
                 val callerName = backStackEntry.arguments?.getString("callerName")?.let {
                     java.net.URLDecoder.decode(it, "UTF-8")
                 } ?: ""
+                val opponentKakaoId = backStackEntry.arguments?.getString("opponentKakaoId")?.toLongOrNull() ?: 0L
                 VideoCallScreen(
                     channelId = channelId,
                     callerName = callerName,
+                    opponentKakaoId = opponentKakaoId,
                     onCallEnded = { navController.popBackStack() }
                 )
             }

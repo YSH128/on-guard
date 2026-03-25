@@ -51,6 +51,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        handleDeepLinkIntent(intent)
 
         setContent {
             ShutterandroidTheme {
@@ -70,8 +71,11 @@ class MainActivity : ComponentActivity() {
                     }
                     LoginUiState.LoggedIn -> {
                         val uiState by viewModel.uiState.collectAsState()
+                        val pendingScreen by viewModel.pendingDeepLinkScreen.collectAsState()
                         MainScreen(
                             uiState = uiState,
+                            pendingDeepLinkScreen = pendingScreen,
+                            onDeepLinkHandled = { viewModel.setDeepLinkScreen(null) },
                             onRequestPermissions = { requestAllPermissions() },
                             onRequestOverlayPermission = { requestOverlayPermission() },
                             onRequestAccessibilityPermission = { requestAccessibilityPermission() },
@@ -82,6 +86,17 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleDeepLinkIntent(intent)
+    }
+
+    private fun handleDeepLinkIntent(intent: Intent?) {
+        val screen = intent?.data?.getQueryParameter("screen") ?: return
+        viewModel.setDeepLinkScreen(screen)
     }
 
     override fun onResume() {

@@ -8,6 +8,7 @@ import com.s14p21a404.shutter.data.repository.AuthRepositoryImpl
 import com.s14p21a404.shutter.data.repository.DeepfakeDetectionRepositoryImpl
 import com.s14p21a404.shutter.data.repository.GpsRepositoryImpl
 import com.s14p21a404.shutter.data.repository.GuardianRepositoryImpl
+import com.s14p21a404.shutter.data.repository.CriminalLocationApi
 import com.s14p21a404.shutter.data.repository.GuardianUuidStore
 import com.s14p21a404.shutter.data.repository.VideoCallRepositoryImpl
 import com.s14p21a404.shutter.data.token.TokenManager
@@ -60,6 +61,8 @@ class ServiceLocator private constructor(context: Context) {
     val gpsRepository: GpsRepository = GpsRepositoryImpl(apiService)
 
     val alertRepository: AlertRepository = AlertRepositoryImpl(apiService)
+
+    val criminalLocationApi = CriminalLocationApi(apiService)
 
     val gpsWebSocketClient = GpsWebSocketClient(tokenManager)
 
