@@ -63,10 +63,11 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun checkLoginState() {
-        _loginUiState.value = if (getAccessTokenUseCase()) {
-            LoginUiState.LoggedIn
+        if (getAccessTokenUseCase()) {
+            registerFcmToken()          // 앱 시작 시 FCM 토큰 재등록 (토큰 변경 대비)
+            _loginUiState.value = LoginUiState.LoggedIn
         } else {
-            LoginUiState.LoggedOut
+            _loginUiState.value = LoginUiState.LoggedOut
         }
     }
 

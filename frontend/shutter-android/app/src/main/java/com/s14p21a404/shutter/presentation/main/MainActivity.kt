@@ -12,15 +12,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import com.s14p21a404.shutter.presentation.login.LoginScreen
 import com.s14p21a404.shutter.presentation.login.LoginUiState
 import com.s14p21a404.shutter.presentation.login.LoginViewModel
-import com.s14p21a404.shutter.presentation.service.ForegroundAppMonitorService
 import com.s14p21a404.shutter.presentation.service.VideoCallDetectService
+import com.s14p21a404.shutter.push.IncomingCallEventBus
 import com.s14p21a404.shutter.ui.theme.ShutterandroidTheme
 
 class MainActivity : ComponentActivity() {
@@ -28,40 +27,45 @@ class MainActivity : ComponentActivity() {
     private val loginViewModel: LoginViewModel by viewModels()
     private val viewModel: MainViewModel by viewModels()
 
-    // 런타임 권한 요청 런처
+    // 핵심: 통화 상태
+    private var isInCall = false
+
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        Log.d(TAG, "권한 결과: $permissions")
+    ) {
         viewModel.checkAllPermissions()
     }
 
-    // 화면 캡처 동의 런처
     private val screenCaptureLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == RESULT_OK && result.data != null) {
-            Log.d(TAG, "화면 캡처 동의 완료")
             startServiceWithProjection(result.resultCode, result.data!!)
-        } else {
-            Log.w(TAG, "화면 캡처 동의 거부됨")
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
         handleDeepLinkIntent(intent)
 
         setContent {
             ShutterandroidTheme {
+
+                LaunchedEffect(Unit) {
+                    IncomingCallEventBus.callRejected.collect {
+                        viewModel.onCallRejected()
+                    }
+                }
+
                 val loginUiState by loginViewModel.loginUiState.collectAsState()
                 val loginError by loginViewModel.loginError.collectAsState()
 
-                when (val state = loginUiState) {
-                    LoginUiState.Checking -> {
-                        // 로그인 상태 확인 중 — 빈 화면 유지 (스플래시 대체)
-                    }
+                when (loginUiState) {
+
+                    LoginUiState.Checking -> {}
+
                     LoginUiState.LoggedOut -> {
                         LoginScreen(
                             onKakaoLogin = { loginViewModel.loginWithKakao(this@MainActivity) },
@@ -69,18 +73,34 @@ class MainActivity : ComponentActivity() {
                             onDismissError = { loginViewModel.dismissLoginError() }
                         )
                     }
+
                     LoginUiState.LoggedIn -> {
+
                         val uiState by viewModel.uiState.collectAsState()
                         val pendingScreen by viewModel.pendingDeepLinkScreen.collectAsState()
+
                         MainScreen(
                             uiState = uiState,
+                            viewModel = viewModel,
                             pendingDeepLinkScreen = pendingScreen,
                             onDeepLinkHandled = { viewModel.setDeepLinkScreen(null) },
                             onRequestPermissions = { requestAllPermissions() },
                             onRequestOverlayPermission = { requestOverlayPermission() },
                             onRequestAccessibilityPermission = { requestAccessibilityPermission() },
                             onToggleService = { toggleService() },
-                            onLogout = { loginViewModel.logout() }
+                            onLogout = { loginViewModel.logout() },
+
+                            // 영상통화 진입
+                            onNavigateToVideoCall = { channelId, callerName, opponentKakaoId, token ->
+
+                                Log.d(TAG, "영상통화 진입: $channelId")
+
+                                isInCall = true
+
+                                viewModel.setDeepLinkScreen(
+                                    "video_call:$channelId:$callerName:$opponentKakaoId:$token"
+                                )
+                            }
                         )
                     }
                 }
@@ -95,74 +115,91 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleDeepLinkIntent(intent: Intent?) {
-        val screen = intent?.data?.getQueryParameter("screen") ?: return
-        viewModel.setDeepLinkScreen(screen)
+
+        val screenFromUri = intent?.data?.getQueryParameter("screen")
+        val screenFromExtra = intent?.getStringExtra("screen")
+
+        val screen = screenFromUri ?: screenFromExtra ?: return
+
+        Log.d(TAG, "DeepLink screen: $screen")
+
+        // 이미 통화중이면 중복 진입 방지
+        if (screen.startsWith("video_call") && isInCall) {
+            Log.d(TAG, "이미 통화중 → video_call 무시")
+            return
+        }
+
+        when (screen) {
+
+            "incoming_call" -> {
+                val channelName = intent?.getStringExtra("channel_name") ?: return
+                val callerName = intent?.getStringExtra("caller_name") ?: "알 수 없음"
+                val callerKakaoId = intent?.getLongExtra("caller_kakao_id", 0L) ?: 0L
+
+                Log.d(TAG, "incoming_call 처리: $channelName / $callerName / kakaoId=$callerKakaoId")
+
+                viewModel.onIncomingCall(channelName, callerName, callerKakaoId)
+                viewModel.setDeepLinkScreen("incoming_call")
+            }
+
+            "reject_call" -> {
+                val channelName = intent?.getStringExtra("channel_name") ?: return
+                Log.d(TAG, "reject_call 처리: $channelName")
+            }
+
+            "call_accepted" -> {
+
+                val channelName = intent?.getStringExtra("channel_name") ?: return
+                val token = intent?.getStringExtra("token") ?: return   // 🔥 추가
+
+                Log.d(TAG, "CALL_ACCEPTED 처리: $channelName / token=$token")
+
+                isInCall = true
+
+                viewModel.setDeepLinkScreen(
+                    "video_call:$channelName:상대방:$token"
+                )
+            }
+
+            else -> {
+                viewModel.setDeepLinkScreen(screen)
+            }
+        }
     }
 
     override fun onResume() {
         super.onResume()
         viewModel.checkAllPermissions()
-
-        // AccessibilityService 활성 여부 확인
-        if (!ForegroundAppMonitorService.isRunning()) {
-            Log.w(TAG, "⚠️ AccessibilityService 미활성 — 접근성 설정에서 Shutter를 켜주세요")
-        }
     }
 
-    /**
-     * 접근성 서비스 설정 화면으로 이동.
-     * 우리 앱(ForegroundAppMonitorService)의 상세 설정 페이지로 바로 이동을 시도하고,
-     * 실패 시 접근성 목록 화면으로 fallback한다.
-     */
     private fun requestAccessibilityPermission() {
-        val componentName = "${packageName}/${packageName}.presentation.service.ForegroundAppMonitorService"
-        try {
-            // Android 접근성 서비스 상세 페이지로 바로 이동
-            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
-                val bundle = Bundle()
-                bundle.putString(":settings:fragment_args_key", componentName)
-                putExtra(":settings:fragment_args_key", componentName)
-                putExtra(":settings:show_fragment_args", bundle)
-            }
-            startActivity(intent)
-        } catch (e: Exception) {
-            Log.w(TAG, "접근성 상세 설정 이동 실패, 접근성 목록으로 fallback", e)
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-        }
+        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
     }
 
     /**
      * 필요한 모든 권한 요청
      */
     private fun requestAllPermissions() {
-        val permissionsToRequest = mutableListOf<String>()
+        val permissions = mutableListOf<String>()
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
             != PackageManager.PERMISSION_GRANTED
-        ) {
-            permissionsToRequest.add(Manifest.permission.READ_PHONE_STATE)
-        }
+        ) permissions.add(Manifest.permission.READ_PHONE_STATE)
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
-        ) {
-            permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
-        }
+        ) permissions.add(Manifest.permission.POST_NOTIFICATIONS)
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED
-        ) {
-            permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION)
-        }
+        ) permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ANSWER_PHONE_CALLS)
             != PackageManager.PERMISSION_GRANTED
-        ) {
-            permissionsToRequest.add(Manifest.permission.ANSWER_PHONE_CALLS)
-        }
+        ) permissions.add(Manifest.permission.ANSWER_PHONE_CALLS)
 
-        if (permissionsToRequest.isNotEmpty()) {
-            permissionLauncher.launch(permissionsToRequest.toTypedArray())
+        if (permissions.isNotEmpty()) {
+            permissionLauncher.launch(permissions.toTypedArray())
         }
     }
 
@@ -171,11 +208,12 @@ class MainActivity : ComponentActivity() {
      */
     private fun requestOverlayPermission() {
         if (!Settings.canDrawOverlays(this)) {
-            val intent = Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                "package:$packageName".toUri()
+            startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    "package:$packageName".toUri()
+                )
             )
-            startActivity(intent)
         }
     }
 
@@ -187,7 +225,6 @@ class MainActivity : ComponentActivity() {
         if (state.isServiceRunning) {
             stopService(Intent(this, VideoCallDetectService::class.java))
             viewModel.setServiceRunning(false)
-            Log.d(TAG, "서비스 중지됨")
         } else {
             val projectionManager = getSystemService(MediaProjectionManager::class.java)
             screenCaptureLauncher.launch(projectionManager.createScreenCaptureIntent())
@@ -200,14 +237,13 @@ class MainActivity : ComponentActivity() {
     private fun startServiceWithProjection(resultCode: Int, data: Intent) {
         // 추가: 캡처 권한 취득 직후 AI 모델 사전 빌드 및 로드를 백그라운드에서 진행 (콜드 스타트 지연 방지)
         com.s14p21a404.shutter.di.ServiceLocator.getInstance(this).detector.prepare()
-        
+
         val intent = Intent(this, VideoCallDetectService::class.java).apply {
             putExtra(VideoCallDetectService.EXTRA_RESULT_CODE, resultCode)
             putExtra(VideoCallDetectService.EXTRA_PROJECTION_DATA, data)
         }
         startForegroundService(intent)
         viewModel.setServiceRunning(true)
-        Log.d(TAG, "서비스 시작됨 (MediaProjection 포함)")
     }
 
     companion object {
