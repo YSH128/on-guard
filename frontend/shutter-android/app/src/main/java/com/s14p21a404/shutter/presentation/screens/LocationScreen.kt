@@ -77,7 +77,7 @@ private data class LocationGuardian(
 // ── 색상 상수 ──
 
 private val BgColor = Color(0xFFF2F5F9)
-private val TitleColor = Color(0xFF4A6091)
+private val TitleColor = Color(0xFF2A2A2A)
 private val SelectedBorderColor = Color(0xFF597BCE)
 private val UnselectedAvatarBg = Color(0xFFD6DCE8)
 private val SelectedAvatarBg = Color(0xFFF2F5F9)
@@ -200,15 +200,15 @@ private fun HeaderTitle() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(BgColor)
+            .background(Color.White)
             .statusBarsPadding()
-            .padding(top = 14.dp, bottom = 4.dp),
+            .padding(top = 36.dp, bottom = 24.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = "위치 확인",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
             color = TitleColor
         )
     }

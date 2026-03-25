@@ -1,7 +1,9 @@
 package com.s14p21a404.shutter.presentation.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -113,45 +116,106 @@ fun RecentRecordsScreen(
     viewModel: RecentRecordsViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val listState = rememberLazyListState()
 
     LaunchedEffect(Unit) { viewModel.loadWards() }
+
+    // 스크롤 50px 이상이면 collapsed
+    val isCollapsed by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 ||
+                    listState.firstVisibleItemScrollOffset > 50
+        }
+    }
+
+    // 헤더 패딩 애니메이션
+    val topPadding by animateDpAsState(
+        targetValue = if (isCollapsed) 16.dp else 36.dp,
+        animationSpec = tween(300),
+        label = "headerTop"
+    )
+    val bottomPadding by animateDpAsState(
+        targetValue = if (isCollapsed) 12.dp else 24.dp,
+        animationSpec = tween(300),
+        label = "headerBottom"
+    )
+
+    // 제목 정렬 (0f = 왼쪽, 0.5f = 가운데)
+    val titleBias by animateFloatAsState(
+        targetValue = if (isCollapsed) -1f else 0f,
+        animationSpec = tween(300),
+        label = "titleBias"
+    )
+    val titleSize by animateFloatAsState(
+        targetValue = if (isCollapsed) 17f else 22f,
+        animationSpec = tween(300),
+        label = "titleSize"
+    )
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(BgColor)
     ) {
-        // ── 타이틀 ──
-        Box(
+        // ── 헤더 (스크롤 감지) ──
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .background(Color.White)
                 .statusBarsPadding()
-                .padding(vertical = 20.dp),
-            contentAlignment = Alignment.Center
+                .padding(top = topPadding, bottom = bottomPadding)
         ) {
-            Text(
-                text = "최근기록",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary,
-            )
-        }
-
-        // ── 필터 칩 (전체 | 피보호자 이름들) ──
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(uiState.wardFilters) { filter ->
-                FilterChip(
-                    text = filter.name,
-                    selected = uiState.selectedFilter == filter.name,
-                    onClick = { viewModel.selectFilter(filter.name) }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                contentAlignment = if (isCollapsed) Alignment.CenterStart else Alignment.Center
+            ) {
+                Text(
+                    text = "최근기록",
+                    fontSize = titleSize.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary,
                 )
+            }
+
+            // 필터 칩은 collapsed 상태에서만 헤더 안에 붙음
+            if (isCollapsed) {
+                Spacer(Modifier.height(10.dp))
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(uiState.wardFilters) { filter ->
+                        FilterChip(
+                            text = filter.name,
+                            selected = uiState.selectedFilter == filter.name,
+                            onClick = { viewModel.selectFilter(filter.name) }
+                        )
+                    }
+                }
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        // ── 필터 칩 (expanded 상태: 헤더 아래) ──
+        if (!isCollapsed) {
+            Spacer(Modifier.height(12.dp))
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(uiState.wardFilters) { filter ->
+                    FilterChip(
+                        text = filter.name,
+                        selected = uiState.selectedFilter == filter.name,
+                        onClick = { viewModel.selectFilter(filter.name) }
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        } else {
+            Spacer(Modifier.height(12.dp))
+        }
 
         // ── 콘텐츠 ──
         when {
@@ -167,6 +231,7 @@ fun RecentRecordsScreen(
             }
             else -> {
                 LazyColumn(
+                    state = listState,
                     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxSize()
