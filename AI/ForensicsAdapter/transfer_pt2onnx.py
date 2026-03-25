@@ -1,3 +1,5 @@
+from onnxconverter_common import float16
+import onnx
 import torch
 from model.ds import DS  # 실제 프로젝트 경로에 맞게 임포트
 import numpy as np
@@ -242,60 +244,28 @@ def quantize_onnx_static(onnx_model_path, output_path, calibration_data_dir=None
 def quantize_onnx_float16(onnx_model_path, output_path):
     """
     ONNX 모델을 Float16으로 변환
-    - 성능 손실 거의 없음
+    - 입출력은 float32 유지 (keep_io_types=True) → Android C++ 코드 변경 불필요
+    - 내부 가중치/연산만 float16으로 변환
     - 파일 크기: ~50% 감소
-    - INT8보다 느릴 수 있음 (하지만 대부분 충분히 빠름)
     """
     print("\n" + "="*60)
     print("양자화: Float16 변환 진행 중...")
     print("="*60)
-    
+
     try:
-        from onnx import load, save, TensorProto
-        from onnx.helper import tensor_dtype_to_np_dtype
-        import onnx
-        
-        model = load(onnx_model_path)
-        
-        # 모든 Float32 타입을 Float16으로 변환
-        for initializer in model.graph.initializer:
-            if initializer.data_type == TensorProto.FLOAT:
-                # Float32 -> Float16
-                float_data = np.frombuffer(initializer.raw_data, dtype=np.float32)
-                float16_data = float_data.astype(np.float16)
-                initializer.raw_data = float16_data.tobytes()
-                initializer.data_type = TensorProto.FLOAT16
-        
-        # 모든 값 초기화의 dtype 업데이트
-        for tensor in model.graph.initializer:
-            if tensor.data_type == TensorProto.FLOAT16:
-                del tensor.float_data[:]
-                del tensor.int32_data[:]
-                del tensor.int64_data[:]
-        
-        # 그래프의 입출력 타입 업데이트
-        for value_info in model.graph.value_info:
-            if value_info.type.tensor_type.elem_type == TensorProto.FLOAT:
-                value_info.type.tensor_type.elem_type = TensorProto.FLOAT16
-        
-        # 노드 output 타입 업데이트 (선택사항)
-        for node in model.graph.node:
-            for output in node.output:
-                for value_info in model.graph.value_info:
-                    if value_info.name == output and value_info.type.tensor_type.elem_type == TensorProto.FLOAT:
-                        value_info.type.tensor_type.elem_type = TensorProto.FLOAT16
-        
-        # 모델 저장
-        save(model, output_path)
-        
+        model = onnx.load(onnx_model_path)
+        # keep_io_types=True: 입출력 타입을 float32로 유지, 내부만 float16
+        model_fp16 = float16.convert_float_to_float16(model, keep_io_types=True)
+        onnx.save(model_fp16, output_path)
+
         print(f"✓ Float16 변환 완료: {output_path}")
         print_model_size(onnx_model_path, output_path)
-        
+
     except Exception as e:
         print(f"❌ Float16 변환 실패: {e}")
-        print("필요한 라이브러리: pip install onnx")
+        print("필요한 라이브러리: pip install onnx onnxconverter-common")
         return False
-    
+
     return True
 
 
