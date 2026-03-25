@@ -10,8 +10,8 @@ import com.shutter.api.user.domain.User;
 import com.shutter.api.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
-
 import java.util.HashMap;
 import java.util.Map;
 
@@ -24,6 +24,7 @@ public class CallService {
     private final AgoraTokenService agoraTokenService;
     private final CallSessionService callSessionService;
     private final AlertService alertService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     /**
      * 통화 요청(Request) 기능 처리
@@ -105,6 +106,14 @@ public class CallService {
         alertService.sendDataAlertToUser(caller.getKakaoId(), payloadMap);
         log.info("Sent CALL_ACCEPTED data push to caller: {}", caller.getId());
 
+        // WebSocket 이벤트 발송 (발신자에게 수락 알림)
+        com.shutter.api.rtc.dto.response.CallEventResponse eventResponse = com.shutter.api.rtc.dto.response.CallEventResponse.builder()
+                .type("CALL_ACCEPTED")
+                .channelName(channelName)
+                .build();
+        messagingTemplate.convertAndSend("/topic/call/" + caller.getId(), eventResponse);
+        log.info("Published CALL_ACCEPTED via WebSocket to caller: {}", caller.getId());
+
         // 7. Redis 세션 삭제 및 발신자 락 해제 (푸시 성공 후 삭제)
         callSessionService.deleteSession(channelName);
         callSessionService.deleteCallerLock(caller.getId());
@@ -146,5 +155,13 @@ public class CallService {
 
         alertService.sendDataAlertToUser(caller.getKakaoId(), payloadMap);
         log.info("Sent CALL_REJECTED data push to caller: {}", caller.getId());
+
+        // WebSocket 이벤트 발송 (발신자에게 거절 알림)
+        com.shutter.api.rtc.dto.response.CallEventResponse eventResponse = com.shutter.api.rtc.dto.response.CallEventResponse.builder()
+                .type("CALL_REJECTED")
+                .channelName(channelName)
+                .build();
+        messagingTemplate.convertAndSend("/topic/call/" + caller.getId(), eventResponse);
+        log.info("Published CALL_REJECTED via WebSocket to caller: {}", caller.getId());
     }
 }
