@@ -59,7 +59,7 @@ class NativeDeepfakeBridge(private val context: Context) {
             if (isOnnxInitialized) return
             try {
                 Log.d("NativeDeepfakeBridge", "ONNX C++ 네이티브 초기화 시작...")
-                val modelPath = getAssetFilePath(context, "face_deepfake.onnx")
+                val modelPath = getAssetFilePath(context, "ds_model_quantized.onnx")
                 val ok = initOnnx(modelPath)
                 if (ok) {
                     isOnnxInitialized = true
@@ -415,7 +415,7 @@ class NativeDeepfakeBridge(private val context: Context) {
         //  4. USE_QNN = true 로 변경
         //
         //  QNN 재컴파일 전까지는 ONNX(NNAPI → GPU/CPU 폴백) 경로를 사용합니다.
-        private const val USE_QNN = true // false
+        private const val USE_QNN = false // TODO: QNN 재컴파일 완료 후 true로 변경
 
         /**
          * 네이티브 라이브러리 로드.

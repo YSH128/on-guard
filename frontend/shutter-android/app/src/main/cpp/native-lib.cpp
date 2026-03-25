@@ -233,21 +233,16 @@ static bool ort_init_session(const char* model_path) {
     OrtSessionOptions* opts = nullptr;
     ORT_CHECK(g_ort->CreateSessionOptions(&opts));
 
-    // TODO: NNAPI GPU/NPU 가속 — 영상통화 중 GPU 자원 충돌로 프로세스 kill 발생
-    //  영상통화 앱이 GPU 점유 중일 때 NNAPI가 GPU를 추가 요청하면 드라이버 fault → 프로세스 kill
-    //  QNN HTP 재컴파일 완료 후 아래 주석 해제 + CPU 코드 제거
-    //  (QNN HTP는 카메라/GPU와 독립적인 DSP 자원 사용으로 충돌 없음)
-    // uint32_t nnapi_flags = 0;
-    // OrtStatus* nnapi_status = OrtSessionOptionsAppendExecutionProvider_Nnapi(opts, nnapi_flags);
-    // if (nnapi_status) {
-    //     LOGW("NNAPI not available, falling back to CPU. Error: %s", g_ort->GetErrorMessage(nnapi_status));
-    //     g_ort->ReleaseStatus(nnapi_status);
-    // } else {
-    //     LOGD("NNAPI GPU/NPU acceleration enabled!");
-    // }
-
-    // [임시] CPU 전용 추론 — NNAPI GPU 충돌 방지용 (QNN 재컴파일 전까지 사용)
-    LOGD("ONNX CPU 전용 추론 모드 (임시 — NNAPI 비활성화)");
+    // NNAPI GPU/NPU 가속 (GPU 미사용 시 CPU 자동 폴백)
+    // TODO: 영상통화 중 GPU 충돌 재발 시 아래 블록 주석 처리 후 CPU 전용 모드로 전환
+    uint32_t nnapi_flags = 0;
+    OrtStatus* nnapi_status = OrtSessionOptionsAppendExecutionProvider_Nnapi(opts, nnapi_flags);
+    if (nnapi_status) {
+        LOGW("NNAPI not available, falling back to CPU. Error: %s", g_ort->GetErrorMessage(nnapi_status));
+        g_ort->ReleaseStatus(nnapi_status);
+    } else {
+        LOGD("NNAPI GPU/NPU acceleration enabled!");
+    }
 
     g_ort->SetIntraOpNumThreads(opts, 2);
     ORT_CHECK(g_ort->CreateSession(g_ort_env, model_path, opts, &g_ort_session));
