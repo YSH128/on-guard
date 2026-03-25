@@ -31,16 +31,14 @@ public class AgoraTokenService {
     public String createToken(String channelName, int uid) {
         RtcTokenBuilder2 tokenBuilder = new RtcTokenBuilder2();
 
-        int timestamp = (int)(System.currentTimeMillis() / 1000 + TOKEN_EXPIRE_TIME_IN_SECONDS);
-
         String token = tokenBuilder.buildTokenWithUid(
                 agoraProperties.getAppId(),
                 agoraProperties.getAppCertificate(),
                 channelName,
                 uid,
                 RtcTokenBuilder2.Role.ROLE_PUBLISHER,
-                timestamp, // tokenExpireTs
-                timestamp  // privilegeExpireTs
+                TOKEN_EXPIRE_TIME_IN_SECONDS, // tokenExpire (초 단위 상대값)
+                TOKEN_EXPIRE_TIME_IN_SECONDS  // privilegeExpire (초 단위 상대값)
         );
 
         log.debug("Generated Agora Token for channel: {}", channelName);
