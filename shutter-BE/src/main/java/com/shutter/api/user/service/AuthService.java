@@ -50,6 +50,7 @@ public class AuthService {
             // 기존 유저 로그인
             User user = userOptional.get();
             user.updateDeviceUuid(request.getDeviceUuid());
+            user.updateProfileImageUrl(userInfo.getProfileImageUrl()); // Update profile image URL
             Long userId = user.getId();
 
             // 카카오 토큰 저장 (알림용)
@@ -73,6 +74,7 @@ public class AuthService {
                     .kakaoId(kakaoId)
                     .name(kakaoName)
                     .deviceUuid(request.getDeviceUuid())
+                    .profileImageUrl(userInfo.getProfileImageUrl()) // Save profile image URL
                     .build();
             userRepository.save(user);
 

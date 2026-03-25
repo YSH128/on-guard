@@ -51,4 +51,11 @@ public class KakaoUserInfoResponse {
         }
         return null;
     }
+
+    public String getProfileImageUrl() {
+        if (kakaoAccount != null && kakaoAccount.getProfile() != null) {
+            return kakaoAccount.getProfile().getProfileImageUrl();
+        }
+        return null;
+    }
 }
