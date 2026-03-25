@@ -102,6 +102,7 @@ data class WardItem(
     val lat: Double?,
     val lng: Double?,
     @SerializedName("gps_updated_at") val gpsUpdatedAt: String?,
+    @SerializedName("profile_image_url") val profileImageUrl: String? = null,
 )
 
 data class WardListData(val wards: List<WardItem>)

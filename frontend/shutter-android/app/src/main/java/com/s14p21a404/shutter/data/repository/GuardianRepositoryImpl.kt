@@ -49,6 +49,7 @@ class GuardianRepositoryImpl(
                 lat = it.lat,
                 lng = it.lng,
                 gpsUpdatedAt = it.gpsUpdatedAt,
+                profileImageUrl = it.profileImageUrl,
             )
         }
     }

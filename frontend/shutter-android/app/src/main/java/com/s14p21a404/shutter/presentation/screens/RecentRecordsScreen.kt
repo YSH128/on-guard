@@ -1,16 +1,20 @@
 package com.s14p21a404.shutter.presentation.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.MailOutline
 import androidx.compose.material.icons.outlined.Person
@@ -20,7 +24,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -36,7 +40,6 @@ private data class TimelineUiItem(
     val badgeColor: Color,
     val type: String,           // "message" | "alert" | "location"
     val personLabel: String? = null,
-    val isLatest: Boolean = false,
     val title: String? = null,
     val description: String,
     val details: List<String>? = null,
@@ -44,24 +47,21 @@ private data class TimelineUiItem(
     val status: String? = null,
 )
 
-// ── API → UI 변환 (1 entry → 1~2 items) ──
+// ── API → UI 변환 ──
 
-private fun TimelineEntry.toUiItems(baseIndex: Int, isLatest: Boolean): List<TimelineUiItem> {
-    val time = item.timestamp.take(16).drop(11) // "HH:mm"
+private fun TimelineEntry.toUiItems(baseIndex: Int): List<TimelineUiItem> {
+    val time = item.timestamp.take(16).drop(11)
     return when (item.type) {
         "MESSAGE" -> listOf(
-            // 1) 위험 감지 카드
             TimelineUiItem(
                 id = baseIndex * 10,
                 time = item.callStartedAt?.take(16)?.drop(11) ?: time,
                 badge = "위험 감지",
                 badgeColor = Color(0xFFEF4444),
                 type = "alert",
-                isLatest = false,
                 title = "높은 위험 감지",
                 description = "AI 딥페이크 감지로 자동 알림이 발송되었습니다.",
             ),
-            // 2) 자동 발송 카드
             TimelineUiItem(
                 id = baseIndex * 10 + 1,
                 time = time,
@@ -69,7 +69,6 @@ private fun TimelineEntry.toUiItems(baseIndex: Int, isLatest: Boolean): List<Tim
                 badgeColor = Color(0xFF4A6CF7),
                 type = "message",
                 personLabel = item.toName?.let { "to. $it" },
-                isLatest = isLatest,
                 title = "[SHUTTER 긴급알림]",
                 description = "${wardName}님이 딥페이크 의심 통화 중입니다.",
                 details = buildList {
@@ -80,7 +79,7 @@ private fun TimelineEntry.toUiItems(baseIndex: Int, isLatest: Boolean): List<Tim
                 status = if (item.status == "SUCCESS") "문자 발송 완료" else "문자 발송 실패",
             ),
         )
-        else -> listOf( // LOCATION
+        else -> listOf(
             TimelineUiItem(
                 id = baseIndex * 10,
                 time = time,
@@ -88,7 +87,6 @@ private fun TimelineEntry.toUiItems(baseIndex: Int, isLatest: Boolean): List<Tim
                 badgeColor = Color(0xFF22C55E),
                 type = "location",
                 personLabel = "from. $wardName",
-                isLatest = isLatest,
                 description = "AI 딥페이크 의심 통화 중 입니다.\n${wardName}님의 위치를 확인해주세요.",
             )
         )
@@ -97,16 +95,13 @@ private fun TimelineEntry.toUiItems(baseIndex: Int, isLatest: Boolean): List<Tim
 
 // ── 색상 상수 ──
 
-private val BgColor          = Color(0xFFF2F5F9)
-private val CardBg           = Color.White
-private val TextPrimary      = Color(0xFF2A2A2A)
-private val TextSecondary    = Color(0xFF6B7280)
-private val TimelineLine     = Color(0xFFE5E5E5)
-private val DotActive        = Color(0xFF3D527E)
-private val DotInactive      = Color(0xFFCED5E1)
-private val ChipSelectedBg   = Color(0xFF3D527E)
-private val ChipSelectedText = Color.White
-private val ChipUnselectedBg = Color.White
+private val BgColor           = Color(0xFFF2F5F9)
+private val CardBg            = Color.White
+private val TextPrimary       = Color(0xFF2A2A2A)
+private val TextSecondary     = Color(0xFF6B7280)
+private val ChipSelectedBg    = Color(0xFF3D527E)
+private val ChipSelectedText  = Color.White
+private val ChipUnselectedBg  = Color.White
 private val ChipUnselectedText = Color(0xFF9CA3AF)
 
 // ════════════════════════════════════════════════════════════
@@ -135,7 +130,7 @@ fun RecentRecordsScreen(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "최근 기록",
+                text = "최근기록",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary,
@@ -158,35 +153,53 @@ fun RecentRecordsScreen(
 
         Spacer(Modifier.height(16.dp))
 
-        // ── 타임라인 콘텐츠 ──
+        // ── 콘텐츠 ──
         when {
             uiState.isLoading -> {
                 Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), Alignment.Center) {
                     CircularProgressIndicator(color = ChipSelectedBg)
                 }
             }
-            uiState.timelineEntries.isEmpty() -> {
+            uiState.dateSections.isEmpty() -> {
                 Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), Alignment.Center) {
                     Text("알림 내역이 없습니다.", fontSize = 14.sp, color = TextSecondary)
                 }
             }
             else -> {
-                // entry → UI item 변환 (MESSAGE는 2개 생성)
-                val uiItems = uiState.timelineEntries
-                    .flatMapIndexed { index, entry ->
-                        entry.toUiItems(baseIndex = index, isLatest = index == 0)
+                LazyColumn(
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(0.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    uiState.dateSections.forEach { section ->
+                        // 날짜 헤더
+                        item(key = "header_${section.dateLabel}") {
+                            Text(
+                                text = section.dateLabel,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(top = 8.dp, bottom = 10.dp)
+                            )
+                        }
+
+                        // 아이별 그룹 카드
+                        items(
+                            items = section.wardGroups,
+                            key = { group -> "${section.dateLabel}||${group.wardName}" }
+                        ) { group ->
+                            val groupKey = "${section.dateLabel}||${group.wardName}"
+                            val isExpanded = groupKey in uiState.expandedGroups
+                            WardGroupCard(
+                                group = group,
+                                isExpanded = isExpanded,
+                                onToggle = { viewModel.toggleGroup(groupKey) }
+                            )
+                            Spacer(Modifier.height(10.dp))
+                        }
                     }
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp)
-                ) {
-                    uiItems.forEachIndexed { index, item ->
-                        TimelineRow(item = item, isLast = index == uiItems.lastIndex)
-                    }
-                    Spacer(Modifier.height(16.dp))
+                    item { Spacer(Modifier.height(16.dp)) }
                 }
             }
         }
@@ -214,68 +227,126 @@ private fun FilterChip(text: String, selected: Boolean, onClick: () -> Unit) {
     )
 }
 
-// ── 타임라인 행 ──
+// ── 아이별 그룹 카드 ──
 
 @Composable
-private fun TimelineRow(item: TimelineUiItem, isLast: Boolean) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min)
+private fun WardGroupCard(
+    group: WardGroup,
+    isExpanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (isExpanded) 180f else 0f,
+        label = "chevron"
+    )
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = CardBg),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        // 왼쪽 점 + 선
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(28.dp)
-        ) {
-            Spacer(Modifier.height(6.dp))
-            Box(
+        Column {
+            // 헤더 행
+            Row(
                 modifier = Modifier
-                    .size(16.dp)
-                    .shadow(1.dp, CircleShape)
-                    .clip(CircleShape)
-                    .background(Color.White),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onToggle
+                    )
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                // 아바타
                 Box(
                     modifier = Modifier
-                        .size(10.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
-                        .background(if (item.isLatest) DotActive else DotInactive)
+                        .background(Color(0xFFD6E0F5)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = Color(0xFF5B7FD6)
+                    )
+                }
+
+                Spacer(Modifier.width(12.dp))
+
+                // 이름
+                Text(
+                    text = group.wardName,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary,
+                    modifier = Modifier.weight(1f)
+                )
+
+                // 최근 시간
+                Text(
+                    text = group.latestTime,
+                    fontSize = 13.sp,
+                    color = TextSecondary,
+                )
+
+                Spacer(Modifier.width(4.dp))
+
+                // 펼침 화살표
+                Icon(
+                    imageVector = Icons.Filled.KeyboardArrowDown,
+                    contentDescription = if (isExpanded) "접기" else "펼치기",
+                    tint = TextSecondary,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .rotate(chevronRotation)
                 )
             }
-            if (!isLast) {
-                Box(
-                    modifier = Modifier
-                        .width(2.dp)
-                        .fillMaxHeight()
-                        .background(TimelineLine)
-                )
+
+            // 펼쳐진 콘텐츠
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically(),
+                exit = shrinkVertically()
+            ) {
+                Column(
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                ) {
+                    HorizontalDivider(color = Color(0xFFEEF0F4), thickness = 1.dp)
+                    Spacer(Modifier.height(12.dp))
+
+                    var itemIndex = 0
+                    group.entries.forEach { entry ->
+                        val uiItems = entry.toUiItems(itemIndex)
+                        itemIndex += uiItems.size
+                        uiItems.forEach { uiItem ->
+                            EntryRow(uiItem)
+                        }
+                    }
+                }
             }
         }
+    }
+}
 
-        Spacer(Modifier.width(8.dp))
+// ── 항목 행 (뱃지 + 카드) ──
 
-        // 오른쪽 시간+뱃지+카드
-        Column(modifier = Modifier.weight(1f)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(text = item.time, fontSize = 14.sp, color = TextSecondary)
-                Spacer(Modifier.weight(1f))
-                Badge(text = item.badge, color = item.badgeColor)
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            when (item.type) {
-                "message"  -> MessageCard(item)
-                "alert"    -> AlertCard(item)
-                else       -> LocationCard(item)
-            }
-
-            Spacer(Modifier.height(16.dp))
+@Composable
+private fun EntryRow(item: TimelineUiItem) {
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(item.time, fontSize = 12.sp, color = TextSecondary)
+            Spacer(Modifier.weight(1f))
+            Badge(text = item.badge, color = item.badgeColor)
+        }
+        Spacer(Modifier.height(6.dp))
+        when (item.type) {
+            "message" -> MessageCard(item)
+            "alert"   -> AlertCard(item)
+            else      -> LocationCard(item)
         }
     }
 }
@@ -285,66 +356,64 @@ private fun TimelineRow(item: TimelineUiItem, isLast: Boolean) {
 @Composable
 private fun MessageCard(item: TimelineUiItem) {
     Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBg),
-        elevation = CardDefaults.cardElevation(1.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F9FF)),
+        elevation = CardDefaults.cardElevation(0.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             // 수신자
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(28.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFFF5F5F5)),
+                        .background(Color(0xFFE8EBF5)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Outlined.Person, null, Modifier.size(16.dp), tint = TextSecondary)
+                    Icon(Icons.Outlined.Person, null, Modifier.size(14.dp), tint = TextSecondary)
                 }
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = item.personLabel ?: "",
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     color = TextPrimary
                 )
             }
 
-            Spacer(Modifier.height(12.dp))
-            Text("문자 내용:", fontSize = 14.sp, color = TextPrimary)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
+            Text("문자 내용:", fontSize = 13.sp, color = TextPrimary)
+            Spacer(Modifier.height(6.dp))
 
-            // 내용 박스
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFFF5F5F5))
-                    .padding(12.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFFEEF0F8))
+                    .padding(10.dp)
             ) {
                 item.title?.let {
-                    Text(it, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                    Spacer(Modifier.height(4.dp))
+                    Text(it, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                    Spacer(Modifier.height(3.dp))
                 }
-                Text(item.description, fontSize = 14.sp, color = TextPrimary)
+                Text(item.description, fontSize = 13.sp, color = TextPrimary)
                 item.details?.forEach { detail ->
                     Spacer(Modifier.height(2.dp))
-                    Text(detail, fontSize = 14.sp, color = TextSecondary)
+                    Text(detail, fontSize = 13.sp, color = TextSecondary)
                 }
                 item.footer?.let {
-                    Spacer(Modifier.height(8.dp))
-                    Text(it, fontSize = 14.sp, color = TextPrimary)
+                    Spacer(Modifier.height(6.dp))
+                    Text(it, fontSize = 13.sp, color = TextPrimary)
                 }
             }
 
-            // 발송 상태
             item.status?.let {
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.MailOutline, null, Modifier.size(16.dp), tint = TextSecondary)
-                    Spacer(Modifier.width(8.dp))
-                    Text(it, fontSize = 14.sp, color = TextSecondary)
+                    Icon(Icons.Outlined.MailOutline, null, Modifier.size(14.dp), tint = TextSecondary)
+                    Spacer(Modifier.width(6.dp))
+                    Text(it, fontSize = 12.sp, color = TextSecondary)
                 }
             }
         }
@@ -356,15 +425,15 @@ private fun MessageCard(item: TimelineUiItem) {
 @Composable
 private fun AlertCard(item: TimelineUiItem) {
     Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBg),
-        elevation = CardDefaults.cardElevation(1.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF5F5)),
+        elevation = CardDefaults.cardElevation(0.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(modifier = Modifier.padding(16.dp)) {
+        Row(modifier = Modifier.padding(12.dp)) {
             Box(
                 modifier = Modifier
-                    .size(32.dp)
+                    .size(28.dp)
                     .clip(CircleShape)
                     .background(Color(0xFFFEE2E2)),
                 contentAlignment = Alignment.Center
@@ -372,19 +441,19 @@ private fun AlertCard(item: TimelineUiItem) {
                 Icon(
                     imageVector = Icons.Outlined.Shield,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(16.dp),
                     tint = Color(0xFFEF4444)
                 )
             }
 
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(10.dp))
 
             Column {
                 item.title?.let {
-                    Text(it, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFEF4444))
-                    Spacer(Modifier.height(4.dp))
+                    Text(it, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFEF4444))
+                    Spacer(Modifier.height(3.dp))
                 }
-                Text(item.description, fontSize = 14.sp, color = TextPrimary)
+                Text(item.description, fontSize = 13.sp, color = TextPrimary)
             }
         }
     }
@@ -395,32 +464,32 @@ private fun AlertCard(item: TimelineUiItem) {
 @Composable
 private fun LocationCard(item: TimelineUiItem) {
     Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBg),
-        elevation = CardDefaults.cardElevation(1.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FFF4)),
+        elevation = CardDefaults.cardElevation(0.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(28.dp)
                         .clip(CircleShape)
                         .background(Color(0xFFDCFCE7)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Outlined.LocationOn, null, Modifier.size(16.dp), tint = Color(0xFF16A34A))
+                    Icon(Icons.Outlined.LocationOn, null, Modifier.size(14.dp), tint = Color(0xFF16A34A))
                 }
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = item.personLabel ?: "",
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     color = TextPrimary
                 )
             }
-            Spacer(Modifier.height(8.dp))
-            Text(item.description, fontSize = 14.sp, color = TextPrimary)
+            Spacer(Modifier.height(6.dp))
+            Text(item.description, fontSize = 13.sp, color = TextPrimary)
         }
     }
 }
@@ -431,11 +500,11 @@ private fun LocationCard(item: TimelineUiItem) {
 private fun Badge(text: String, color: Color) {
     Text(
         text = text,
-        fontSize = 12.sp,
+        fontSize = 11.sp,
         color = Color.White,
         modifier = Modifier
             .clip(RoundedCornerShape(50))
             .background(color)
-            .padding(horizontal = 10.dp, vertical = 2.dp)
+            .padding(horizontal = 8.dp, vertical = 2.dp)
     )
 }

@@ -8,15 +8,6 @@ import android.graphics.Shader
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -41,9 +32,11 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import coil.compose.SubcomposeAsyncImage
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -65,7 +58,7 @@ import com.kakao.vectormap.label.LabelOptions
 import com.kakao.vectormap.label.LabelStyle
 import com.kakao.vectormap.label.LabelStyles
 import com.s14p21a404.shutter.R
-import kotlinx.coroutines.delay
+
 
 private const val PULSE_FRAME_COUNT = 40
 private const val PULSE_INTERVAL_MS = 40L
@@ -78,6 +71,7 @@ private data class LocationGuardian(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val isSharing: Boolean = false,
+    val profileImageUrl: String? = null,
 )
 
 // ── 색상 상수 ──
@@ -118,6 +112,7 @@ fun LocationScreen(
                 latitude = ward.lat,
                 longitude = ward.lng,
                 isSharing = ward.isSharing,
+                profileImageUrl = ward.profileImageUrl,
             )
         }
         else -> emptyList()
@@ -257,6 +252,7 @@ private fun GuardianSelector(
 
             GuardianAvatar(
                 name = guardian.name,
+                profileImageUrl = guardian.profileImageUrl,
                 isSelected = isSelected,
                 onClick = { onSelect(guardian.id) }
             )
@@ -267,6 +263,7 @@ private fun GuardianSelector(
 @Composable
 private fun GuardianAvatar(
     name: String,
+    profileImageUrl: String? = null,
     isSelected: Boolean,
     onClick: () -> Unit,
 ) {
@@ -284,24 +281,40 @@ private fun GuardianAvatar(
         Box(
             modifier = Modifier
                 .size(68.dp)
-                .clip(CircleShape)
+                .clip(RoundedCornerShape(16.dp))
                 .background(if (isSelected) SelectedAvatarBg else UnselectedAvatarBg)
                 .then(
                     if (isSelected) {
-                        Modifier.border(2.dp, SelectedBorderColor, CircleShape)
+                        Modifier.border(2.dp, SelectedBorderColor, RoundedCornerShape(16.dp))
                     } else {
-                        Modifier.border(2.dp, Color.Transparent, CircleShape)
+                        Modifier.border(2.dp, Color.Transparent, RoundedCornerShape(16.dp))
                     }
                 ),
             contentAlignment = Alignment.Center
         ) {
-            // ep-user 벡터 아이콘
-            Image(
-                painter = painterResource(id = R.drawable.ic_ep_user),
-                contentDescription = null,
-                modifier = Modifier.size(28.dp),
-                colorFilter = ColorFilter.tint(if (isSelected) UnselectedIconColor else Color.White)
-            )
+            if (!profileImageUrl.isNullOrEmpty()) {
+                SubcomposeAsyncImage(
+                    model = profileImageUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    error = {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_ep_user),
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp),
+                            colorFilter = ColorFilter.tint(if (isSelected) UnselectedIconColor else Color.White)
+                        )
+                    }
+                )
+            } else {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_ep_user),
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp),
+                    colorFilter = ColorFilter.tint(if (isSelected) UnselectedIconColor else Color.White)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -346,9 +359,6 @@ private fun KakaoMapWithMarker(
     var pulseStylesRef by remember { mutableStateOf<List<LabelStyles?>>(emptyList()) }
     var shieldStyleRef by remember { mutableStateOf<LabelStyles?>(null) }
     var animStarted by remember { mutableStateOf(false) }
-
-    // 스켈레톤 표시 여부: 초기 지도 로딩 + 피보호자 전환 시 모두 표시
-    var showSkeleton by remember { mutableStateOf(true) }
 
     // 기존 마커만 제거
     fun clearMarkers() {
@@ -427,34 +437,18 @@ private fun KakaoMapWithMarker(
 
     LaunchedEffect(wardId) {
         if (isFirstComposition) {
-            // 최초 진입은 onMapReady에서 스켈레톤 해제 처리
             isFirstComposition = false
             return@LaunchedEffect
         }
 
-        // 피보호자 전환 시 스켈레톤 즉시 표시
-        showSkeleton = true
+        val map = kakaoMapRef ?: return@LaunchedEffect
 
-        // 스켈레톤이 최소 1프레임 이상 그려지도록 대기
-        delay(400)
-
-        val map = kakaoMapRef ?: run {
-            showSkeleton = false
-            return@LaunchedEffect
-        }
-
-        // 이전 마커 즉시 제거
         clearMarkers()
 
         if (latitude != null && longitude != null) {
-            // 카메라를 애니메이션 없이 즉시 점프
             map.moveCamera(CameraUpdateFactory.newCenterPosition(LatLng.from(latitude, longitude), 16))
-            // 새 위치에 마커 배치
             placeMarkers(map, latitude, longitude)
         }
-
-        // 전환 완료 후 스켈레톤 숨김
-        showSkeleton = false
     }
 
     // ── 같은 피보호자의 실시간 위치 업데이트: 부드럽게 이동 ──
@@ -513,7 +507,6 @@ private fun KakaoMapWithMarker(
                         )
                         placeMarkers(kakaoMap, latitude, longitude)
                     }
-                    showSkeleton = false
                 }
             }
         )
@@ -544,85 +537,12 @@ private fun KakaoMapWithMarker(
             modifier = Modifier.fillMaxSize()
         )
 
-        // 지도 로딩 중 또는 피보호자 전환 중 shimmer 스켈레톤 오버레이
-        AnimatedVisibility(
-            visible = showSkeleton,
-            enter = fadeIn(animationSpec = tween(150)),
-            exit = fadeOut(animationSpec = tween(300)),
-        ) {
-            MapSkeletonOverlay()
-        }
     }
 }
 
 // ════════════════════════════════════════════════════════════
 // 지도 로딩 스켈레톤 (shimmer)
 // ════════════════════════════════════════════════════════════
-
-@Composable
-private fun MapSkeletonOverlay() {
-    val shimmerColors = listOf(
-        Color(0xFFE8ECF1),
-        Color(0xFFF5F7FA),
-        Color(0xFFE8ECF1),
-    )
-
-    val transition = rememberInfiniteTransition(label = "mapShimmer")
-    val translateAnim by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 2000f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "mapShimmerTranslate",
-    )
-
-    val brush = Brush.linearGradient(
-        colors = shimmerColors,
-        start = Offset(translateAnim - 400f, translateAnim - 400f),
-        end = Offset(translateAnim, translateAnim),
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .clip(RoundedCornerShape(16.dp))
-            .background(brush),
-        contentAlignment = Alignment.Center,
-    ) {
-        // 중앙에 작은 위치 아이콘 모양의 스켈레톤 플레이스홀더
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            // 핀 아이콘 자리
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFFD6DCE8))
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            // 텍스트 줄 자리
-            Box(
-                modifier = Modifier
-                    .width(120.dp)
-                    .height(14.dp)
-                    .clip(RoundedCornerShape(7.dp))
-                    .background(Color(0xFFD6DCE8))
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Box(
-                modifier = Modifier
-                    .width(80.dp)
-                    .height(14.dp)
-                    .clip(RoundedCornerShape(7.dp))
-                    .background(Color(0xFFD6DCE8))
-            )
-        }
-    }
-}
 
 /**
  * 파장 펄스 애니메이션 프레임 배열 생성
