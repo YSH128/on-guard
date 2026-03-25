@@ -51,7 +51,7 @@ class WarningBottomSheetView(
     private var detectionTypeRow: LinearLayout? = null
     private var countryNameTv: TextView? = null
     private var labelContainer: LinearLayout? = null
-    private lateinit var subtitleContainer: LinearLayout
+    private var typeLabelTv: TextView? = null
     private val buttonsContainer: LinearLayout
 
     /** 현재 표시 중인 국가명 */
@@ -201,26 +201,7 @@ class WarningBottomSheetView(
             buildDetectionTypeSection()
         }
 
-        // GMS 분석 결과 추가
-        if (!analysisResult.isNullOrBlank()) {
-            subtitleContainer.addView(TextView(context).apply {
-                text = "#$analysisResult"
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-                setTextColor(Color.parseColor("#9CA3AF")) // gray-400
-                gravity = Gravity.CENTER
-            }, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dpToPx(8) })
-        }
 
-        sheetContainer.addView(subtitleContainer, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            bottomMargin = dpToPx(24)
-        })
 
         // ── 버튼 ──
         buttonsContainer = LinearLayout(context).apply {
@@ -410,8 +391,8 @@ class WarningBottomSheetView(
             translationY = dpToPx(16).toFloat()
         }
 
-        val typeLabelTv = TextView(context).apply {
-            text = "계좌 이체 요구"
+        typeLabelTv = TextView(context).apply {
+            text = analysisResult?.takeIf { it.isNotBlank() } ?: "일상 대화"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setTextColor(Color.parseColor("#374151"))
         }
@@ -542,25 +523,7 @@ class WarningBottomSheetView(
 
     fun setAnalysisResult(result: String) {
         if (result.isNotBlank()) {
-            // 기존 GMS 결과 제거 (있으면)
-            for (i in subtitleContainer.childCount - 1 downTo 0) {
-                val child = subtitleContainer.getChildAt(i)
-                if (child.tag == "gms_result") {
-                    subtitleContainer.removeViewAt(i)
-                }
-            }
-            
-            // 새로운 GMS 결과 추가
-            subtitleContainer.addView(TextView(context).apply {
-                text = "감지된 의도: $result"
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-                setTextColor(Color.parseColor("#9CA3AF")) // gray-400
-                gravity = Gravity.CENTER
-                tag = "gms_result"
-            }, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dpToPx(8) })
+            typeLabelTv?.text = result
         }
     }
 
