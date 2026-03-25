@@ -10,6 +10,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class CallRequest {
     
-    @JsonProperty("callee_id")
-    private Long calleeId;
+    @JsonProperty("callee_kakao_id")
+    private Long calleeKakaoId;
 }
