@@ -1,12 +1,11 @@
 package com.s14p21a404.shutter.presentation.screens
 
+import android.os.Build
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Person
@@ -18,12 +17,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.ImageLoader
+import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
 import com.s14p21a404.shutter.R
 import kotlin.math.PI
 import kotlin.math.sin
@@ -172,6 +176,19 @@ fun HomeScreen(
 
 @Composable
 private fun HeaderSection() {
+    val context = LocalContext.current
+    val gifImageLoader = remember {
+        ImageLoader.Builder(context)
+            .components {
+                if (Build.VERSION.SDK_INT >= 28) {
+                    add(ImageDecoderDecoder.Factory())
+                } else {
+                    add(GifDecoder.Factory())
+                }
+            }
+            .build()
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -180,9 +197,10 @@ private fun HeaderSection() {
             .padding(top = 28.dp, bottom = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Image(
-            painter = painterResource(R.drawable.logo),
+        AsyncImage(
+            model = R.drawable.logo_gif,
             contentDescription = "Shutter",
+            imageLoader = gifImageLoader,
             modifier = Modifier.size(120.dp),
             contentScale = ContentScale.Fit
         )
@@ -192,6 +210,13 @@ private fun HeaderSection() {
         WaveformAnimation()
     }
 }
+
+// 각 바의 고정 높이 스케일 (웨이브 모양은 유지하되 막대마다 최대 높이가 다름)
+private val barScales = floatArrayOf(
+    0.55f, 0.9f, 0.45f, 1.0f, 0.6f, 0.8f, 0.4f, 0.95f, 0.65f, 0.5f,
+    0.85f, 0.4f, 1.0f, 0.55f, 0.75f, 0.45f, 0.9f, 0.6f, 0.5f, 0.85f,
+    0.7f, 0.4f, 1.0f, 0.5f, 0.8f, 0.6f, 0.9f, 0.45f
+)
 
 @Composable
 private fun WaveformAnimation() {
@@ -222,7 +247,7 @@ private fun WaveformAnimation() {
         modifier = Modifier.height(36.dp)
     ) {
         repeat(28) { i ->
-            val heightFraction = ((sin(phase + i * 0.45f).toFloat() + 1f) / 2f) * 0.65f + 0.15f
+            val heightFraction = ((sin(phase + i * 0.45f).toFloat() + 1f) / 2f) * barScales[i] * 0.8f + 0.1f
             Box(
                 modifier = Modifier
                     .width(4.dp)
@@ -251,7 +276,7 @@ private fun FriendItem(
         Box(
             modifier = Modifier
                 .size(44.dp)
-                .clip(CircleShape)
+                .clip(RoundedCornerShape(12.dp))
                 .background(Color(0xFFD6E0F5)),
             contentAlignment = Alignment.Center
         ) {
