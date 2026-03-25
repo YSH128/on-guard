@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -135,6 +136,25 @@ public class AlertService {
         }
 
         log.info("✅ [PUSH SUCCESS] kakaoId={}, payload={}", kakaoId, payloadJson);
+    }
+
+    /**
+     * 단일 대상에게 데이터 전용(사일런트) 푸시 전송 (FCM 백그라운드에서 직접 수신)
+     */
+    public void sendDataAlertToUser(Long kakaoId, Map<String, String> payload) {
+        PushResult pushResult = kakaoPushClient.sendDataPush(kakaoId, payload);
+
+        if (pushResult == PushResult.CONFIG_ERROR) {
+            log.error("❌ [DATA PUSH FAIL] kakaoId={}, payload={}, error=KAKAO_PUSH_CONFIG_ERROR", kakaoId, payload);
+            throw new AlertException(ErrorCode.KAKAO_PUSH_CONFIG_ERROR);
+        }
+
+        if (pushResult != PushResult.SUCCESS) {
+            log.error("❌ [DATA PUSH FAIL] kakaoId={}, payload={}, error={}", kakaoId, payload, pushResult);
+            throw new AlertException(ErrorCode.FCM_SEND_FAILED);
+        }
+
+        log.info("✅ [DATA PUSH SUCCESS] kakaoId={}, payload={}", kakaoId, payload);
     }
 
     /**
