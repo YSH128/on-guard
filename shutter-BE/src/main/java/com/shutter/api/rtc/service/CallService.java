@@ -1,7 +1,5 @@
 package com.shutter.api.rtc.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.shutter.api.global.exception.CallException;
 import com.shutter.api.global.exception.ErrorCode;
 import com.shutter.api.notification.service.AlertService;
@@ -26,7 +24,6 @@ public class CallService {
     private final AgoraTokenService agoraTokenService;
     private final CallSessionService callSessionService;
     private final AlertService alertService;
-    private final ObjectMapper objectMapper;
 
     /**
      * 통화 요청(Request) 기능 처리
@@ -59,21 +56,15 @@ public class CallService {
         // 6. Redis 콜 세션 저장 (TTL 30초)
         callSessionService.saveSession(channelName, callerId, calleeId);
         
-        // 7. 카카오 푸시 전송 (AlertService.sendAlertToUser)
-        Map<String, Object> payloadMap = new HashMap<>();
+        // 7. Data 전용 카카오 푸시 전송 (안드로이드 백그라운드 수신용)
+        Map<String, String> payloadMap = new HashMap<>();
         payloadMap.put("type", "INCOMING_CALL");
-        payloadMap.put("caller_id", callerId);
+        payloadMap.put("caller_id", String.valueOf(callerId));
         payloadMap.put("caller_name", caller.getName());
         payloadMap.put("channel_name", channelName);
 
-        try {
-            String payloadJson = objectMapper.writeValueAsString(payloadMap);
-            alertService.sendAlertToUser(callee.getKakaoId(), payloadJson);
-            log.info("Sent CALL push payload to callee: {}", calleeId);
-        } catch (JsonProcessingException e) {
-            log.error("Failed to serialize push payload for caller: {}", callerId, e);
-            throw new CallException(ErrorCode.INTERNAL_SERVER_ERROR);
-        }
+        alertService.sendDataAlertToUser(callee.getKakaoId(), payloadMap);
+        log.info("Sent INCOMING_CALL data push to callee: {}", calleeId);
 
         // 8. 응답 반환
         return CallResponse.builder()
@@ -105,19 +96,13 @@ public class CallService {
         User caller = userRepository.findById(session.getCallerId())
                 .orElseThrow(() -> new CallException(ErrorCode.USER_NOT_FOUND));
 
-        // 6. 카카오 푸시 전송 (AlertService.sendAlertToUser)
-        Map<String, Object> payloadMap = new HashMap<>();
+        // 6. Data 전용 카카오 푸시 전송 (안드로이드 백그라운드 수신용)
+        Map<String, String> payloadMap = new HashMap<>();
         payloadMap.put("type", "CALL_ACCEPTED");
         payloadMap.put("channel_name", channelName);
 
-        try {
-            String payloadJson = objectMapper.writeValueAsString(payloadMap);
-            alertService.sendAlertToUser(caller.getKakaoId(), payloadJson);
-            log.info("Sent CALL_ACCEPTED push to caller: {}", caller.getId());
-        } catch (JsonProcessingException e) {
-            log.error("Failed to serialize push payload for caller: {}", caller.getId(), e);
-            throw new CallException(ErrorCode.INTERNAL_SERVER_ERROR);
-        }
+        alertService.sendDataAlertToUser(caller.getKakaoId(), payloadMap);
+        log.info("Sent CALL_ACCEPTED data push to caller: {}", caller.getId());
 
         // 7. Redis 세션 삭제 (푸시 성공 후 삭제)
         callSessionService.deleteSession(channelName);
@@ -151,18 +136,12 @@ public class CallService {
         User caller = userRepository.findById(session.getCallerId())
                 .orElseThrow(() -> new CallException(ErrorCode.USER_NOT_FOUND));
 
-        // 5. 카카오 푸시 전송 (AlertService.sendAlertToUser)
-        Map<String, Object> payloadMap = new HashMap<>();
+        // 5. Data 전용 카카오 푸시 전송 (안드로이드 백그라운드 수신용)
+        Map<String, String> payloadMap = new HashMap<>();
         payloadMap.put("type", "CALL_REJECTED");
         payloadMap.put("channel_name", channelName);
 
-        try {
-            String payloadJson = objectMapper.writeValueAsString(payloadMap);
-            alertService.sendAlertToUser(caller.getKakaoId(), payloadJson);
-            log.info("Sent CALL_REJECTED push to caller: {}", caller.getId());
-        } catch (JsonProcessingException e) {
-            log.error("Failed to serialize push payload for caller: {}", caller.getId(), e);
-            throw new CallException(ErrorCode.INTERNAL_SERVER_ERROR);
-        }
+        alertService.sendDataAlertToUser(caller.getKakaoId(), payloadMap);
+        log.info("Sent CALL_REJECTED data push to caller: {}", caller.getId());
     }
 }
