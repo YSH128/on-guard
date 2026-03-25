@@ -89,13 +89,39 @@ fun AppScaffold(
     val currentDestination = navBackStackEntry?.destination
 
     LaunchedEffect(pendingDeepLinkScreen) {
-        if (pendingDeepLinkScreen == "location") {
-            navController.navigate(Screen.Location.route) {
-                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                launchSingleTop = true
-                restoreState = true
+        when {
+            pendingDeepLinkScreen == "location" -> {
+                navController.navigate(Screen.Location.route) {
+                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+                onDeepLinkHandled()
             }
-            onDeepLinkHandled()
+
+            pendingDeepLinkScreen?.startsWith("video_call:") == true -> {
+
+                // limit=4 로 분리해야 token 안에 ":" 가 있어도 잘리지 않음
+                val parts = pendingDeepLinkScreen.split(":", limit = 4)
+
+                val channelName = parts.getOrElse(1) { "" }
+                val callerName = parts.getOrElse(2) { "" }
+                val agoraToken = parts.getOrElse(3) { "" }
+
+                android.util.Log.d("NAV_FIX", "channel=$channelName")
+                android.util.Log.d("NAV_FIX", "caller=$callerName")
+                android.util.Log.d("NAV_FIX", "token=$agoraToken")
+
+                navController.navigate(
+                    Screen.VideoCall.createRoute(
+                        channelName,
+                        callerName,
+                        agoraToken
+                    )
+                )
+
+                onDeepLinkHandled()
+            }
         }
     }
 
@@ -125,9 +151,9 @@ fun AppScaffold(
                     onRequestPermissions = onRequestPermissions,
                     onRequestOverlayPermission = onRequestOverlayPermission,
                     onRequestAccessibilityPermission = onRequestAccessibilityPermission,
-                    onNavigateToVideoCall = { channelId, callerName ->
-            navController.navigate(Screen.VideoCall.createRoute(channelId, callerName))
-        },
+                    onNavigateToVideoCall = { channelId, callerName, agoraToken ->
+                        navController.navigate(Screen.VideoCall.createRoute(channelId, callerName, agoraToken))
+                    },
                 )
             }
             composable(Screen.RecentRecords.route) {
@@ -155,12 +181,21 @@ fun AppScaffold(
                 )
             }
             composable(Screen.VideoCall.route) { backStackEntry ->
+
                 val channelId = backStackEntry.arguments?.getString("channelId") ?: ""
-                val callerName = backStackEntry.arguments?.getString("callerName")?.let {
-                    java.net.URLDecoder.decode(it, "UTF-8")
-                } ?: ""
+
+                // NavController가 path argument를 Uri.decode()로 자동 decode하므로
+                // URLDecoder.decode를 추가로 쓰면 + → 공백 변환이 일어나 토큰이 손상됨
+                val callerName = backStackEntry.arguments?.getString("callerName") ?: ""
+                val agoraToken = backStackEntry.arguments?.getString("token") ?: ""
+
+                android.util.Log.d("NAV_DEBUG", "channelId=$channelId")
+                android.util.Log.d("NAV_DEBUG", "callerName=$callerName")
+                android.util.Log.d("NAV_DEBUG", "token=$agoraToken")
+
                 VideoCallScreen(
                     channelId = channelId,
+                    agoraToken = agoraToken,
                     callerName = callerName,
                     onCallEnded = { navController.popBackStack() }
                 )

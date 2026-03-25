@@ -14,19 +14,18 @@ import com.s14p21a404.shutter.presentation.main.MainActivity
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONObject
 
 /**
  * FCM 토큰 갱신 및 푸시 메시지 수신 처리.
  *
  * 토큰 갱신 시 카카오 REST API로 직접 등록하고,
- * 푸시 메시지 수신 시 상단바 알림으로 표시한다.
+ * 푸시 메시지 수신 시:
+ *   - INCOMING_CALL → MainActivity로 통화 수신 화면 딥링크
+ *   - 그 외 → 상단바 알림 표시
  */
 class ShutterFirebaseMessagingService : FirebaseMessagingService() {
 
-    /**
-     * FCM 토큰이 갱신될 때 호출.
-     * 로그인 상태일 때만 카카오에 재등록한다.
-     */
     override fun onNewToken(token: String) {
         Log.d(TAG, "FCM 토큰 갱신: $token")
 
@@ -40,29 +39,101 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
         registerTokenWithKakao(token, deviceId)
     }
 
-    /**
-     * 푸시 메시지 수신 시 호출.
-     * 알림을 상단바에 표시한다.
-     */
     override fun onMessageReceived(message: RemoteMessage) {
-        Log.d(TAG, "푸시 수신 — from: ${message.from}, data: ${message.data}")
+        super.onMessageReceived(message)
 
-        val title = message.notification?.title
-            ?: message.data["title"]
-            ?: "Shutter 알림"
-        val body = message.notification?.body
-            ?: message.data["body"]
-            ?: ""
+        val data = message.data
+        val type = data["type"]
 
-        showNotification(title, body)
+        when (type) {
+
+            "INCOMING_CALL" -> {
+                val callerId = data["caller_id"]?.toLongOrNull() ?: return
+                val callerName = data["caller_name"] ?: return
+                val channelName = data["channel_name"] ?: return
+
+                handleIncomingCall(callerId, callerName, channelName)
+            }
+
+            "CALL_ACCEPTED" -> {
+                // 발신자는 이미 채널에 joinChannel 되어 있으므로
+                // 수신자가 join하면 Agora onUserJoined 이벤트로 자동 연결됨
+            }
+        }
+    }
+
+    /**
+     * INCOMING_CALL 수신 시 MainActivity를 통화 수신 화면으로 이동.
+     * 앱이 포그라운드/백그라운드 모두 동작.
+     */
+    private fun handleIncomingCall(callerId: Long, callerName: String, channelName: String) {
+        // 1) 풀스크린 알림용 채널 생성
+        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        val channel = NotificationChannel(
+            CALL_CHANNEL_ID,
+            "Shutter 수신 전화",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "영상통화 수신 알림"
+            enableVibration(true)
+        }
+        notificationManager.createNotificationChannel(channel)
+
+        // 2) MainActivity에 딥링크 Intent — screen=incoming_call
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("screen", "incoming_call")
+            putExtra("caller_id", callerId)
+            putExtra("caller_name", callerName)
+            putExtra("channel_name", channelName)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this, CALL_REQUEST_CODE, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // 3) 거절 Intent (알림에서 바로 거절)
+        val rejectIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("screen", "reject_call")
+            putExtra("channel_name", channelName)
+        }
+        val rejectPendingIntent = PendingIntent.getActivity(
+            this, CALL_REJECT_REQUEST_CODE, rejectIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, CALL_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_call)
+            .setContentTitle("📞 수신 전화")
+            .setContentText("$callerName 님이 영상통화를 요청했습니다")
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)          // 알림 탭 → 수락 화면
+            .addAction(
+                android.R.drawable.ic_menu_call,
+                "수락",
+                pendingIntent
+            )
+            .addAction(
+                android.R.drawable.ic_delete,
+                "거절",
+                rejectPendingIntent
+            )
+            .build()
+
+        notificationManager.notify(CALL_NOTIFICATION_ID, notification)
+
+        // 4) 앱이 포그라운드일 때도 즉시 화면 전환
+        startActivity(intent)
     }
 
     private fun showNotification(title: String, body: String) {
-        val channelId = CHANNEL_ID
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
         val channel = NotificationChannel(
-            channelId,
+            CHANNEL_ID,
             "Shutter 딥페이크 알림",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
@@ -79,7 +150,7 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
             PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(this, channelId)
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setContentTitle(title)
             .setContentText(body)
@@ -92,18 +163,25 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
         notificationManager.notify(NOTIFICATION_ID, notification)
     }
 
+    /** body가 JSON이면 파싱, 아니면 null 반환 */
+    private fun tryParseJson(body: String): JSONObject? = try {
+        if (body.trimStart().startsWith("{")) JSONObject(body) else null
+    } catch (e: Exception) {
+        null
+    }
+
     companion object {
         private const val TAG = "ShutterFCMService"
         private const val CHANNEL_ID = "shutter_push_channel_v2"
+        private const val CALL_CHANNEL_ID = "shutter_call_channel_v1"
         private const val NOTIFICATION_ID = 2001
+        private const val CALL_NOTIFICATION_ID = 2002
+        private const val CALL_REQUEST_CODE = 3001
+        private const val CALL_REJECT_REQUEST_CODE = 3002
         private const val KAKAO_PUSH_REGISTER_URL = "https://kapi.kakao.com/v1/push/register"
 
         private val okHttpClient = OkHttpClient()
 
-        /**
-         * 카카오 REST API를 통해 FCM 토큰을 등록한다.
-         * Kakao SDK가 관리하는 카카오 액세스 토큰을 사용한다.
-         */
         fun registerTokenWithKakao(fcmToken: String, deviceId: String) {
             val kakaoAccessToken = try {
                 AuthApiClient.instance.tokenManagerProvider.manager.getToken()?.accessToken
@@ -132,11 +210,11 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
             Thread {
                 try {
                     val response = okHttpClient.newCall(request).execute()
-                    val body = response.body?.string() ?: "(empty)"
+                    val responseBody = response.body?.string() ?: "(empty)"
                     if (response.isSuccessful) {
-                        Log.d(TAG, "카카오 푸시 토큰 등록 성공 [${response.code}]: $body")
+                        Log.d(TAG, "카카오 푸시 토큰 등록 성공 [${response.code}]: $responseBody")
                     } else {
-                        Log.e(TAG, "카카오 푸시 토큰 등록 실패 [${response.code}]: $body")
+                        Log.e(TAG, "카카오 푸시 토큰 등록 실패 [${response.code}]: $responseBody")
                     }
                     response.close()
                 } catch (e: Exception) {

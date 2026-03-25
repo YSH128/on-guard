@@ -55,20 +55,24 @@ import java.nio.ByteBuffer
 private val ControlBarBg = Color.Black
 private val EndCallRed = Color(0xFFEF4444)
 private val ControlBtnBg = Color(0xFF404040)
-private val BounceDotColor = Color(0xFFFACC15)   // yellow-400
-private val AvatarBg = Color(0xFF6B7280)          // neutral-500
-private val AvatarBgLarge = Color(0xFF4B5563)     // neutral-600
-private val GradientTop = Color(0xFF525252)       // neutral-600
-private val GradientBottom = Color(0xFF262626)    // neutral-800
-private val RemoteGradientTop = Color(0xFF404040) // neutral-700
-private val RemoteGradientBottom = Color(0xFF171717) // neutral-900
+private val BounceDotColor = Color(0xFFFACC15)
+private val AvatarBg = Color(0xFF6B7280)
+private val AvatarBgLarge = Color(0xFF4B5563)
+private val GradientTop = Color(0xFF525252)
+private val GradientBottom = Color(0xFF262626)
+private val RemoteGradientTop = Color(0xFF404040)
+private val RemoteGradientBottom = Color(0xFF171717)
 
 @Composable
-fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () -> Unit = {}) {
+fun VideoCallScreen(
+    channelId: String,
+    agoraToken: String,
+    callerName: String = "",
+    onCallEnded: () -> Unit = {},
+) {
     val context = LocalContext.current
-    val appId = "6c6109e0b9644b599072a68b514d77a8"
+    val appId = com.s14p21a404.shutter.BuildConfig.AGORA_APP_ID
 
-    // ── 딥페이크 감지 연동: ServiceLocator에서 VideoCallRepository 획득 ──
     val videoCallRepository = remember {
         ServiceLocator.getInstance(context).videoCallRepository
     }
@@ -79,30 +83,24 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
     var outputStream by remember { mutableStateOf<FileOutputStream?>(null) }
     var recordingFile by remember { mutableStateOf<File?>(null) }
 
-    // UI 상태
     var isMuted by remember { mutableStateOf(false) }
     var isFrontCamera by remember { mutableStateOf(true) }
     var callEnded by remember { mutableStateOf(false) }
     var callDuration by remember { mutableIntStateOf(0) }
 
-    // 중복 종료 방지 플래그 (콜백 스레드에서도 안전하게 사용)
     val isEndingCall = remember { mutableStateOf(false) }
 
-    /** leaveChannel + callEnded 처리를 한 곳에서 관리 */
     fun endCall() {
-        if (isEndingCall.value) return   // 이미 종료 처리 중이면 무시
+        if (isEndingCall.value) return
         isEndingCall.value = true
         rtcEngine?.leaveChannel()
         callEnded = true
-        // 인앱 통화 종료 → 딥페이크 감지 파이프라인에 통화 종료 알림
         videoCallRepository.setInAppCallActive(false)
         VideoCallDetectService.onInAppCallEnd = null
     }
 
-    // 연결 상태: remoteUid가 null이면 연결 중
     val isConnecting = remoteUid == null && !callEnded
 
-    // 로컬/리모트 SurfaceView를 remember로 보관
     val localView = remember { mutableStateOf<SurfaceView?>(null) }
     val remoteView = remember { mutableStateOf<SurfaceView?>(null) }
 
@@ -110,14 +108,11 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
         ActivityResultContracts.RequestMultiplePermissions()
     ) { }
 
-
     // ── 딥페이크 감지 연동: 상대방 연결 시 인앱 통화 활성화 ──
     LaunchedEffect(remoteUid, callEnded) {
         if (remoteUid != null && !callEnded) {
-            // 상대방 연결됨 → 인앱 영상통화 활성
             android.util.Log.d("VideoCallScreen", "🛡️ 인앱 영상통화 활성화 → 딥페이크 감지 시작")
             videoCallRepository.setInAppCallActive(true)
-            // 오버레이 "전화 종료" 클릭 시 Agora 통화를 종료하도록 콜백 등록
             VideoCallDetectService.onInAppCallEnd = { endCall() }
         }
     }
@@ -158,7 +153,7 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
         }
     }
 
-    // rtcEngine 또는 localView가 바뀌면 로컬 비디오 세팅 + SurfaceHolder 콜백 등록
+    // ── 로컬 비디오 세팅 (rtcEngine 또는 localView 준비 시 재시도) ──
     val currentLocalView = localView.value
     LaunchedEffect(rtcEngine, currentLocalView) {
         val engine = rtcEngine ?: return@LaunchedEffect
@@ -166,7 +161,7 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
         engine.setupLocalVideo(VideoCanvas(view, VideoCanvas.RENDER_MODE_HIDDEN, 0))
         engine.startPreview()
     }
-    // Surface가 크기 변경 등으로 재생성될 때 setupLocalVideo를 다시 호출
+
     DisposableEffect(currentLocalView, rtcEngine) {
         val view = currentLocalView
         val engine = rtcEngine
@@ -180,22 +175,17 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
                     engine.startPreview()
                 }
                 override fun surfaceChanged(holder: android.view.SurfaceHolder, format: Int, width: Int, height: Int) {
-                    android.util.Log.d("VIDEO", "Local surface changed ${width}x${height} → re-setup")
                     engine.setupLocalVideo(VideoCanvas(view, VideoCanvas.RENDER_MODE_HIDDEN, 0))
                     engine.startPreview()
                 }
-                override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {
-                    android.util.Log.d("VIDEO", "Local surface destroyed")
-                }
+                override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {}
             }
             view.holder.addCallback(callback)
-            onDispose {
-                view.holder.removeCallback(callback)
-            }
+            onDispose { view.holder.removeCallback(callback) }
         }
     }
 
-    // remoteUid가 바뀌면 리모트 비디오 세팅
+    // ── 리모트 비디오 세팅 (remoteUid 또는 remoteView 준비 시 재시도) ──
     val currentRemoteView = remoteView.value
     LaunchedEffect(remoteUid, rtcEngine, currentRemoteView) {
         val engine = rtcEngine ?: return@LaunchedEffect
@@ -216,6 +206,15 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
             mContext = context
             mAppId = appId
             mEventHandler = object : IRtcEngineEventHandler() {
+                override fun onJoinChannelSuccess(channel: String, uid: Int, elapsed: Int) {
+                    android.util.Log.d("Agora", "✅ 채널 입장 성공: channel=$channel uid=$uid")
+                }
+                override fun onError(err: Int) {
+                    android.util.Log.e("Agora", "❌ 에러: err=$err")
+                }
+                override fun onConnectionStateChanged(state: Int, reason: Int) {
+                    android.util.Log.d("Agora", "🔗 연결 상태: state=$state reason=$reason")
+                }
                 override fun onUserJoined(uid: Int, elapsed: Int) {
                     android.util.Log.d("Agora", "상대방 입장: $uid")
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
@@ -256,10 +255,15 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
         val options = ChannelMediaOptions().apply {
             channelProfile = Constants.CHANNEL_PROFILE_COMMUNICATION
             clientRoleType = Constants.CLIENT_ROLE_BROADCASTER
+            publishCameraTrack = true
             publishMicrophoneTrack = true
+            autoSubscribeVideo = true
             autoSubscribeAudio = true
         }
-        engine.joinChannel(null, channelId, 0, options)
+
+        val joinResult = engine.joinChannel(agoraToken, channelId, 0, options)
+        android.util.Log.d("Agora", "joinChannel result=$joinResult channel=$channelId")
+
         rtcEngine = engine
     }
 
@@ -270,7 +274,6 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
             outputStream?.close()
             outputStream = null
 
-            // 인앱 통화 정리 → 딥페이크 감지 파이프라인에 통화 종료 알림
             videoCallRepository.setInAppCallActive(false)
             VideoCallDetectService.onInAppCallEnd = null
 
@@ -323,14 +326,11 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
                         .padding(12.dp)
                         .clip(RoundedCornerShape(16.dp))
                 ) {
-                    // 리모트 비디오 placeholder
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(
-                                Brush.verticalGradient(
-                                    listOf(RemoteGradientTop, RemoteGradientBottom)
-                                )
+                                Brush.verticalGradient(listOf(RemoteGradientTop, RemoteGradientBottom))
                             ),
                         contentAlignment = Alignment.Center
                     ) {
@@ -349,7 +349,6 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
                             )
                         }
                     }
-                    // 실제 리모트 비디오
                     AndroidView(
                         factory = { ctx ->
                             SurfaceView(ctx).apply {
@@ -365,15 +364,13 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
                 }
             }
 
-            // ── 내 비디오 – 부드러운 전체화면 ↔ PiP 전환 ──
-            // 애니메이션 값: 0f = 전체화면(연결 중), 1f = PiP(연결됨)
+            // ── 내 비디오: 연결 중 → 전체화면, 연결됨 → PiP ──
             val pipProgress by animateFloatAsState(
                 targetValue = if (isConnecting) 0f else 1f,
                 animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
                 label = "pipTransition"
             )
 
-            // PiP 목표 크기/위치
             val pipWidth = 128.dp
             val pipHeight = 176.dp
             val pipPaddingStart = 16.dp
@@ -384,18 +381,14 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
                 label = "cornerRadius"
             )
 
-            BoxWithConstraints(
-                modifier = Modifier.fillMaxSize()
-            ) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val fullWidth = maxWidth
                 val fullHeight = maxHeight
 
-                // 보간: 전체화면 → PiP
                 val currentWidth = lerp(fullWidth, pipWidth, pipProgress)
                 val currentHeight = lerp(fullHeight, pipHeight, pipProgress)
-                val currentPadding = 12.dp * (1f - pipProgress) // 전체화면일 때 12dp, PiP면 0dp
+                val currentPadding = 12.dp * (1f - pipProgress)
 
-                // 정렬: 전체화면일 때 중앙, PiP일 때 좌측 하단
                 val alignX by animateFloatAsState(
                     targetValue = if (isConnecting) 0f else -1f,
                     animationSpec = tween(600, easing = FastOutSlowInEasing),
@@ -420,7 +413,6 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
                         .clip(RoundedCornerShape(cornerRadius))
                         .zIndex(10f)
                 ) {
-                    // placeholder 배경
                     val avatarSize by animateDpAsState(
                         targetValue = if (isConnecting) 112.dp else 56.dp,
                         animationSpec = tween(600, easing = FastOutSlowInEasing),
@@ -431,13 +423,12 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
                         animationSpec = tween(600, easing = FastOutSlowInEasing),
                         label = "iconSize"
                     )
+
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(
-                                Brush.verticalGradient(
-                                    listOf(GradientTop, GradientBottom)
-                                )
+                                Brush.verticalGradient(listOf(GradientTop, GradientBottom))
                             ),
                         contentAlignment = Alignment.Center
                     ) {
@@ -456,7 +447,7 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
                             )
                         }
                     }
-                    // 실제 로컬 비디오 – AndroidView는 한 번만 생성
+
                     AndroidView(
                         factory = { ctx ->
                             SurfaceView(ctx).apply {
@@ -471,7 +462,6 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    // PiP일 때 내 이름 오버레이
                     val overlayAlpha by animateFloatAsState(
                         targetValue = if (isConnecting) 0f else 1f,
                         animationSpec = tween(600),
@@ -503,7 +493,7 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
                 }
             }
 
-            // ── 연결 중 오버레이 (이름 + "연결 중" + 바운스 점) ──
+            // ── 연결 중 오버레이 ──
             androidx.compose.animation.AnimatedVisibility(
                 visible = isConnecting,
                 enter = fadeIn(),
@@ -583,7 +573,6 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
     }
 }
 
-// ── 바운싱 점 애니메이션 ──
 @Composable
 private fun BouncingDots() {
     val infiniteTransition = rememberInfiniteTransition(label = "bounce")
@@ -618,7 +607,6 @@ private fun BouncingDots() {
     }
 }
 
-// ── 하단 컨트롤 바 ──
 @Composable
 private fun ControlBar(
     isMuted: Boolean,
@@ -635,7 +623,6 @@ private fun ControlBar(
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // 음소거 버튼
         IconButton(
             onClick = onToggleMute,
             modifier = Modifier
@@ -650,10 +637,7 @@ private fun ControlBar(
                 modifier = Modifier.size(24.dp)
             )
         }
-
         Spacer(modifier = Modifier.width(24.dp))
-
-        // 통화 종료 버튼
         IconButton(
             onClick = onEndCall,
             modifier = Modifier
@@ -668,10 +652,7 @@ private fun ControlBar(
                 modifier = Modifier.size(28.dp)
             )
         }
-
         Spacer(modifier = Modifier.width(24.dp))
-
-        // 카메라 전환 버튼
         IconButton(
             onClick = onSwitchCamera,
             modifier = Modifier
@@ -689,12 +670,10 @@ private fun ControlBar(
     }
 }
 
-// ── 통화 종료 화면 ──
 @Composable
 private fun CallEndedScreen(callerName: String, callDuration: Int, onDismiss: () -> Unit) {
-    // 1초 후 자동으로 화면 닫기
     LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(1000)
+        kotlinx.coroutines.delay(1500)
         onDismiss()
     }
 
@@ -720,17 +699,9 @@ private fun CallEndedScreen(callerName: String, callDuration: Int, onDismiss: ()
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = callerName.ifEmpty { "상대방" },
-                fontSize = 20.sp,
-                color = Color.White,
-            )
+            Text(text = callerName.ifEmpty { "상대방" }, fontSize = 20.sp, color = Color.White)
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "통화 종료",
-                fontSize = 16.sp,
-                color = Color(0xFF9CA3AF),
-            )
+            Text(text = "통화 종료", fontSize = 16.sp, color = Color(0xFF9CA3AF))
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "통화 시간: ${formatDuration(callDuration)}",
@@ -743,10 +714,7 @@ private fun CallEndedScreen(callerName: String, callDuration: Int, onDismiss: ()
 
 // ── 유틸리티 ──
 
-/** Dp 선형 보간 */
-private fun lerp(start: Dp, stop: Dp, fraction: Float): Dp {
-    return start + (stop - start) * fraction
-}
+private fun lerp(start: Dp, stop: Dp, fraction: Float): Dp = start + (stop - start) * fraction
 
 private fun formatDuration(seconds: Int): String {
     val mins = seconds / 60
@@ -782,9 +750,7 @@ private fun sendWavToJetson(wavFile: File) {
                     android.util.Log.d("WS", "WebSocket 닫힘: $reason")
                 }
             }
-
             client.newWebSocket(request, listener)
-
         } catch (e: Exception) {
             android.util.Log.e("WS", "❌ 전송 실패: ${e.message}")
         }

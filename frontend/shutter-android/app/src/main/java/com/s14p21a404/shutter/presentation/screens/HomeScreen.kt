@@ -25,6 +25,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.s14p21a404.shutter.di.ServiceLocator
+import kotlinx.coroutines.launch
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 
 // ── 색상 상수 ──
 
@@ -46,9 +51,18 @@ fun HomeScreen(
     onRequestPermissions: () -> Unit = {},
     onRequestOverlayPermission: () -> Unit = {},
     onRequestAccessibilityPermission: () -> Unit = {},
-    onNavigateToVideoCall: (String, String) -> Unit = { _, _ -> },
+
+    onNavigateToVideoCall: (String, String, String) -> Unit = { _, _, _ -> },
+
     homeViewModel: HomeViewModel = viewModel(),
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    val videoCallRepository = remember {
+        ServiceLocator.getInstance(context).videoCallRepository
+    }
+
     val uiState by homeViewModel.uiState.collectAsState()
 
     LaunchedEffect(Unit) {
@@ -56,53 +70,67 @@ fun HomeScreen(
         homeViewModel.loadMyProfile()
     }
 
-    var showPermissionDialog    by remember { mutableStateOf(false) }
-    var showOverlayDialog       by remember { mutableStateOf(false) }
+    var showPermissionDialog by remember { mutableStateOf(false) }
+    var showOverlayDialog by remember { mutableStateOf(false) }
     var showAccessibilityDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(allPermissionsGranted, overlayPermissionGranted, accessibilityServiceEnabled, isServiceRunning) {
         when {
-            !allPermissionsGranted       -> showPermissionDialog = true
-            !overlayPermissionGranted    -> showOverlayDialog = true
-            !isServiceRunning            -> onToggleService()
+            !allPermissionsGranted -> showPermissionDialog = true
+            !overlayPermissionGranted -> showOverlayDialog = true
+            !isServiceRunning -> onToggleService()
             !accessibilityServiceEnabled -> showAccessibilityDialog = true
         }
     }
 
     if (showPermissionDialog) {
         AlertDialog(
-            onDismissRequest = {},
-            title = { Text("권한 허용 필요", fontWeight = FontWeight.Bold) },
-            text  = { Text("서비스 실행에 필요한 권한을 허용해주세요.\n(전화 상태, 알림, 위치)") },
+            onDismissRequest = { showPermissionDialog = false },
+            title = { Text("권한 필요") },
+            text = { Text("앱 기능을 사용하려면 필수 권한이 필요합니다.") },
             confirmButton = {
-                TextButton(onClick = { showPermissionDialog = false; onRequestPermissions() }) {
-                    Text("허용하기")
-                }
+                TextButton(onClick = {
+                    showPermissionDialog = false
+                    onRequestPermissions()
+                }) { Text("허용") }
             },
+            dismissButton = {
+                TextButton(onClick = { showPermissionDialog = false }) { Text("취소") }
+            }
         )
     }
-    if (showOverlayDialog && allPermissionsGranted) {
+
+    if (showOverlayDialog) {
         AlertDialog(
-            onDismissRequest = {},
-            title = { Text("오버레이 권한 필요", fontWeight = FontWeight.Bold) },
-            text  = { Text("영상통화 위에 경고를 표시하려면\n'다른 앱 위에 표시' 권한이 필요합니다.\n설정 화면에서 직접 허용해주세요.") },
+            onDismissRequest = { showOverlayDialog = false },
+            title = { Text("오버레이 권한 필요") },
+            text = { Text("다른 앱 위에 표시하려면 오버레이 권한이 필요합니다.") },
             confirmButton = {
-                TextButton(onClick = { showOverlayDialog = false; onRequestOverlayPermission() }) {
-                    Text("설정으로 이동")
-                }
+                TextButton(onClick = {
+                    showOverlayDialog = false
+                    onRequestOverlayPermission()
+                }) { Text("허용") }
             },
+            dismissButton = {
+                TextButton(onClick = { showOverlayDialog = false }) { Text("취소") }
+            }
         )
     }
-    if (showAccessibilityDialog && allPermissionsGranted && overlayPermissionGranted && isServiceRunning) {
+
+    if (showAccessibilityDialog) {
         AlertDialog(
-            onDismissRequest = {},
-            title = { Text("접근성 서비스 활성화 필요", fontWeight = FontWeight.Bold) },
-            text  = { Text("영상통화 화면 감지를 위해\n접근성 서비스를 켜야 합니다.\n\n설정 화면에서 'Shutter'를 찾아\n토글을 켜주세요.") },
+            onDismissRequest = { showAccessibilityDialog = false },
+            title = { Text("접근성 서비스 필요") },
+            text = { Text("앱 감지 기능을 위해 접근성 서비스를 활성화해주세요.") },
             confirmButton = {
-                TextButton(onClick = { showAccessibilityDialog = false; onRequestAccessibilityPermission() }) {
-                    Text("설정으로 이동")
-                }
+                TextButton(onClick = {
+                    showAccessibilityDialog = false
+                    onRequestAccessibilityPermission()
+                }) { Text("설정으로 이동") }
             },
+            dismissButton = {
+                TextButton(onClick = { showAccessibilityDialog = false }) { Text("취소") }
+            }
         )
     }
 
@@ -121,43 +149,31 @@ fun HomeScreen(
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
         )
 
-        when {
-            uiState.isLoading -> {
-                Box(Modifier.fillMaxWidth().padding(40.dp), Alignment.Center) {
-                    CircularProgressIndicator(color = Color(0xFF3D527E))
-                }
-            }
-            uiState.error != null -> {
-                Box(Modifier.fillMaxWidth().padding(40.dp), Alignment.Center) {
-                    Text(uiState.error!!, fontSize = 14.sp, color = TextSecondary)
-                }
-            }
-            uiState.friends.isEmpty() -> {
-                Box(Modifier.fillMaxWidth().padding(40.dp), Alignment.Center) {
-                    Text("카카오 친구가 없습니다.", fontSize = 14.sp, color = TextSecondary)
-                }
-            }
-            else -> {
-                LazyColumn(
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(uiState.friends) { friend ->
-                        FriendItem(
-                            name = friend.name,
-                            profileImageUrl = friend.profileImageUrl,
+        LazyColumn(
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(uiState.friends) { friend ->
+                FriendItem(
+                    name = friend.name,
+                    profileImageUrl = friend.profileImageUrl,
 
-                            onVideoCall = {
-                                val myName = homeViewModel.getMyName()
-                                val channelId = listOf(myName, friend.id.toString())
-                                    .sorted()
-                                    .joinToString("_")
-                                android.util.Log.d("Channel", "채널명: $channelId")
-                                onNavigateToVideoCall(channelId, friend.name)
+                    onVideoCall = {
+                        coroutineScope.launch {
+
+                            val result = videoCallRepository.requestCall(friend.kakaoId)
+
+                            result.onSuccess { data ->
+
+                                onNavigateToVideoCall(
+                                    data.channelName,
+                                    friend.name,
+                                    data.token
+                                )
                             }
-                        )
+                        }
                     }
-                }
+                )
             }
         }
     }

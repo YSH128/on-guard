@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.kakao.sdk.talk.TalkApiClient
 import com.kakao.sdk.user.UserApiClient
+import com.s14p21a404.shutter.domain.model.Friend
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,7 +16,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
 data class ContactsUiState(
-    val friends: List<KakaoFriendItem> = emptyList(),
+    val friends: List<Friend> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
 )
@@ -61,7 +62,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun getMyName(): String = _myName.value
 
-    private suspend fun loadKakaoFriends(): Result<List<KakaoFriendItem>> =
+    private suspend fun loadKakaoFriends(): Result<List<Friend>> =
         suspendCancellableCoroutine { cont ->
             TalkApiClient.instance.friends { friends, error ->
                 if (error != null) {
@@ -69,10 +70,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     val items = friends?.elements
                         ?.mapNotNull { friend ->
+
                             val id = friend.id ?: return@mapNotNull null
                             val name = friend.profileNickname ?: return@mapNotNull null
-                            KakaoFriendItem(id = id, uuid = friend.uuid, name = name, profileImageUrl = friend.profileThumbnailImage)
+
+                            Friend(
+                                id = id,
+                                name = name,
+                                profileImageUrl = friend.profileThumbnailImage,
+
+                                kakaoId = id
+                            )
                         } ?: emptyList()
+
                     cont.resume(Result.success(items))
                 }
             }

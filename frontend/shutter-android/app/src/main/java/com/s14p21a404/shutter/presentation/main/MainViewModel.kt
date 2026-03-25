@@ -47,6 +47,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _pendingDeepLinkScreen.value = screen
     }
 
+    // 핵심 추가
+    fun onCallRejected() {
+        Log.d(TAG, "ViewModel: CALL_REJECTED 처리")
+        _pendingDeepLinkScreen.value = "call_rejected"
+    }
+
     init {
         checkAllPermissions()
         syncGpsSharingState()
@@ -88,19 +94,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         ) == PackageManager.PERMISSION_GRANTED
 
         val hasOverlay = Settings.canDrawOverlays(context)
-
         val hasAccessibility = ForegroundAppMonitorService.isRunning()
 
-        _uiState.update { it.copy(
-            allPermissionsGranted = hasPhoneState && hasNotification && hasLocation && hasAnswerPhoneCalls,
-            overlayPermissionGranted = hasOverlay,
-            accessibilityServiceEnabled = hasAccessibility
-        ) }
+        _uiState.update {
+            it.copy(
+                allPermissionsGranted = hasPhoneState && hasNotification && hasLocation && hasAnswerPhoneCalls,
+                overlayPermissionGranted = hasOverlay,
+                accessibilityServiceEnabled = hasAccessibility
+            )
+        }
 
-        Log.d(TAG, "권한 상태 - Phone: $hasPhoneState, Notification: $hasNotification, Location: $hasLocation, AnswerPhoneCalls: $hasAnswerPhoneCalls, Overlay: $hasOverlay, Accessibility: $hasAccessibility")
+        Log.d(TAG, "권한 상태 확인 완료")
     }
 
-    /**
+    **
      * 서비스 실행 상태 업데이트
      */
     fun setServiceRunning(running: Boolean) {
@@ -110,5 +117,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         private const val TAG = "MainViewModel"
     }
-}
 
+    // 추가
+    private val _incomingChannelName = MutableStateFlow<String?>(null)
+    val incomingChannelName: StateFlow<String?> = _incomingChannelName.asStateFlow()
+
+    private val _incomingCallerName = MutableStateFlow<String?>(null)
+    val incomingCallerName: StateFlow<String?> = _incomingCallerName.asStateFlow()
+
+    fun onIncomingCall(channelName: String, callerName: String) {
+        _incomingChannelName.value = channelName
+        _incomingCallerName.value = callerName
+    }
+
+    fun clearIncomingCall() {
+        _incomingChannelName.value = null
+        _incomingCallerName.value = null
+    }
+}
