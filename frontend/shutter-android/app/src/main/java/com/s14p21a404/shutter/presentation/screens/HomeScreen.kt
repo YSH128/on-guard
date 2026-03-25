@@ -201,7 +201,7 @@ private fun HeaderSection() {
             model = R.drawable.logo_gif,
             contentDescription = "Shutter",
             imageLoader = gifImageLoader,
-            modifier = Modifier.size(120.dp),
+            modifier = Modifier.size(150.dp),
             contentScale = ContentScale.Fit
         )
 
@@ -232,13 +232,13 @@ private fun WaveformAnimation() {
     )
 
     val barColors = listOf(
-        Color(0xFF5B7FD6),
-        Color(0xFF7B9AE8),
-        Color(0xFFD94F8A),
-        Color(0xFF5B7FD6),
-        Color(0xFFD94F8A),
-        Color(0xFF7B9AE8),
-        Color(0xFF5B7FD6),
+        Color(0xFF6CAEEA),
+        Color(0xFFD03770),
+        Color(0xFF6CAEEA),
+        Color(0xFFD03770),
+        Color(0xFF6CAEEA),
+        Color(0xFFD03770),
+        Color(0xFF6CAEEA),
     )
 
     Row(
