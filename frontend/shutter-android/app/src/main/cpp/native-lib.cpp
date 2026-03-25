@@ -57,7 +57,7 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
         return resultMap;
     }
 
-    const int W = 224, H = 224, C = 3;
+    const int W = 256, H = 256, C = 3;
 
     cv::Mat resized;
     cv::resize(frame, resized, cv::Size(W, H));
@@ -189,7 +189,7 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_preprocess
         return env->NewFloatArray(0);
     }
 
-    const int W = 224, H = 224;
+    const int W = 256, H = 256;
     cv::Mat resized, rgb, floatMat;
     cv::resize(frame, resized, cv::Size(W, H));
     cv::cvtColor(resized, rgb, cv::COLOR_RGBA2RGB); 
@@ -202,7 +202,7 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_preprocess
     channels[1] = (channels[1] - 0.456f) / 0.224f; // G
     channels[2] = (channels[2] - 0.406f) / 0.225f; // B
 
-    // Convert to NCHW flat array [1, 3, 224, 224] for ONNX Runtime PyTorch models.
+    // Convert to NCHW flat array [1, 3, 256, 256] for ONNX Runtime PyTorch models.
     // Since cv::split separates channels into planar mats, we directly copy them memory-aligned.
     int numPixels = W * H;
     jfloatArray result = env->NewFloatArray(3 * numPixels);

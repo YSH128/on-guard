@@ -46,6 +46,8 @@ import kotlinx.coroutines.launch
 import io.agora.rtc2.*
 import io.agora.rtc2.audio.AudioParams
 import io.agora.rtc2.video.VideoCanvas
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.delay
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -161,9 +163,51 @@ fun VideoCallScreen(
     // ── 통화 시간 타이머 ──
     LaunchedEffect(isConnecting, callEnded) {
         if (!isConnecting && !callEnded) {
-            while (true) {
-                kotlinx.coroutines.delay(1000)
+            while (isActive) {
+                delay(1000)
                 callDuration++
+            }
+        }
+    }
+
+    val whisperHelper = remember {
+        ServiceLocator.getInstance(context).whisperHelper
+    }
+    val sttBuffer = remember { java.io.ByteArrayOutputStream() }
+    
+    LaunchedEffect(Unit) {
+        whisperHelper.onResult = { resultText ->
+            android.util.Log.d("WhisperSTT_Result", "🗣️ [진행중인 통화 중 실시간 STT]: $resultText")
+        }
+        whisperHelper.initModel()
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            whisperHelper.onResult = null
+        }
+    }
+
+    // ── 실시간 온디바이스 STT 로직 (5초 주기) ──
+    LaunchedEffect(isConnecting, callEnded, isRecording) {
+        if (!isConnecting && !callEnded && isRecording) {
+            while (isActive) {
+                delay(5000)
+                try {
+                    val chunkBytes: ByteArray
+                    synchronized(sttBuffer) {
+                        chunkBytes = sttBuffer.toByteArray()
+                        sttBuffer.reset()
+                    }
+                    
+                    if (chunkBytes.isNotEmpty()) {
+                        android.util.Log.d("WhisperSTT_Result", "🎙️ [STT 추출 시작] 새로 수집된 ${chunkBytes.size} bytes 크기의 음성을 인메모리 추론합니다!")
+                        whisperHelper.transcribe(chunkBytes)
+                    } else {
+                        android.util.Log.w("WhisperSTT_Result", "⚠️ [경고] 추가된 음성이 없습니다!")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("WhisperSTT_Result", "주기적 STT 에러: ${e.message}")
+                }
             }
         }
     }
@@ -183,7 +227,16 @@ fun VideoCallScreen(
                 return true
             }
             override fun onRecordAudioFrame(channelId: String, type: Int, samplesPerChannel: Int, bytesPerSample: Int, channels: Int, samplesPerSec: Int, buffer: ByteBuffer, renderTimeMs: Long, avsync_type: Int): Boolean = true
-            override fun onMixedAudioFrame(channelId: String, type: Int, samplesPerChannel: Int, bytesPerSample: Int, channels: Int, samplesPerSec: Int, buffer: ByteBuffer, renderTimeMs: Long, avsync_type: Int): Boolean = true
+            override fun onMixedAudioFrame(channelId: String, type: Int, samplesPerChannel: Int, bytesPerSample: Int, channels: Int, samplesPerSec: Int, buffer: ByteBuffer, renderTimeMs: Long, avsync_type: Int): Boolean {
+                if (isRecording) {
+                    val data = ByteArray(buffer.remaining())
+                    buffer.get(data)
+                    synchronized(sttBuffer) {
+                        sttBuffer.write(data)
+                    }
+                }
+                return true
+            }
             override fun onEarMonitoringAudioFrame(type: Int, samplesPerChannel: Int, bytesPerSample: Int, channels: Int, samplesPerSec: Int, buffer: ByteBuffer, renderTimeMs: Long, avsync_type: Int): Boolean = true
             override fun onPlaybackAudioFrameBeforeMixing(channelId: String, userId: Int, type: Int, samplesPerChannel: Int, bytesPerSample: Int, channels: Int, samplesPerSec: Int, buffer: ByteBuffer, renderTimeMs: Long, avsync_type: Int): Boolean = true
             override fun getObservedAudioFramePosition(): Int = 0x000F
@@ -323,7 +376,7 @@ fun VideoCallScreen(
                     val wavFile = File(context.getExternalFilesDir(null), "remote_only.wav")
                     convertPcmToWav(pcmFile, wavFile, 44100, 1, 16)
                     pcmFile.delete()
-                    sendWavToJetson(wavFile)
+                    // sendWavToJetson(wavFile) // [Modified] 온디바이스 추론 전환으로 서버 전송 중단
                 }
             }
 

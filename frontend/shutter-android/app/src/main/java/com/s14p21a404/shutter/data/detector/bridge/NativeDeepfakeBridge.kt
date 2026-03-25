@@ -66,16 +66,16 @@ class NativeDeepfakeBridge(private val context: Context) {
                 ortEnv = OrtEnvironment.getEnvironment()
                 val options = OrtSession.SessionOptions()
                 options.addNnapi() // Android NNAPI 가속 활성화
-                val modelPath = getAssetFilePath(context, "face_deepfake.onnx")
+                val modelPath = getAssetFilePath(context, "ds_model_quantized.onnx")
                 ortSession = ortEnv?.createSession(modelPath, options)
                 
                 // Warmup Inference (VRAM 사전 적재 및 셰이더 컴파일 강제실행)
                 try {
-                    val dummyFloatArray = FloatArray(1 * 3 * 224 * 224) { 0f }
+                    val dummyFloatArray = FloatArray(1 * 3 * 256 * 256) { 0f }
                     val dummyTensor = OnnxTensor.createTensor(
                         ortEnv, 
                         FloatBuffer.wrap(dummyFloatArray), 
-                        longArrayOf(1, 3, 224, 224)
+                        longArrayOf(1, 3, 256, 256)
                     )
                     val inputName = ortSession?.inputNames?.iterator()?.next() ?: "input"
                     ortSession?.run(mapOf(inputName to dummyTensor))?.close()
@@ -245,11 +245,11 @@ class NativeDeepfakeBridge(private val context: Context) {
                     }.toString()
                 }
 
-                // Create ONNX NCHW Tensor [1, 3, 224, 224]
+                // Create ONNX NCHW Tensor [1, 3, 256, 256]
                 val inputTensor = OnnxTensor.createTensor(
                     ortEnv, 
                     FloatBuffer.wrap(floatArray), 
-                    longArrayOf(1, 3, 224, 224)
+                    longArrayOf(1, 3, 256, 256)
                 )
 
                 val inputName = ortSession?.inputNames?.iterator()?.next() ?: "input"

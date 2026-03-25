@@ -46,6 +46,8 @@ android {
 
         val agoraAppId = localProperties.getProperty("agora.app.id", "")
         buildConfigField("String", "AGORA_APP_ID", "\"$agoraAppId\"")
+        val gmsApiToken = localProperties.getProperty("GMS_API_TOKEN", "")
+        buildConfigField("String", "GMS_API_TOKEN", "\"$gmsApiToken\"")
 
         externalNativeBuild {
             cmake {
@@ -65,6 +67,12 @@ android {
         jniLibs {
             pickFirsts += "**/libc++_shared.so"
             useLegacyPackaging = true // [필수] DSP가 APK 내부 .so를 직접 읽을 수 없으므로 압축 해제 강제
+        }
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
         }
     }
 
@@ -91,6 +99,9 @@ android {
         compose = true
         resValues = true
         buildConfig = true // BuildConfig 활성화
+    }
+    androidResources {
+        noCompress.addAll(listOf("tflite", "bin", "vocab", "json", "txt"))
     }
 }
 
@@ -140,6 +151,13 @@ dependencies {
 
     // 이미지 로딩 (카카오 프로필 사진)
     implementation("io.coil-kt:coil-compose:2.6.0")
+    
+    // WhisperKit SDK
+    implementation("com.argmaxinc:whisperkit:0.3.3")
+
+    // QNN dependencies for hardware acceleration
+    implementation("com.qualcomm.qti:qnn-runtime:2.34.0")
+    implementation("com.qualcomm.qti:qnn-litert-delegate:2.34.0")
 }
 
 

@@ -33,7 +33,8 @@ class WarningBottomSheetView(
     context: Context,
     private val onEndCall: (() -> Unit)? = null,
     private val onRescan: (() -> Unit)? = null,
-    private val onClose: (() -> Unit)? = null
+    private val onClose: (() -> Unit)? = null,
+    private val analysisResult: String? = null
 ) : FrameLayout(context) {
 
     private val handler = Handler(Looper.getMainLooper())
@@ -196,6 +197,19 @@ class WarningBottomSheetView(
         })
         subtitleContainer.addView(subtitleRow2)
 
+        // GMS 분석 결과 추가
+        if (!analysisResult.isNullOrBlank()) {
+            subtitleContainer.addView(TextView(context).apply {
+                text = "#$analysisResult"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextColor(Color.parseColor("#9CA3AF")) // gray-400
+                gravity = Gravity.CENTER
+            }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dpToPx(8) })
+        }
+
         sheetContainer.addView(subtitleContainer, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
@@ -332,6 +346,30 @@ class WarningBottomSheetView(
     fun stopAnimations() {
         handler.removeCallbacksAndMessages(null)
         pulseAnimators.forEach { it.cancel() }
+    }
+
+    fun setAnalysisResult(result: String) {
+        if (result.isNotBlank()) {
+            // 기존 GMS 결과 제거 (있으면)
+            for (i in subtitleContainer.childCount - 1 downTo 0) {
+                val child = subtitleContainer.getChildAt(i)
+                if (child.tag == "gms_result") {
+                    subtitleContainer.removeViewAt(i)
+                }
+            }
+            
+            // 새로운 GMS 결과 추가
+            subtitleContainer.addView(TextView(context).apply {
+                text = "감지된 의도: $result"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextColor(Color.parseColor("#9CA3AF")) // gray-400
+                gravity = Gravity.CENTER
+                tag = "gms_result"
+            }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dpToPx(8) })
+        }
     }
 
     override fun onDetachedFromWindow() {
