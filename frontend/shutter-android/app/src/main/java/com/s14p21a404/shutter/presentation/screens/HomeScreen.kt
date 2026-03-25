@@ -29,17 +29,14 @@ import coil.compose.SubcomposeAsyncImage
 import coil.decode.GifDecoder
 import coil.decode.ImageDecoderDecoder
 import com.s14p21a404.shutter.R
-import kotlin.math.PI
-import kotlin.math.sin
 import com.s14p21a404.shutter.data.repository.VideoCallSessionStore
 import com.s14p21a404.shutter.di.ServiceLocator
 import kotlinx.coroutines.launch
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import kotlin.math.PI
+import kotlin.math.sin
 
-private val BgColor      = Color(0xFFF2F5F9)
-private val TextPrimary  = Color(0xFF2A2A2A)
+private val BgColor       = Color(0xFFF2F5F9)
+private val TextPrimary   = Color(0xFF2A2A2A)
 private val TextSecondary = Color(0xFF6B7280)
 
 @Composable
@@ -52,12 +49,10 @@ fun HomeScreen(
     onRequestPermissions: () -> Unit = {},
     onRequestOverlayPermission: () -> Unit = {},
     onRequestAccessibilityPermission: () -> Unit = {},
-
     onNavigateToVideoCall: (String, String, Long) -> Unit = { _, _, _ -> },
-
     homeViewModel: HomeViewModel = viewModel(),
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
     val videoCallRepository = remember {
@@ -162,26 +157,6 @@ fun HomeScreen(
             )
         }
 
-        LazyColumn(
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(uiState.friends) { friend ->
-                FriendItem(
-                    name = friend.name,
-                    profileImageUrl = friend.profileImageUrl,
-
-                    onVideoCall = {
-                        coroutineScope.launch {
-                            videoCallRepository.requestCall(friend.kakaoId)
-                                .onSuccess { data ->
-                                    VideoCallSessionStore.agoraToken = data.token
-                                    VideoCallSessionStore.channelName = data.channelName
-                                    onNavigateToVideoCall(data.channelName, friend.name, friend.kakaoId)
-                                }
-                        }
-                    }
-                )
         when {
             uiState.isLoading -> {
                 Box(Modifier.fillMaxWidth().padding(40.dp), Alignment.Center) {
@@ -208,12 +183,14 @@ fun HomeScreen(
                             name = friend.name,
                             profileImageUrl = friend.profileImageUrl,
                             onVideoCall = {
-                                val myName = homeViewModel.getMyName()
-                                val channelId = listOf(myName, friend.id.toString())
-                                    .sorted()
-                                    .joinToString("_")
-                                android.util.Log.d("Channel", "채널명: $channelId")
-                                onNavigateToVideoCall(channelId, friend.name, friend.id)
+                                coroutineScope.launch {
+                                    videoCallRepository.requestCall(friend.kakaoId)
+                                        .onSuccess { data ->
+                                            VideoCallSessionStore.agoraToken = data.token
+                                            VideoCallSessionStore.channelName = data.channelName
+                                            onNavigateToVideoCall(data.channelName, friend.name, friend.kakaoId)
+                                        }
+                                }
                             }
                         )
                     }

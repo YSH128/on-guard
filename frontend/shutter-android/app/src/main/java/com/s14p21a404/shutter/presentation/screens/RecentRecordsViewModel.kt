@@ -24,22 +24,19 @@ data class TimelineEntry(
     val item: TimelineItem,
 )
 
-data class WardGroup(
+data class SessionGroup(
+    val sessionId: String,        // unique key: "wardName||callStartedAt"
     val wardName: String,
-    val latestTime: String,
+    val sessionDate: String,      // "오늘" or "MM월 DD일"
+    val sessionTime: String,      // "HH:mm"
     val entries: List<TimelineEntry>,
-)
-
-data class DateSection(
-    val dateLabel: String,
-    val wardGroups: List<WardGroup>,
 )
 
 data class RecentRecordsUiState(
     val wardFilters: List<WardFilter> = listOf(WardFilter("전체", null)),
     val selectedFilter: String = "전체",
-    val dateSections: List<DateSection> = emptyList(),
-    val expandedGroups: Set<String> = emptySet(), // key: "dateLabel||wardName"
+    val sessions: List<SessionGroup> = emptyList(),
+    val expandedSessions: Set<String> = emptySet(),
     val isLoading: Boolean = false,
 )
 
@@ -73,11 +70,11 @@ class RecentRecordsViewModel(application: Application) : AndroidViewModel(applic
         loadTimeline()
     }
 
-    fun toggleGroup(key: String) {
+    fun toggleSession(sessionId: String) {
         _uiState.update { state ->
-            val expanded = state.expandedGroups.toMutableSet()
-            if (key in expanded) expanded.remove(key) else expanded.add(key)
-            state.copy(expandedGroups = expanded)
+            val expanded = state.expandedSessions.toMutableSet()
+            if (sessionId in expanded) expanded.remove(sessionId) else expanded.add(sessionId)
+            state.copy(expandedSessions = expanded)
         }
     }
 
@@ -105,31 +102,34 @@ class RecentRecordsViewModel(application: Application) : AndroidViewModel(applic
                 .sortedByDescending { it.item.timestamp }
 
             val today = LocalDate.now()
-            val dateSections = allEntries
+
+            // 같은 callStartedAt을 공유하는 entries = 하나의 통화 세션
+            val sessions = allEntries
                 .groupBy { entry ->
-                    try {
-                        LocalDate.parse(entry.item.timestamp.take(10))
-                    } catch (e: Exception) {
-                        today
-                    }
+                    val sessionKey = entry.item.callStartedAt ?: entry.item.timestamp.take(16)
+                    "${entry.wardName}||$sessionKey"
                 }
                 .entries
-                .sortedByDescending { it.key }
-                .map { (date, entries) ->
+                .sortedByDescending { (_, entries) ->
+                    entries.first().item.callStartedAt ?: entries.first().item.timestamp
+                }
+                .map { (key, entries) ->
+                    val first = entries.first()
+                    val rawStart = first.item.callStartedAt ?: first.item.timestamp
+                    val date = try { LocalDate.parse(rawStart.take(10)) } catch (e: Exception) { today }
                     val dateLabel = if (date == today) "오늘" else "${date.monthValue}월 ${date.dayOfMonth}일"
-                    val groups = entries
-                        .groupBy { it.wardName }
-                        .map { (wardName, wardEntries) ->
-                            WardGroup(
-                                wardName = wardName,
-                                latestTime = wardEntries.first().item.timestamp.take(16).drop(11),
-                                entries = wardEntries,
-                            )
-                        }
-                    DateSection(dateLabel = dateLabel, wardGroups = groups)
+                    val timeLabel = rawStart.take(16).drop(11)
+
+                    SessionGroup(
+                        sessionId = key,
+                        wardName = first.wardName,
+                        sessionDate = dateLabel,
+                        sessionTime = timeLabel,
+                        entries = entries.sortedBy { it.item.timestamp },
+                    )
                 }
 
-            _uiState.update { it.copy(dateSections = dateSections, isLoading = false) }
+            _uiState.update { it.copy(sessions = sessions, isLoading = false) }
         }
     }
 }

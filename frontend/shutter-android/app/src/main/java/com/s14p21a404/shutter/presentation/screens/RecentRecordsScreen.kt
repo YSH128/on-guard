@@ -95,13 +95,13 @@ private fun TimelineEntry.toUiItems(baseIndex: Int): List<TimelineUiItem> {
 
 // ── 색상 상수 ──
 
-private val BgColor           = Color(0xFFF2F5F9)
-private val CardBg            = Color.White
-private val TextPrimary       = Color(0xFF2A2A2A)
-private val TextSecondary     = Color(0xFF6B7280)
-private val ChipSelectedBg    = Color(0xFF3D527E)
-private val ChipSelectedText  = Color.White
-private val ChipUnselectedBg  = Color.White
+private val BgColor            = Color(0xFFF2F5F9)
+private val CardBg             = Color.White
+private val TextPrimary        = Color(0xFF2A2A2A)
+private val TextSecondary      = Color(0xFF6B7280)
+private val ChipSelectedBg     = Color(0xFF3D527E)
+private val ChipSelectedText   = Color.White
+private val ChipUnselectedBg   = Color.White
 private val ChipUnselectedText = Color(0xFF9CA3AF)
 
 // ════════════════════════════════════════════════════════════
@@ -137,7 +137,7 @@ fun RecentRecordsScreen(
             )
         }
 
-        // ── 필터 칩 ──
+        // ── 필터 칩 (전체 | 피보호자 이름들) ──
         LazyRow(
             contentPadding = PaddingValues(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -160,7 +160,7 @@ fun RecentRecordsScreen(
                     CircularProgressIndicator(color = ChipSelectedBg)
                 }
             }
-            uiState.dateSections.isEmpty() -> {
+            uiState.sessions.isEmpty() -> {
                 Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), Alignment.Center) {
                     Text("알림 내역이 없습니다.", fontSize = 14.sp, color = TextSecondary)
                 }
@@ -168,35 +168,19 @@ fun RecentRecordsScreen(
             else -> {
                 LazyColumn(
                     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(0.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    uiState.dateSections.forEach { section ->
-                        // 날짜 헤더
-                        item(key = "header_${section.dateLabel}") {
-                            Text(
-                                text = section.dateLabel,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = TextSecondary,
-                                modifier = Modifier.padding(top = 8.dp, bottom = 10.dp)
-                            )
-                        }
-
-                        // 아이별 그룹 카드
-                        items(
-                            items = section.wardGroups,
-                            key = { group -> "${section.dateLabel}||${group.wardName}" }
-                        ) { group ->
-                            val groupKey = "${section.dateLabel}||${group.wardName}"
-                            val isExpanded = groupKey in uiState.expandedGroups
-                            WardGroupCard(
-                                group = group,
-                                isExpanded = isExpanded,
-                                onToggle = { viewModel.toggleGroup(groupKey) }
-                            )
-                            Spacer(Modifier.height(10.dp))
-                        }
+                    items(
+                        items = uiState.sessions,
+                        key = { session -> session.sessionId }
+                    ) { session ->
+                        val isExpanded = session.sessionId in uiState.expandedSessions
+                        SessionCard(
+                            session = session,
+                            isExpanded = isExpanded,
+                            onToggle = { viewModel.toggleSession(session.sessionId) }
+                        )
                     }
 
                     item { Spacer(Modifier.height(16.dp)) }
@@ -227,11 +211,11 @@ private fun FilterChip(text: String, selected: Boolean, onClick: () -> Unit) {
     )
 }
 
-// ── 아이별 그룹 카드 ──
+// ── 세션 카드 ──
 
 @Composable
-private fun WardGroupCard(
-    group: WardGroup,
+private fun SessionCard(
+    session: SessionGroup,
     isExpanded: Boolean,
     onToggle: () -> Unit,
 ) {
@@ -277,23 +261,20 @@ private fun WardGroupCard(
 
                 Spacer(Modifier.width(12.dp))
 
-                // 이름
-                Text(
-                    text = group.wardName,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary,
-                    modifier = Modifier.weight(1f)
-                )
-
-                // 최근 시간
-                Text(
-                    text = group.latestTime,
-                    fontSize = 13.sp,
-                    color = TextSecondary,
-                )
-
-                Spacer(Modifier.width(4.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = session.wardName,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "${session.sessionDate} ${session.sessionTime}",
+                        fontSize = 12.sp,
+                        color = TextSecondary,
+                    )
+                }
 
                 // 펼침 화살표
                 Icon(
@@ -319,7 +300,7 @@ private fun WardGroupCard(
                     Spacer(Modifier.height(12.dp))
 
                     var itemIndex = 0
-                    group.entries.forEach { entry ->
+                    session.entries.forEach { entry ->
                         val uiItems = entry.toUiItems(itemIndex)
                         itemIndex += uiItems.size
                         uiItems.forEach { uiItem ->
@@ -362,7 +343,6 @@ private fun MessageCard(item: TimelineUiItem) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            // 수신자
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
