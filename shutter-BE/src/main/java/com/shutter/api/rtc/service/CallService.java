@@ -40,7 +40,7 @@ public class CallService {
 
         // 2. 수신자 조회 (카카오 ID로 매핑)
         User callee = userRepository.findByKakaoId(calleeKakaoId)
-                .orElseThrow(() -> new CallException(ErrorCode.USER_NOT_FOUND));
+                .orElseThrow(() -> new CallException(ErrorCode.CALLEE_NOT_FOUND));
 
         Long calleeId = callee.getId();
 
