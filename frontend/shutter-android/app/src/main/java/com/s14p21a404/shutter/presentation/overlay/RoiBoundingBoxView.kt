@@ -40,15 +40,9 @@ class RoiBoundingBoxView(context: Context) : View(context) {
     }
 
     private val outerBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#FACC15") // yellow-400
+        color = Color.parseColor("#EF4444") // red-500 (레퍼런스: border-3 border-red-500)
         style = Paint.Style.STROKE
-        strokeWidth = dpToPx(2).toFloat()
-    }
-
-    private val innerBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#66F87171") // red-400 / 40%
-        style = Paint.Style.STROKE
-        strokeWidth = dpToPx(1).toFloat()
+        strokeWidth = dpToPx(3).toFloat()
     }
 
     private val scanLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -157,11 +151,9 @@ class RoiBoundingBoxView(context: Context) : View(context) {
         val alpha = (popAlpha * 255).toInt().coerceIn(0, 255)
 
         val outerRadius = dpToPx(8).toFloat()
-        val innerRadius = dpToPx(6).toFloat()
-        val inset = dpToPx(4).toFloat()
 
-        // ① 연빨간 fill
-        fillPaint.alpha = alpha * 0x26 / 255
+        // ① 연빨간 fill (레퍼런스: bg-red-500/20)
+        fillPaint.alpha = alpha * 0x33 / 255  // ~20%
         canvas.drawRoundRect(left, top, right, bottom, outerRadius, outerRadius, fillPaint)
 
         // ② 스캔 라인 (box 안쪽에서 위→아래 이동)
@@ -185,16 +177,10 @@ class RoiBoundingBoxView(context: Context) : View(context) {
         scanGlowPaint.alpha = alpha
         canvas.drawLine(left, scanY, right, scanY, scanGlowPaint)
 
-        // ③ 외곽 노란 border
+        // ③ 외곽 빨간 border (레퍼런스: border-3 border-red-500 rounded-lg)
         outerBorderPaint.alpha = alpha
         canvas.drawRoundRect(left, top, right, bottom, outerRadius, outerRadius, outerBorderPaint)
 
-        // ④ 내부 빨간 border (inset)
-        innerBorderPaint.alpha = alpha * 0x66 / 255
-        canvas.drawRoundRect(
-            left + inset, top + inset, right - inset, bottom - inset,
-            innerRadius, innerRadius, innerBorderPaint
-        )
 
         // ⑤ Confidence 배지 (box 상단 위)
         val badgeText = String.format("%.1f%%", confidence)
@@ -216,20 +202,25 @@ class RoiBoundingBoxView(context: Context) : View(context) {
         badgePaint.alpha = alpha
         canvas.drawRoundRect(badgeLeft, badgeTop, badgeRight, badgeBottom, badgeRadius, badgeRadius, badgePaint)
 
-        // 🔍 magnifying glass icon
+        // ⚠ AlertTriangle icon (레퍼런스: AlertTriangle 아이콘)
         val iconCx = badgeLeft + badgePadH + iconSize / 2f
         val iconCy = badgeTop + badgeH / 2f
-        val circleR = iconSize * 0.35f
         iconPaint.alpha = alpha
-        canvas.drawCircle(iconCx - iconSize * 0.05f, iconCy - iconSize * 0.05f, circleR, iconPaint)
-        // handle line
-        val handleStartX = iconCx - iconSize * 0.05f + circleR * 0.7f
-        val handleStartY = iconCy - iconSize * 0.05f + circleR * 0.7f
-        canvas.drawLine(
-            handleStartX, handleStartY,
-            handleStartX + iconSize * 0.25f, handleStartY + iconSize * 0.25f,
-            iconPaint
-        )
+        iconPaint.style = Paint.Style.STROKE
+        iconPaint.strokeWidth = dpToPx(1.5f).toFloat()
+        // 삼각형
+        val triPath = Path().apply {
+            moveTo(iconCx, iconCy - iconSize * 0.4f)
+            lineTo(iconCx - iconSize * 0.38f, iconCy + iconSize * 0.3f)
+            lineTo(iconCx + iconSize * 0.38f, iconCy + iconSize * 0.3f)
+            close()
+        }
+        canvas.drawPath(triPath, iconPaint)
+        // 느낌표 (세로선 + 점)
+        iconPaint.style = Paint.Style.STROKE
+        iconPaint.strokeCap = Paint.Cap.ROUND
+        canvas.drawLine(iconCx, iconCy - iconSize * 0.15f, iconCx, iconCy + iconSize * 0.08f, iconPaint)
+        canvas.drawPoint(iconCx, iconCy + iconSize * 0.2f, iconPaint)
 
         // badge text
         badgeTextPaint.alpha = alpha
