@@ -1,5 +1,7 @@
 package com.s14p21a404.shutter.domain.repository
 
+
+import com.s14p21a404.shutter.network.CallResponseData
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -42,5 +44,15 @@ interface VideoCallRepository {
 
     /** 현재 인앱 영상통화가 활성 상태인지 반환 */
     fun isInAppCallActive(): Boolean
-}
 
+    // ── 백엔드 API 연동 ──
+
+    /** 통화 요청 (상대방의 DB ID인 wardId 또는 guardianId 전달) */
+    suspend fun requestCall(calleeId: Long): Result<CallResponseData>
+    
+    /** 통화 수락 (푸시로 받은 채널명 전달) */
+    suspend fun acceptCall(channelName: String): Result<CallResponseData>
+    
+    /** 통화 거절 (푸시로 받은 채널명 전달) */
+    suspend fun rejectCall(channelName: String): Result<Unit>
+}

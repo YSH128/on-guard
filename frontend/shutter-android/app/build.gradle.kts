@@ -44,6 +44,9 @@ android {
         val serverBaseUrl = localProperties.getProperty("server.base.url", "https://your-server.com/")
         buildConfigField("String", "SERVER_BASE_URL", "\"$serverBaseUrl\"")
 
+        val agoraAppId = localProperties.getProperty("agora.app.id", "")
+        buildConfigField("String", "AGORA_APP_ID", "\"$agoraAppId\"")
+
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"

@@ -1,5 +1,6 @@
 package com.s14p21a404.shutter.di
 
+
 import android.content.Context
 import com.s14p21a404.shutter.data.detector.DeepfakeDetector
 import com.s14p21a404.shutter.data.detector.real.RealDeepfakeDetector
@@ -84,7 +85,7 @@ class ServiceLocator private constructor(context: Context) {
     val getMyWardsUseCase = GetMyWardsUseCase(guardianRepository)
 
     val videoCallRepository: VideoCallRepository =
-        VideoCallRepositoryImpl(context)
+        VideoCallRepositoryImpl(context, apiService)
 
     // ── Auth UseCases ──
 
