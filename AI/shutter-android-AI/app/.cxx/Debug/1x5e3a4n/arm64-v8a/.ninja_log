@@ -1,0 +1,22 @@
+# ninja log v5
+34	36877	7959526437079943	CMakeFiles/shutter_android_ai.dir/native-lib.cpp.o	caa4c4fb4825eb4a
+36878	37245	7959526443298671	C:/Users/SSAFY/Desktop/SSAFY_14_yujin/2_specific_PJT/0_dev/S14P21A404/AI/shutter-android-AI/app/build/intermediates/cxx/Debug/1x5e3a4n/obj/arm64-v8a/libshutter_android_ai.so	a1f5a5a1bec4fe47
+19	15693	7959563580695574	CMakeFiles/shutter_android_ai.dir/native-lib.cpp.o	caa4c4fb4825eb4a
+15694	15875	7959563583782012	C:/Users/SSAFY/Desktop/SSAFY_14_yujin/2_specific_PJT/0_dev/S14P21A404/AI/shutter-android-AI/app/build/intermediates/cxx/Debug/1x5e3a4n/obj/arm64-v8a/libshutter_android_ai.so	a1f5a5a1bec4fe47
+0	14	0	clean	5604d1cc43f86cab
+14	19967	7959573228400784	CMakeFiles/shutter_android_ai.dir/native-lib.cpp.o	caa4c4fb4825eb4a
+19969	20210	7959573232210556	C:/Users/SSAFY/Desktop/SSAFY_14_yujin/2_specific_PJT/0_dev/S14P21A404/AI/shutter-android-AI/app/build/intermediates/cxx/Debug/1x5e3a4n/obj/arm64-v8a/libshutter_android_ai.so	a1f5a5a1bec4fe47
+15	15239	7959574173405548	CMakeFiles/shutter_android_ai.dir/native-lib.cpp.o	caa4c4fb4825eb4a
+15240	15410	7959574176605855	C:/Users/SSAFY/Desktop/SSAFY_14_yujin/2_specific_PJT/0_dev/S14P21A404/AI/shutter-android-AI/app/build/intermediates/cxx/Debug/1x5e3a4n/obj/arm64-v8a/libshutter_android_ai.so	a1f5a5a1bec4fe47
+105	35308	7959586239077595	CMakeFiles/shutter_android_ai.dir/native-lib.cpp.o	caa4c4fb4825eb4a
+35310	35651	7959586244591979	C:/Users/SSAFY/Desktop/SSAFY_14_yujin/2_specific_PJT/0_dev/S14P21A404/AI/shutter-android-AI/app/build/intermediates/cxx/Debug/1x5e3a4n/obj/arm64-v8a/libshutter_android_ai.so	a1f5a5a1bec4fe47
+30	20064	7959588253691654	CMakeFiles/shutter_android_ai.dir/native-lib.cpp.o	caa4c4fb4825eb4a
+20065	20339	7959588258463786	C:/Users/SSAFY/Desktop/SSAFY_14_yujin/2_specific_PJT/0_dev/S14P21A404/AI/shutter-android-AI/app/build/intermediates/cxx/Debug/1x5e3a4n/obj/arm64-v8a/libshutter_android_ai.so	a1f5a5a1bec4fe47
+25	28954	7959683306059843	CMakeFiles/shutter_android_ai.dir/native-lib.cpp.o	caa4c4fb4825eb4a
+28956	29494	7959683313723808	C:/Users/SSAFY/Desktop/SSAFY_14_yujin/2_specific_PJT/0_dev/S14P21A404/AI/shutter-android-AI/app/build/intermediates/cxx/Debug/1x5e3a4n/obj/arm64-v8a/libshutter_android_ai.so	a1f5a5a1bec4fe47
+29	26710	7959686416814171	CMakeFiles/shutter_android_ai.dir/native-lib.cpp.o	caa4c4fb4825eb4a
+26712	27161	7959686422623171	C:/Users/SSAFY/Desktop/SSAFY_14_yujin/2_specific_PJT/0_dev/S14P21A404/AI/shutter-android-AI/app/build/intermediates/cxx/Debug/1x5e3a4n/obj/arm64-v8a/libshutter_android_ai.so	a1f5a5a1bec4fe47
+23	22314	7959694051084154	CMakeFiles/shutter_android_ai.dir/native-lib.cpp.o	caa4c4fb4825eb4a
+22315	22604	7959694055963027	C:/Users/SSAFY/Desktop/SSAFY_14_yujin/2_specific_PJT/0_dev/S14P21A404/AI/shutter-android-AI/app/build/intermediates/cxx/Debug/1x5e3a4n/obj/arm64-v8a/libshutter_android_ai.so	a1f5a5a1bec4fe47
+23	19763	7959698825927187	CMakeFiles/shutter_android_ai.dir/native-lib.cpp.o	caa4c4fb4825eb4a
+19764	20016	7959698830042374	C:/Users/SSAFY/Desktop/SSAFY_14_yujin/2_specific_PJT/0_dev/S14P21A404/AI/shutter-android-AI/app/build/intermediates/cxx/Debug/1x5e3a4n/obj/arm64-v8a/libshutter_android_ai.so	a1f5a5a1bec4fe47
