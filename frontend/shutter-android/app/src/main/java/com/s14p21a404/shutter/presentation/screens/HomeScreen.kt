@@ -1,46 +1,43 @@
 package com.s14p21a404.shutter.presentation.screens
 
+import android.os.Build
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.layout.ContentScale
-import coil.compose.SubcomposeAsyncImage
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.ImageLoader
+import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
+import com.s14p21a404.shutter.R
 import com.s14p21a404.shutter.data.repository.VideoCallSessionStore
 import com.s14p21a404.shutter.di.ServiceLocator
 import kotlinx.coroutines.launch
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import kotlin.math.PI
+import kotlin.math.sin
 
-// ── 색상 상수 ──
-
-private val HeaderGradientStart = Color(0xFF23368B)
-private val HeaderGradientEnd   = Color(0xFF7297DB)
-private val ShieldIconColor     = Color(0xFF5B7FD6)
-private val StatusGreen         = Color(0xFF4ADE80)
-private val BgColor             = Color(0xFFF2F5F9)
-private val TextPrimary         = Color(0xFF2A2A2A)
-private val TextSecondary       = Color(0xFF6B7280)
+private val BgColor       = Color(0xFFF2F5F9)
+private val TextPrimary   = Color(0xFF2A2A2A)
+private val TextSecondary = Color(0xFF6B7280)
 
 @Composable
 fun HomeScreen(
@@ -52,12 +49,10 @@ fun HomeScreen(
     onRequestPermissions: () -> Unit = {},
     onRequestOverlayPermission: () -> Unit = {},
     onRequestAccessibilityPermission: () -> Unit = {},
-
     onNavigateToVideoCall: (String, String, Long) -> Unit = { _, _, _ -> },
-
     homeViewModel: HomeViewModel = viewModel(),
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
     val videoCallRepository = remember {
@@ -140,37 +135,152 @@ fun HomeScreen(
             .fillMaxSize()
             .background(BgColor)
     ) {
-        HeaderSection(isServiceRunning = isServiceRunning, onToggleService = onToggleService)
+        HeaderSection()
 
-        Text(
-            text = "연락처",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            color = TextPrimary,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+        // 친구 (N) 헤더
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ri_kakao_talk_fill),
+                contentDescription = null,
+                tint = Color.Unspecified,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = "친구 (${uiState.friends.size})",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary
+            )
+        }
+
+        when {
+            uiState.isLoading -> {
+                Box(Modifier.fillMaxWidth().padding(40.dp), Alignment.Center) {
+                    CircularProgressIndicator(color = Color(0xFF5B7FD6))
+                }
+            }
+            uiState.error != null -> {
+                Box(Modifier.fillMaxWidth().padding(40.dp), Alignment.Center) {
+                    Text(uiState.error!!, fontSize = 14.sp, color = TextSecondary)
+                }
+            }
+            uiState.friends.isEmpty() -> {
+                Box(Modifier.fillMaxWidth().padding(40.dp), Alignment.Center) {
+                    Text("카카오 친구가 없습니다.", fontSize = 14.sp, color = TextSecondary)
+                }
+            }
+            else -> {
+                LazyColumn(
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(uiState.friends) { friend ->
+                        FriendItem(
+                            name = friend.name,
+                            profileImageUrl = friend.profileImageUrl,
+                            onVideoCall = {
+                                coroutineScope.launch {
+                                    videoCallRepository.requestCall(friend.kakaoId)
+                                        .onSuccess { data ->
+                                            VideoCallSessionStore.agoraToken = data.token
+                                            VideoCallSessionStore.channelName = data.channelName
+                                            onNavigateToVideoCall(data.channelName, friend.name, friend.kakaoId)
+                                        }
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeaderSection() {
+    val context = LocalContext.current
+    val gifImageLoader = remember {
+        ImageLoader.Builder(context)
+            .components {
+                if (Build.VERSION.SDK_INT >= 28) {
+                    add(ImageDecoderDecoder.Factory())
+                } else {
+                    add(GifDecoder.Factory())
+                }
+            }
+            .build()
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White)
+            .statusBarsPadding()
+            .padding(top = 28.dp, bottom = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        AsyncImage(
+            model = R.drawable.logo_gif,
+            contentDescription = "Shutter",
+            imageLoader = gifImageLoader,
+            modifier = Modifier.size(100.dp),
+            contentScale = ContentScale.Fit
         )
 
-        LazyColumn(
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(uiState.friends) { friend ->
-                FriendItem(
-                    name = friend.name,
-                    profileImageUrl = friend.profileImageUrl,
+        Spacer(Modifier.height(20.dp))
 
-                    onVideoCall = {
-                        coroutineScope.launch {
-                            videoCallRepository.requestCall(friend.kakaoId)
-                                .onSuccess { data ->
-                                    VideoCallSessionStore.agoraToken = data.token
-                                    VideoCallSessionStore.channelName = data.channelName
-                                    onNavigateToVideoCall(data.channelName, friend.name, friend.kakaoId)
-                                }
-                        }
-                    }
-                )
-            }
+        WaveformAnimation()
+    }
+}
+
+// 각 바의 고정 높이 스케일 (웨이브 모양은 유지하되 막대마다 최대 높이가 다름)
+private val barScales = floatArrayOf(
+    0.55f, 0.9f, 0.45f, 1.0f, 0.6f, 0.8f, 0.4f, 0.95f, 0.65f, 0.5f,
+    0.85f, 0.4f, 1.0f, 0.55f, 0.75f, 0.45f, 0.9f, 0.6f, 0.5f, 0.85f,
+    0.7f, 0.4f, 1.0f, 0.5f, 0.8f, 0.6f, 0.9f, 0.45f
+)
+
+@Composable
+private fun WaveformAnimation() {
+    val infiniteTransition = rememberInfiniteTransition(label = "wave")
+    val phase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "wavePhase"
+    )
+
+    val barColors = listOf(
+        Color(0xFF6CAEEA),
+        Color(0xFFD03770),
+        Color(0xFF6CAEEA),
+        Color(0xFFD03770),
+        Color(0xFF6CAEEA),
+        Color(0xFFD03770),
+        Color(0xFF6CAEEA),
+    )
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.height(36.dp)
+    ) {
+        repeat(28) { i ->
+            val heightFraction = ((sin(phase + i * 0.45f).toFloat() + 1f) / 2f) * barScales[i] * 0.8f + 0.1f
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .fillMaxHeight(heightFraction)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(barColors[i % barColors.size])
+            )
         }
     }
 }
@@ -184,17 +294,16 @@ private fun FriendItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(28.dp))
             .background(Color.White)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 프로필 아이콘
         Box(
             modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(Color(0xFFE8EBF5)),
+                .size(44.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFFD6E0F5)),
             contentAlignment = Alignment.Center
         ) {
             if (!profileImageUrl.isNullOrEmpty()) {
@@ -207,7 +316,7 @@ private fun FriendItem(
                         Icon(
                             imageVector = Icons.Outlined.Person,
                             contentDescription = null,
-                            modifier = Modifier.size(22.dp),
+                            modifier = Modifier.size(24.dp),
                             tint = Color(0xFF5B7FD6)
                         )
                     },
@@ -216,7 +325,7 @@ private fun FriendItem(
                 Icon(
                     imageVector = Icons.Outlined.Person,
                     contentDescription = null,
-                    modifier = Modifier.size(22.dp),
+                    modifier = Modifier.size(24.dp),
                     tint = Color(0xFF5B7FD6)
                 )
             }
@@ -224,7 +333,6 @@ private fun FriendItem(
 
         Spacer(Modifier.width(12.dp))
 
-        // 이름
         Text(
             text = name,
             fontSize = 15.sp,
@@ -233,7 +341,6 @@ private fun FriendItem(
             modifier = Modifier.weight(1f)
         )
 
-        // 영상통화 버튼
         IconButton(onClick = onVideoCall) {
             Icon(
                 imageVector = Icons.Outlined.Videocam,
@@ -241,116 +348,6 @@ private fun FriendItem(
                 tint = Color(0xFF5B7FD6),
                 modifier = Modifier.size(24.dp)
             )
-        }
-    }
-}
-
-@Composable
-private fun HeaderSection(isServiceRunning: Boolean, onToggleService: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
-            .background(Brush.verticalGradient(listOf(HeaderGradientStart, HeaderGradientEnd)))
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 32.dp)
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Shutter",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    modifier = Modifier.align(Alignment.Start)
-                )
-
-                Spacer(Modifier.height(32.dp))
-
-                Box(
-                    modifier = Modifier
-                        .size(144.dp)
-                        .shadow(16.dp, CircleShape)
-                        .clip(CircleShape)
-                        .background(Brush.verticalGradient(listOf(Color.White, Color(0xFF999999)))),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(96.dp)
-                            .clip(CircleShape)
-                            .background(Brush.verticalGradient(listOf(Color.White, Color.White, Color(0xFFC0C0C0)))),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Shield,
-                            contentDescription = "보호 상태",
-                            modifier = Modifier.size(64.dp),
-                            tint = ShieldIconColor
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(24.dp))
-
-                val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-                val pulseAlpha by infiniteTransition.animateFloat(
-                    initialValue = 0.55f, targetValue = 0.55f,
-                    animationSpec = infiniteRepeatable(
-                        animation = keyframes { durationMillis = 1800; 0.55f at 0; 0f at 900; 0.55f at 1800 },
-                        repeatMode = RepeatMode.Restart
-                    ), label = "pulseAlpha"
-                )
-                val pulseRadius by infiniteTransition.animateFloat(
-                    initialValue = 0f, targetValue = 0f,
-                    animationSpec = infiniteRepeatable(
-                        animation = keyframes { durationMillis = 1800; 0f at 0; 5f at 900; 0f at 1800 },
-                        repeatMode = RepeatMode.Restart
-                    ), label = "pulseRadius"
-                )
-
-                Surface(
-                    onClick = onToggleService,
-                    shape = RoundedCornerShape(50),
-                    color = Color.White.copy(alpha = 0.2f),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val dotColor = if (isServiceRunning) StatusGreen else Color(0xFFEF4444)
-                        Box(modifier = Modifier.size(16.dp), contentAlignment = Alignment.Center) {
-                            if (isServiceRunning) {
-                                Box(
-                                    modifier = Modifier
-                                        .size((8 + pulseRadius * 2).dp)
-                                        .clip(CircleShape)
-                                        .background(dotColor.copy(alpha = pulseAlpha))
-                                )
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(dotColor)
-                            )
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = if (isServiceRunning) "실시간 AI 감지 중" else "실시간 감지 시작하기",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.White
-                        )
-                    }
-                }
-            }
         }
     }
 }

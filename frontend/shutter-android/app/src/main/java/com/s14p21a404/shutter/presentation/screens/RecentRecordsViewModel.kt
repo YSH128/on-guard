@@ -12,10 +12,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 data class WardFilter(
     val name: String,
-    val wardId: Long?,  // null = 전체
+    val wardId: Long?,
 )
 
 data class TimelineEntry(
@@ -23,10 +24,19 @@ data class TimelineEntry(
     val item: TimelineItem,
 )
 
+data class SessionGroup(
+    val sessionId: String,        // unique key: "wardName||callStartedAt"
+    val wardName: String,
+    val sessionDate: String,      // "오늘" or "MM월 DD일"
+    val sessionTime: String,      // "HH:mm"
+    val entries: List<TimelineEntry>,
+)
+
 data class RecentRecordsUiState(
     val wardFilters: List<WardFilter> = listOf(WardFilter("전체", null)),
     val selectedFilter: String = "전체",
-    val timelineEntries: List<TimelineEntry> = emptyList(),
+    val sessions: List<SessionGroup> = emptyList(),
+    val expandedSessions: Set<String> = emptySet(),
     val isLoading: Boolean = false,
 )
 
@@ -60,6 +70,14 @@ class RecentRecordsViewModel(application: Application) : AndroidViewModel(applic
         loadTimeline()
     }
 
+    fun toggleSession(sessionId: String) {
+        _uiState.update { state ->
+            val expanded = state.expandedSessions.toMutableSet()
+            if (sessionId in expanded) expanded.remove(sessionId) else expanded.add(sessionId)
+            state.copy(expandedSessions = expanded)
+        }
+    }
+
     private fun loadTimeline() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
@@ -71,7 +89,7 @@ class RecentRecordsViewModel(application: Application) : AndroidViewModel(applic
                 state.wardFilters.filter { it.name == state.selectedFilter && it.wardId != null }
             }
 
-            val entries = wardsToFetch
+            val allEntries = wardsToFetch
                 .map { ward ->
                     async {
                         alertRepository.getTimeline(ward.wardId!!)
@@ -83,7 +101,35 @@ class RecentRecordsViewModel(application: Application) : AndroidViewModel(applic
                 .flatten()
                 .sortedByDescending { it.item.timestamp }
 
-            _uiState.update { it.copy(timelineEntries = entries, isLoading = false) }
+            val today = LocalDate.now()
+
+            // 같은 callStartedAt을 공유하는 entries = 하나의 통화 세션
+            val sessions = allEntries
+                .groupBy { entry ->
+                    val sessionKey = entry.item.callStartedAt ?: entry.item.timestamp.take(16)
+                    "${entry.wardName}||$sessionKey"
+                }
+                .entries
+                .sortedByDescending { (_, entries) ->
+                    entries.first().item.callStartedAt ?: entries.first().item.timestamp
+                }
+                .map { (key, entries) ->
+                    val first = entries.first()
+                    val rawStart = first.item.callStartedAt ?: first.item.timestamp
+                    val date = try { LocalDate.parse(rawStart.take(10)) } catch (e: Exception) { today }
+                    val dateLabel = if (date == today) "오늘" else "${date.monthValue}월 ${date.dayOfMonth}일"
+                    val timeLabel = rawStart.take(16).drop(11)
+
+                    SessionGroup(
+                        sessionId = key,
+                        wardName = first.wardName,
+                        sessionDate = dateLabel,
+                        sessionTime = timeLabel,
+                        entries = entries.sortedBy { it.item.timestamp },
+                    )
+                }
+
+            _uiState.update { it.copy(sessions = sessions, isLoading = false) }
         }
     }
 }

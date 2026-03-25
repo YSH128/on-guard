@@ -203,13 +203,14 @@ private fun SettingsHeader() {
             .fillMaxWidth()
             .background(BgColor)
             .statusBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 16.dp)
+            .padding(horizontal = 20.dp)
+            .padding(top = 40.dp, bottom = 24.dp)
     ) {
         Text(
-            text = "환경 설정",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = TitleColor,
+            text = "환경설정",
+            fontSize = 26.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary,
             modifier = Modifier.align(Alignment.Center)
         )
     }
@@ -326,29 +327,13 @@ private fun GuardianListSection(
             color = TextPrimary
         )
 
-        Surface(
-            onClick = onAddGuardian,
-            shape = RoundedCornerShape(50),
-            color = AddButtonBg,
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.PersonAdd,
-                    contentDescription = "보호자 추가",
-                    modifier = Modifier.size(16.dp),
-                    tint = Color.White
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "추가",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.White
-                )
-            }
+        IconButton(onClick = onAddGuardian) {
+            Icon(
+                imageVector = Icons.Filled.PersonAdd,
+                contentDescription = "보호자 추가",
+                modifier = Modifier.size(24.dp),
+                tint = TextPrimary
+            )
         }
     }
 

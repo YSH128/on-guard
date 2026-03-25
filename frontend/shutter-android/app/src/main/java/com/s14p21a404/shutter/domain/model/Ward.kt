@@ -11,4 +11,5 @@ data class Ward(
     val lat: Double?,
     val lng: Double?,
     val gpsUpdatedAt: String?,
+    val profileImageUrl: String? = null,
 )

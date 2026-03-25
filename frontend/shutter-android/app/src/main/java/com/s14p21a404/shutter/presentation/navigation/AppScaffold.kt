@@ -63,7 +63,7 @@ val bottomNavItems = listOf(
 )
 
 // ── 색상 상수 ──
-private val NavBgColor = Color(0xCCFFFFFF)
+private val NavBgColor = Color(0xFFFFFFFF)
 private val NavActiveColor = Color(0xFF1A1A1A)
 private val NavInactiveColor = Color(0xFF64666E)
 
@@ -118,14 +118,12 @@ fun AppScaffold(
     // 보호자 등록 성공 시 SettingsScreen 목록을 갱신하기 위한 키
     var settingsRefreshKey by rememberSaveable { mutableIntStateOf(0) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        // 콘텐츠 영역
+    Column(modifier = Modifier.fillMaxSize()) {
+        // 콘텐츠 영역 — 네비게이션 바 위 공간만 차지
         NavHost(
             navController = navController,
             startDestination = Screen.Home.route,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = if (showBottomBar) 72.dp else 0.dp)
+            modifier = Modifier.weight(1f)
         ) {
             composable(Screen.Home.route) {
                 HomeScreen(
@@ -183,22 +181,26 @@ fun AppScaffold(
 
         // 하단 Pill 네비게이션
         if (showBottomBar) {
-            PillBottomNavigation(
-                currentDestination = currentDestination,
-                onNavigate = { route ->
-                    navController.navigate(route) {
-                        popUpTo(navController.graph.findStartDestination().id) {
-                            saveState = true
-                        }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                },
+            Box(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
                     .navigationBarsPadding()
-                    .padding(bottom = 12.dp)
-            )
+                    .padding(bottom = 12.dp, top = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                PillBottomNavigation(
+                    currentDestination = currentDestination,
+                    onNavigate = { route ->
+                        navController.navigate(route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                )
+            }
         }
     }
 }
@@ -207,8 +209,8 @@ fun AppScaffold(
 private fun PillBottomNavigation(
     currentDestination: androidx.navigation.NavDestination?,
     onNavigate: (String) -> Unit,
-    modifier: Modifier = Modifier,
 ) {
+    val modifier = Modifier
     Row(
         modifier = modifier
             .fillMaxWidth(0.85f)
