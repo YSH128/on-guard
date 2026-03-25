@@ -19,6 +19,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
+import com.s14p21a404.shutter.network.ApiService
+import com.s14p21a404.shutter.network.CallRequest
+import com.s14p21a404.shutter.network.CallResponseData
+
 /**
  * 영상통화 상태 Repository 구현체
  *
@@ -28,7 +32,10 @@ import kotlinx.coroutines.launch
  * AccessibilityService로부터 포그라운드 패키지를 받아
  * 영상통화 앱 화면 위에 있는지 여부도 판단한다.
  */
-class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepository {
+class VideoCallRepositoryImpl(
+    private val context: Context,
+    private val apiService: ApiService
+) : VideoCallRepository {
 
     private val telephonyManager =
         context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
@@ -243,6 +250,27 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
         Log.d(TAG, "VoIP 포그라운드 관찰 중단")
     }
 
+    // ── 백엔드 API 연동 ──
+
+    override suspend fun requestCall(calleeKakaoId: Long): Result<CallResponseData> = runCatching {
+        val response = apiService.requestCall(
+            CallRequest(calleeKakaoId = calleeKakaoId)
+        )
+        check(response.success) { response.message }
+        response.data
+    }
+
+    override suspend fun acceptCall(channelName: String): Result<CallResponseData> = runCatching {
+        val response = apiService.acceptCall(channelName)
+        check(response.success) { response.message }
+        response.data
+    }
+
+    override suspend fun rejectCall(channelName: String): Result<Unit> = runCatching {
+        val response = apiService.rejectCall(channelName)
+        check(response.isSuccessful) { "통화 거절 처리 실패" }
+    }
+
     companion object {
         private const val TAG = "VideoCallRepo"
 
@@ -308,6 +336,5 @@ class VideoCallRepositoryImpl(private val context: Context) : VideoCallRepositor
         )
     }
 }
-
 
 

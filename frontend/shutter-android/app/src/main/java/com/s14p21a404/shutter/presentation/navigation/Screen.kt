@@ -3,8 +3,11 @@ package com.s14p21a404.shutter.presentation.navigation
 /**
  * 앱 내 화면(라우트) 정의
  */
+import java.net.URLEncoder
+
 sealed class Screen(val route: String) {
     /** 연락처 – 카카오 친구 목록 */
+
     object Home : Screen("home")
 
     /** 최근 기록 – 알림 타임라인 */
@@ -21,8 +24,13 @@ sealed class Screen(val route: String) {
 
     /** 영상 통화 */
     object VideoCall : Screen("video_call/{channelId}/{callerName}/{opponentKakaoId}") {
-        fun createRoute(channelId: String, callerName: String, opponentKakaoId: Long) =
-            "video_call/$channelId/${java.net.URLEncoder.encode(callerName, "UTF-8")}/$opponentKakaoId"
+
+        fun createRoute(
+            channelId: String,
+            callerName: String,
+            opponentKakaoId: Long,
+        ): String = "video_call/$channelId/${
+            URLEncoder.encode(callerName, "UTF-8")
+        }/$opponentKakaoId"
     }
 }
-

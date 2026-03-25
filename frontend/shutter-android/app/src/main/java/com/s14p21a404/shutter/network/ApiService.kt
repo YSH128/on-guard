@@ -203,6 +203,23 @@ data class TimelineResponse(
     val data: TimelineData,
 )
 
+// ── 영상 통화 요청 POST /calls ──────────────────────────────────────────────────
+
+data class CallRequest(
+    @SerializedName("callee_kakao_id") val calleeKakaoId: Long
+)
+
+data class CallResponseData(
+    @SerializedName("channel_name") val channelName: String,
+    @SerializedName("token") val token: String
+)
+
+data class CallResponse(
+    val success: Boolean,
+    val message: String,
+    val data: CallResponseData
+)
+
 // ── 범죄자 위치 요청/신고 ──────────────────────────────────────────────────────
 
 data class CriminalLocationRequestBody(
@@ -256,6 +273,17 @@ interface ApiService {
 
     @GET("api/v1/timeline/{wardId}")
     suspend fun getTimeline(@Path("wardId") wardId: Long): TimelineResponse
+
+    // ── 통화(RTC) ──────────────────────────────────────────────────────────────
+
+    @POST("api/v1/calls")
+    suspend fun requestCall(@Body request: CallRequest): CallResponse
+
+    @POST("api/v1/calls/{channelName}/accept")
+    suspend fun acceptCall(@Path("channelName") channelName: String): CallResponse
+
+    @POST("api/v1/calls/{channelName}/reject")
+    suspend fun rejectCall(@Path("channelName") channelName: String): retrofit2.Response<Unit>
 
     @POST("api/v1/location/criminal-request")
     suspend fun requestCriminalLocation(@Body request: CriminalLocationRequestBody): MessageResponse

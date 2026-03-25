@@ -89,13 +89,25 @@ fun AppScaffold(
     val currentDestination = navBackStackEntry?.destination
 
     LaunchedEffect(pendingDeepLinkScreen) {
-        if (pendingDeepLinkScreen == "location") {
-            navController.navigate(Screen.Location.route) {
-                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                launchSingleTop = true
-                restoreState = true
+        when {
+            pendingDeepLinkScreen == "location" -> {
+                navController.navigate(Screen.Location.route) {
+                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+                onDeepLinkHandled()
             }
-            onDeepLinkHandled()
+
+            pendingDeepLinkScreen?.startsWith("video_call:") == true -> {
+                // format: video_call:channelName:callerName:opponentKakaoId
+                val parts = pendingDeepLinkScreen.split(":", limit = 4)
+                val channelName = parts.getOrElse(1) { "" }
+                val callerName = parts.getOrElse(2) { "" }
+                val opponentKakaoId = parts.getOrElse(3) { "0" }.toLongOrNull() ?: 0L
+                navController.navigate(Screen.VideoCall.createRoute(channelName, callerName, opponentKakaoId))
+                onDeepLinkHandled()
+            }
         }
     }
 

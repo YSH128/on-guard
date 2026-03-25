@@ -10,8 +10,8 @@ import com.shutter.api.user.domain.User;
 import com.shutter.api.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
-
 import java.util.HashMap;
 import java.util.Map;
 
@@ -24,6 +24,7 @@ public class CallService {
     private final AgoraTokenService agoraTokenService;
     private final CallSessionService callSessionService;
     private final AlertService alertService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     /**
      * 통화 요청(Request) 기능 처리
@@ -52,9 +53,8 @@ public class CallService {
         // 5. 중복 호출 방지를 위한 발신자 락 저장 (따닥 방지)
         callSessionService.saveCallerLock(callerId, channelName);
         
-        // 6. 토큰 발급 (uid는 callerId)
-        int uid = Math.toIntExact(callerId);
-        String token = agoraTokenService.createToken(channelName, uid);
+        // 6. 토큰 발급 (uid=0: 어떤 uid로도 join 가능한 범용 토큰)
+        String token = agoraTokenService.createToken(channelName, 0);
         
         // 7. Redis 콜 세션 저장 (TTL 60초)
         callSessionService.saveSession(channelName, callerId, calleeId);
@@ -91,9 +91,8 @@ public class CallService {
             throw new CallException(ErrorCode.UNAUTHORIZED_ACCESS);
         }
 
-        // 3. 토큰 발급 (수신자용)
-        int uid = Math.toIntExact(userId);
-        String token = agoraTokenService.createToken(channelName, uid);
+        // 3. 토큰 발급 (uid=0: 어떤 uid로도 join 가능한 범용 토큰)
+        String token = agoraTokenService.createToken(channelName, 0);
 
         // 4. 발신자 조회 -> kakaoId 획득
         User caller = userRepository.findById(session.getCallerId())
@@ -106,6 +105,14 @@ public class CallService {
 
         alertService.sendDataAlertToUser(caller.getKakaoId(), payloadMap);
         log.info("Sent CALL_ACCEPTED data push to caller: {}", caller.getId());
+
+        // WebSocket 이벤트 발송 (발신자에게 수락 알림)
+        com.shutter.api.rtc.dto.response.CallEventResponse eventResponse = com.shutter.api.rtc.dto.response.CallEventResponse.builder()
+                .type("CALL_ACCEPTED")
+                .channelName(channelName)
+                .build();
+        messagingTemplate.convertAndSend("/topic/call/" + caller.getId(), eventResponse);
+        log.info("Published CALL_ACCEPTED via WebSocket to caller: {}", caller.getId());
 
         // 7. Redis 세션 삭제 및 발신자 락 해제 (푸시 성공 후 삭제)
         callSessionService.deleteSession(channelName);
@@ -148,5 +155,13 @@ public class CallService {
 
         alertService.sendDataAlertToUser(caller.getKakaoId(), payloadMap);
         log.info("Sent CALL_REJECTED data push to caller: {}", caller.getId());
+
+        // WebSocket 이벤트 발송 (발신자에게 거절 알림)
+        com.shutter.api.rtc.dto.response.CallEventResponse eventResponse = com.shutter.api.rtc.dto.response.CallEventResponse.builder()
+                .type("CALL_REJECTED")
+                .channelName(channelName)
+                .build();
+        messagingTemplate.convertAndSend("/topic/call/" + caller.getId(), eventResponse);
+        log.info("Published CALL_REJECTED via WebSocket to caller: {}", caller.getId());
     }
 }
