@@ -49,11 +49,14 @@ public class CallService {
         // 4. 채널명 생성
         String channelName = agoraTokenService.generateChannelName(callerId, calleeId);
         
-        // 5. 토큰 발급 (uid는 callerId)
+        // 5. 중복 호출 방지를 위한 발신자 락 저장 (따닥 방지)
+        callSessionService.saveCallerLock(callerId, channelName);
+        
+        // 6. 토큰 발급 (uid는 callerId)
         int uid = Math.toIntExact(callerId);
         String token = agoraTokenService.createToken(channelName, uid);
         
-        // 6. Redis 콜 세션 저장 (TTL 30초)
+        // 7. Redis 콜 세션 저장 (TTL 60초)
         callSessionService.saveSession(channelName, callerId, calleeId);
         
         // 7. Data 전용 카카오 푸시 전송 (안드로이드 백그라운드 수신용)
@@ -104,8 +107,9 @@ public class CallService {
         alertService.sendDataAlertToUser(caller.getKakaoId(), payloadMap);
         log.info("Sent CALL_ACCEPTED data push to caller: {}", caller.getId());
 
-        // 7. Redis 세션 삭제 (푸시 성공 후 삭제)
+        // 7. Redis 세션 삭제 및 발신자 락 해제 (푸시 성공 후 삭제)
         callSessionService.deleteSession(channelName);
+        callSessionService.deleteCallerLock(caller.getId());
 
         // 8. 결과 반환
         return CallResponse.builder()
@@ -129,8 +133,9 @@ public class CallService {
             throw new CallException(ErrorCode.UNAUTHORIZED_ACCESS);
         }
 
-        // 3. Redis 세션 삭제
+        // 3. Redis 세션 삭제 및 발신자 락 해제
         callSessionService.deleteSession(channelName);
+        callSessionService.deleteCallerLock(session.getCallerId());
 
         // 4. 발신자 조회 -> kakaoId 획득
         User caller = userRepository.findById(session.getCallerId())
