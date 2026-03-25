@@ -45,7 +45,7 @@ class WarningBottomSheetView(
     // 애니메이션 대상 뷰들
     private val sheetContainer: LinearLayout
     private val sheetFrame: FrameLayout
-    private val titleTv: TextView
+    private val titleContainer: View // 타이틀 (외부앱: 아이콘+텍스트 row / 인앱: 텍스트만)
     private var mapContainer: FrameLayout? = null
     private var detectionTypeRow: LinearLayout? = null
     private val buttonsContainer: LinearLayout
@@ -70,23 +70,123 @@ class WarningBottomSheetView(
             setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(24))
         }
 
-        // ── 타이틀 "AI 위조 감지" ──
-        titleTv = TextView(context).apply {
-            text = "AI 위조 감지"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
-            setTextColor(Color.parseColor("#111827"))
-            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-            gravity = Gravity.CENTER
-            alpha = 0f
-            translationY = dpToPx(24).toFloat()
+        // ── 타이틀 영역 ──
+        if (isInApp) {
+            // 인앱: "AI 위조 감지" 텍스트만
+            val tv = TextView(context).apply {
+                text = "AI 위조 감지"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+                setTextColor(Color.parseColor("#111827"))
+                typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+                gravity = Gravity.CENTER
+                alpha = 0f
+                translationY = dpToPx(24).toFloat()
+            }
+            titleContainer = tv
+            sheetContainer.addView(tv, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                bottomMargin = dpToPx(16)
+            })
+        } else {
+            // 외부앱: 위험 아이콘(pulse) + "AI 위조 감지" 텍스트 행
+            val titleRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                clipChildren = false
+                clipToPadding = false
+                alpha = 0f
+                translationY = dpToPx(24).toFloat()
+            }
+
+            // 위험 아이콘 컨테이너 (pulse 원 + ⚠ 아이콘)
+            val iconWrap = FrameLayout(context).apply {
+                clipChildren = false
+                clipToPadding = false
+            }
+
+            // pulse 원 2개
+            for (i in 0..1) {
+                val pulseCircle = View(context).apply {
+                    background = GradientDrawable().apply {
+                        setColor(Color.parseColor("#80EF4444")) // red-500/50%
+                        shape = GradientDrawable.OVAL
+                    }
+                    alpha = 0f
+                }
+                val pulseSize = dpToPx(32)
+                iconWrap.addView(pulseCircle, FrameLayout.LayoutParams(pulseSize, pulseSize).apply {
+                    gravity = Gravity.CENTER
+                })
+
+                val scaleX = ObjectAnimator.ofFloat(pulseCircle, "scaleX", 1f, 2.5f).apply {
+                    duration = if (i == 0) 1500L else 2000L
+                    repeatCount = ValueAnimator.INFINITE
+                    startDelay = (i * 300).toLong()
+                }
+                val scaleY = ObjectAnimator.ofFloat(pulseCircle, "scaleY", 1f, 2.5f).apply {
+                    duration = if (i == 0) 1500L else 2000L
+                    repeatCount = ValueAnimator.INFINITE
+                    startDelay = (i * 300).toLong()
+                }
+                val alphaAnim = ObjectAnimator.ofFloat(pulseCircle, "alpha", 0.7f, 0f).apply {
+                    duration = if (i == 0) 1500L else 2000L
+                    repeatCount = ValueAnimator.INFINITE
+                    startDelay = (i * 300).toLong()
+                }
+                val set = AnimatorSet().apply { playTogether(scaleX, scaleY, alphaAnim) }
+                pulseAnimators.add(set)
+            }
+
+            // 경고 아이콘 원
+            val alertCircle = FrameLayout(context).apply {
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#FEE2E2")) // red-100
+                    shape = GradientDrawable.OVAL
+                    setStroke(dpToPx(2), Color.parseColor("#FECACA")) // red-200
+                }
+                elevation = dpToPx(2).toFloat()
+            }
+            val alertIcon = TextView(context).apply {
+                text = "⚠"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextColor(Color.parseColor("#EF4444"))
+                gravity = Gravity.CENTER
+            }
+            alertCircle.addView(alertIcon, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
+            ))
+            val circleSize = dpToPx(32)
+            iconWrap.addView(alertCircle, FrameLayout.LayoutParams(circleSize, circleSize).apply {
+                gravity = Gravity.CENTER
+            })
+
+            // iconWrap 크기를 pulse 최대 크기보다 크게 설정하여 overflow 허용
+            val iconWrapSize = dpToPx(56)
+            titleRow.addView(iconWrap, LinearLayout.LayoutParams(iconWrapSize, iconWrapSize).apply {
+                marginEnd = dpToPx(6)
+            })
+
+            // "AI 위조 감지" 텍스트
+            val tv = TextView(context).apply {
+                text = "AI 위조 감지"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+                setTextColor(Color.parseColor("#111827"))
+                typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            }
+            titleRow.addView(tv)
+
+            titleContainer = titleRow
+            sheetContainer.addView(titleRow, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                bottomMargin = dpToPx(24)
+            })
         }
-        sheetContainer.addView(titleTv, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            bottomMargin = dpToPx(if (isInApp) 16 else 24)
-        })
 
         // ── 인앱 전용: 세계 지도 + 핀 ──
         if (isInApp) {
@@ -342,14 +442,18 @@ class WarningBottomSheetView(
                 .start()
         }, 50)
 
-        // 2) 타이틀 fade-in
+        // 2) 타이틀 fade-in (+ 외부앱: pulse 시작)
         handler.postDelayed({
-            titleTv.animate()
+            titleContainer.animate()
                 .translationY(0f)
                 .alpha(1f)
                 .setDuration(500)
                 .setInterpolator(OvershootInterpolator(1.0f))
                 .start()
+            if (!isInApp) {
+                // 외부앱: 타이틀 안의 pulse 애니메이션 시작
+                pulseAnimators.forEach { it.start() }
+            }
         }, 250)
 
         if (isInApp) {
