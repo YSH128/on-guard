@@ -100,14 +100,16 @@ fun VideoCallScreen(
 
     // ── 범죄자 위치 추적 상태 ──
     var isRequestingLocation by remember { mutableStateOf(false) }
-    var receivedCountry by remember { mutableStateOf<String?>(null) }
+    val warningOverlayManager = remember {
+        ServiceLocator.getInstance(context).warningOverlayManager
+    }
 
-    // criminal_location FCM 수신 콜백 등록
+    // criminal_location FCM 수신 콜백 등록 (위치 데이터는 오버레이 바텀시트에 표시)
     DisposableEffect(Unit) {
         CriminalLocationBridge.onLocationReceived = { country ->
             android.util.Log.d("CriminalLocation", "위치 수신됨 — country: $country")
-            receivedCountry = country
             isRequestingLocation = false
+            warningOverlayManager.updateCountry(country)
         }
         onDispose {
             CriminalLocationBridge.onLocationReceived = null
@@ -333,24 +335,6 @@ fun VideoCallScreen(
         }
     }
 
-    // ── 범죄자 위치 수신 다이얼로그 ──
-    receivedCountry?.let { country ->
-        AlertDialog(
-            onDismissRequest = { receivedCountry = null },
-            title = { Text("통화 상대방 위치 확인", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("통화 상대방의 현재 위치가 확인되었습니다.")
-                    Spacer(Modifier.height(4.dp))
-                    Text(country, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1A1A1A))
-                }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { receivedCountry = null }) { Text("확인") }
-            }
-        )
-    }
 
     // ── 통화 종료 화면 ──
     if (callEnded) {

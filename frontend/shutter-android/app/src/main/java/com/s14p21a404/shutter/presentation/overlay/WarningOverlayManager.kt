@@ -56,6 +56,10 @@ class WarningOverlayManager(
     @Volatile
     private var bottomSheetShownForSession = false
 
+    /** 수신된 상대방 국가명 (바텀시트에 표시) */
+    @Volatile
+    private var receivedCountryName: String? = null
+
     /** 콜백: 전화 종료 */
     var onEndCall: (() -> Unit)? = null
 
@@ -242,6 +246,8 @@ class WarningOverlayManager(
                 touchable = true
             )
             sheet.startEntranceAnimation()
+            // 이미 수신된 국가명이 있으면 바텀시트에 반영
+            receivedCountryName?.let { country -> sheet.updateCountry(country) }
             bottomSheetView = sheet
             Log.d(TAG, "바텀시트 표시")
 
@@ -383,6 +389,20 @@ class WarningOverlayManager(
         handler.removeCallbacksAndMessages(null)
         lastResult = null
         bottomSheetShownForSession = false
+        receivedCountryName = null
+    }
+
+    /**
+     * 상대방 위치(국가명)를 업데이트한다.
+     * 바텀시트가 이미 표시 중이면 즉시 반영하고,
+     * 아직 표시되지 않았으면 저장해두었다가 바텀시트 생성 시 반영한다.
+     */
+    fun updateCountry(country: String) {
+        receivedCountryName = country
+        handler.post {
+            bottomSheetView?.updateCountry(country)
+        }
+        Log.d(TAG, "국가명 업데이트: $country")
     }
 
     // ─────────────────────────────────────────────

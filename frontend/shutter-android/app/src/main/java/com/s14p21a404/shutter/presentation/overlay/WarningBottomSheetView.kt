@@ -48,7 +48,12 @@ class WarningBottomSheetView(
     private val titleContainer: View // 타이틀 (외부앱: 아이콘+텍스트 row / 인앱: 텍스트만)
     private var mapContainer: FrameLayout? = null
     private var detectionTypeRow: LinearLayout? = null
+    private var countryNameTv: TextView? = null
+    private var labelContainer: LinearLayout? = null
     private val buttonsContainer: LinearLayout
+
+    /** 현재 표시 중인 국가명 */
+    private var currentCountryName: String = "위치 확인 중..."
 
     init {
         setBackgroundColor(Color.TRANSPARENT)
@@ -337,8 +342,8 @@ class WarningBottomSheetView(
             topMargin = (mapHeight * 0.35f).toInt()
         })
 
-        // 국가명 + 국기 라벨 (핀 아래)
-        val labelContainer = LinearLayout(context).apply {
+        // 국가명 라벨 (핀 아래)
+        labelContainer = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             background = GradientDrawable().apply {
@@ -349,19 +354,12 @@ class WarningBottomSheetView(
             setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4))
         }
 
-        val countryNameTv = TextView(context).apply {
-            text = "캄보디아"
+        countryNameTv = TextView(context).apply {
+            text = currentCountryName
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setTextColor(Color.parseColor("#374151"))
         }
-        labelContainer.addView(countryNameTv)
-
-        // 캄보디아 국기
-        val flagView = CambodiaFlagView(context)
-        val flagLp = LinearLayout.LayoutParams(dpToPx(24), dpToPx(16)).apply {
-            leftMargin = dpToPx(6)
-        }
-        labelContainer.addView(flagView, flagLp)
+        labelContainer!!.addView(countryNameTv)
 
         mapContainer!!.addView(labelContainer, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT
@@ -425,6 +423,20 @@ class WarningBottomSheetView(
             gravity = Gravity.CENTER_HORIZONTAL
             bottomMargin = dpToPx(24)
         })
+    }
+
+    // ─────────────────────────────────────────────
+    // 국가명 업데이트
+    // ─────────────────────────────────────────────
+
+    /**
+     * 국가명을 업데이트한다. FCM 등으로 위치 데이터가 수신되면 호출.
+     */
+    fun updateCountry(country: String) {
+        currentCountryName = country
+        handler.post {
+            countryNameTv?.text = country
+        }
     }
 
     // ─────────────────────────────────────────────

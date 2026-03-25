@@ -154,6 +154,7 @@ class VideoCallDetectService : Service() {
             monitorUseCase.startDetection()
         }
 
+
         // 영상통화 상태 관찰 → 캡처·감지 자동 시작/중단 + 오버레이 enabled 제어
         serviceScope.launch {
             monitorUseCase.observeAndControl().collect { isVideoCall ->
