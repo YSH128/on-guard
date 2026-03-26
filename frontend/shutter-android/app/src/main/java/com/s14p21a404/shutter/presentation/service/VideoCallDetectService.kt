@@ -312,7 +312,7 @@ class VideoCallDetectService : Service() {
                 if (isFinancialApp && isDeepfakeDetected) {
                     if (!financialBlockOverlayManager.isShowing()) {
                         Log.d(TAG, "🏦 금융 앱 감지 → 접근 제한 오버레이 표시")
-                        financialBlockOverlayManager.show()
+                        financialBlockOverlayManager.show(isInApp = videoCallRepository.isInAppCallActive())
                     }
                 } else {
                     if (financialBlockOverlayManager.isShowing()) {

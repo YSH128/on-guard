@@ -219,7 +219,7 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
 
         // 1. VideoCallScreen UI에 콜백 (메인 스레드에서 실행)
         Handler(Looper.getMainLooper()).post {
-            CriminalLocationBridge.onLocationReceived?.invoke(country)
+            CriminalLocationBridge.onLocationReceived?.invoke(country, null, null)
         }
 
         // 2. 푸시 알림 표시
