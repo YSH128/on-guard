@@ -114,6 +114,12 @@ class DeepfakeDetectionRepositoryImpl(
     }
 
     override fun setMediaProjection(context: Context, mediaProjection: MediaProjection) {
+        // 이미 동작 중인 구형 MediaProjection/ScreenCaptureManager가 있다면 완전히 파기 (화면 멈춤 버그 방지)
+        if (this.mediaProjection != null || this.screenCaptureManager != null) {
+            Log.d(TAG, "새로운 MediaProjection 수신: 기존 캡처 매니저 및 프로젝션 강제 종료")
+            releaseMediaProjection()
+        }
+        
         this.captureContext = context
         this.mediaProjection = mediaProjection
         Log.d(TAG, "MediaProjection 설정 완료")
