@@ -124,6 +124,8 @@ fun MainScreen(
         onRequestPermissions = onRequestPermissions,
         onRequestOverlayPermission = onRequestOverlayPermission,
         onRequestAccessibilityPermission = onRequestAccessibilityPermission,
+        pendingDeepLinkScreen = pendingDeepLinkScreen,
+        onDeepLinkHandled = onDeepLinkHandled,
     )
 }
 

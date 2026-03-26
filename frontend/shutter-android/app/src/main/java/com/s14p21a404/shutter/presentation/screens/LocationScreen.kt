@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -425,26 +426,6 @@ private fun KakaoMapWithMarker(
         }
     }
 
-    // ── 피보호자 전환 감지: 즉시 전환 (디졸브 없음) ──
-    // 초기 컴포지션을 구분하기 위한 플래그
-    var isFirstComposition by remember { mutableStateOf(true) }
-
-    LaunchedEffect(wardId) {
-        if (isFirstComposition) {
-            isFirstComposition = false
-            return@LaunchedEffect
-        }
-
-        val map = kakaoMapRef ?: return@LaunchedEffect
-
-        clearMarkers()
-
-        if (latitude != null && longitude != null) {
-            map.moveCamera(CameraUpdateFactory.newCenterPosition(LatLng.from(latitude, longitude), 16))
-            placeMarkers(map, latitude, longitude)
-        }
-    }
-
     // ── 같은 피보호자의 실시간 위치 업데이트: 부드럽게 이동 ──
     LaunchedEffect(latitude, longitude) {
         val map = kakaoMapRef ?: return@LaunchedEffect
@@ -518,7 +499,7 @@ private fun KakaoMapWithMarker(
                 }
             },
             update = { view ->
-                view.visibility = if (visible) android.view.View.VISIBLE else android.view.View.GONE
+                view.visibility = android.view.View.VISIBLE
             },
             modifier = Modifier.fillMaxSize()
         )
