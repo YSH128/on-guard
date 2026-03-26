@@ -55,4 +55,7 @@ interface VideoCallRepository {
     
     /** 통화 거절 (푸시로 받은 채널명 전달) */
     suspend fun rejectCall(channelName: String): Result<Unit>
+
+    /** 통화 취소 (발신자가 상대방 수락 전 취소) */
+    suspend fun cancelCall(channelName: String): Result<Unit>
 }
