@@ -275,35 +275,58 @@ def quantize_onnx_static(
 
 def quantize_onnx_float16(onnx_model_path, output_path):
     print("\n" + "=" * 60)
-    print("양자화: Resize 및 첫 Conv 구간 FP32 유지 최적화...")
+    print("양자화: 입력 직결 Conv FP32 유지 후 Float16 변환...")
     print("=" * 60)
 
     try:
         model = onnx.load(onnx_model_path)
 
-        # 1. 제외할 노드 리스트 생성
+        # 1. 이름 없는 노드에 고유 이름 부여
+        # PyTorch ONNX export는 대부분의 노드에 이름을 붙이지 않아
+        # node_block_list에 빈 문자열("")이 들어가면 아무 노드도 차단되지 않음
+        for i, node in enumerate(model.graph.node):
+            if not node.name:
+                node.name = f"{node.op_type}_{i}"
+
+        # 2. 모델 입력 텐서 이름 수집 (direct input 추적용)
+        input_names = {inp.name for inp in model.graph.input}
+
+        # 3. 입력과 연결된 텐서 집합 확장 (Cast/Resize 등 중간 노드 통과 추적)
+        # input → [Cast/Resize/Shape/Concat/...] → Conv 패턴을 모두 잡기 위해
+        # 입력 텐서에서 도달 가능한 텐서 이름을 BFS로 확장
+        reachable = set(input_names)
+        changed = True
+        while changed:
+            changed = False
+            for node in model.graph.node:
+                if node.op_type == "Conv":
+                    continue  # Conv는 목적지이므로 통과 안 함
+                if any(inp in reachable for inp in node.input):
+                    for out in node.output:
+                        if out not in reachable:
+                            reachable.add(out)
+                            changed = True
+
+        # 4. 제외할 노드 리스트 생성
         block_list = []
 
-        # Netron에서 확인된 Resize 관련 노드들과 첫 번째 Conv를 찾아 차단 리스트에 추가
-        # 보통 Resize 앞뒤로 Shape, Slice, Concat, Cast 등이 붙어있습니다.
         for node in model.graph.node:
-            # Resize 연산 자체와 그 주변 연산들 차단
-            if node.op_type in [
-                "Resize",
-                "Slice",
-                "Shape",
-                "Concat",
-                "Constant",
-            ]:
+            # 입력 경로 상의 비-Conv 노드 차단 (Resize, Shape, Cast 등)
+            if node.op_type not in ("Conv",) and any(
+                inp in reachable for inp in node.input
+            ):
                 block_list.append(node.name)
 
-            # 첫 번째 Conv 찾기 (이미 찾은 후라면 중단 가능)
-            if node.op_type == "Conv":
+            # 입력에서 직접 도달 가능한 Conv 노드 차단 (ALL, break 없음)
+            if node.op_type == "Conv" and any(
+                inp in reachable for inp in node.input
+            ):
                 block_list.append(node.name)
-                print(f"ℹ️  FP32 유지 대상(첫 Conv): {node.name}")
-                break
+                print(f"  FP32 유지 대상(Conv): {node.name}")
 
-        # 2. float16 변환 실행
+        print(f"  총 FP32 유지 노드 수: {len(block_list)}")
+
+        # 5. float16 변환 실행
         model_fp16 = float16.convert_float_to_float16(
             model, keep_io_types=True, node_block_list=block_list
         )
