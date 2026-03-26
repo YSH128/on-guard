@@ -71,7 +71,16 @@ class WarningBottomSheetView(
         clipToPadding = false
 
         if (!analysisResult.isNullOrBlank()) {
-            gmsResultSet.add(analysisResult)
+            val tags = analysisResult.split(" ").map { it.trim() }.filter { it.isNotBlank() }
+            for (tag in tags) {
+                if (tag != "#일상대화" && tag != "#일상 대화") {
+                    gmsResultSet.remove("#일상대화")
+                    gmsResultSet.remove("#일상 대화")
+                    gmsResultSet.add(tag)
+                } else if (gmsResultSet.isEmpty()) {
+                    gmsResultSet.add(tag)
+                }
+            }
         }
 
         // ── 바텀시트 컨테이너 ──
@@ -479,9 +488,9 @@ class WarningBottomSheetView(
 
         typeLabelTv = TextView(context).apply {
             text = if (gmsResultSet.isNotEmpty()) {
-                gmsResultSet.joinToString(" ") { "#$it" }
+                gmsResultSet.joinToString(" ")
             } else {
-                "#일상 대화"
+                "#AI위조영상통화"
             }
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setTextColor(Color.parseColor("#374151"))
@@ -711,22 +720,22 @@ class WarningBottomSheetView(
 
     fun setAnalysisResult(result: String) {
         if (result.isNotBlank()) {
-            // 한 번에 "계좌 이체 요구, 일상 대화" 등 여러 개가 붙어서 올 경우를 대비해 쉼표(,)로 분리
-            val tags = result.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            // 여러 해시태그가 띄어쓰기로 분리되어 옴
+            val tags = result.split(" ").map { it.trim() }.filter { it.isNotBlank() }
             
             for (tag in tags) {
-                if (tag != "일상 대화" && tag != "일상대화") {
-                    // 위험 태그가 들어왔으므로 기존의 "일상 대화"는 즉시 삭제
-                    gmsResultSet.remove("일상 대화")
-                    gmsResultSet.remove("일상대화")
+                if (tag != "#일상대화" && tag != "#일상 대화") {
+                    // 위험 태그가 들어왔으므로 기존의 "일상대화"는 즉시 삭제
+                    gmsResultSet.remove("#일상 대화")
+                    gmsResultSet.remove("#일상대화")
                     gmsResultSet.add(tag)
                 } else if (gmsResultSet.isEmpty()) {
-                    // 들어온 태그가 "일상 대화"뿐이고, 아직 위험 태그가 하나도 없을 때만 추가
+                    // 들어온 태그가 "일상대화"뿐이고, 아직 위험 태그가 하나도 없을 때만 추가
                     gmsResultSet.add(tag)
                 }
             }
 
-            typeLabelTv?.text = gmsResultSet.joinToString(" ") { "#$it" }
+            typeLabelTv?.text = gmsResultSet.joinToString(" ")
         }
     }
 
