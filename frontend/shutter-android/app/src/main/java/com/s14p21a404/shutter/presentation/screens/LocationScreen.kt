@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Path
@@ -174,12 +175,14 @@ fun LocationScreen(
                         .background(BgColor),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (hasActiveLocation && selectedWard != null) {
-                        KakaoMapWithMarker(
-                            latitude = selectedWard.latitude!!,
-                            longitude = selectedWard.longitude!!
-                        )
-                    } else {
+                    // 지도를 항상 유지하되, 위치가 없으면 숨기기만 한다 (파괴하지 않음)
+                    KakaoMapWithMarker(
+                        wardId = selectedId,
+                        latitude = if (hasActiveLocation) selectedWard?.latitude else null,
+                        longitude = if (hasActiveLocation) selectedWard?.longitude else null,
+                        visible = hasActiveLocation,
+                    )
+                    if (!hasActiveLocation) {
                         EmptyLocationState()
                     }
                 }
@@ -332,8 +335,10 @@ private fun GuardianAvatar(
 
 @Composable
 private fun KakaoMapWithMarker(
-    latitude: Double,
-    longitude: Double,
+    wardId: String?,
+    latitude: Double?,
+    longitude: Double?,
+    visible: Boolean,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -426,13 +431,41 @@ private fun KakaoMapWithMarker(
         }
     }
 
+    // ── 피보호자 전환 감지: 즉시 전환 (디졸브 없음) ──
+    // 초기 컴포지션을 구분하기 위한 플래그
+    var isFirstComposition by remember { mutableStateOf(true) }
+
+    LaunchedEffect(wardId) {
+        if (isFirstComposition) {
+            isFirstComposition = false
+            return@LaunchedEffect
+        }
+
+        val map = kakaoMapRef ?: return@LaunchedEffect
+
+        clearMarkers()
+
+        if (latitude != null && longitude != null) {
+            map.moveCamera(CameraUpdateFactory.newCenterPosition(LatLng.from(latitude, longitude), 16))
+            placeMarkers(map, latitude, longitude)
+        }
+    }
+
     // ── 같은 피보호자의 실시간 위치 업데이트: 부드럽게 이동 ──
     LaunchedEffect(latitude, longitude) {
         val map = kakaoMapRef ?: return@LaunchedEffect
+        if (latitude == null || longitude == null) {
+            clearMarkers()
+            return@LaunchedEffect
+        }
+        // wardId 전환 직후에는 위 LaunchedEffect(wardId)가 처리하므로 스킵
+        // 여기서는 같은 ward 내 좌표 변동만 처리
         val newLatLng = LatLng.from(latitude, longitude)
-        map.moveCamera(CameraUpdateFactory.newCenterPosition(newLatLng, 16))
-        pulseLabelRef?.moveTo(newLatLng)
-        shieldLabelRef?.moveTo(newLatLng)
+        if (pulseLabelRef != null && shieldLabelRef != null) {
+            map.moveCamera(CameraUpdateFactory.newCenterPosition(newLatLng, 16))
+            pulseLabelRef?.moveTo(newLatLng)
+            shieldLabelRef?.moveTo(newLatLng)
+        }
     }
 
     DisposableEffect(lifecycleOwner) {
@@ -499,7 +532,7 @@ private fun KakaoMapWithMarker(
                 }
             },
             update = { view ->
-                view.visibility = android.view.View.VISIBLE
+                view.visibility = if (visible) android.view.View.VISIBLE else android.view.View.GONE
             },
             modifier = Modifier.fillMaxSize()
         )
