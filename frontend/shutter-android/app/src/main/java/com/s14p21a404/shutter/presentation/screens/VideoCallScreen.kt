@@ -193,11 +193,17 @@ fun VideoCallScreen(
         whisperHelper.onResult = { resultText ->
             android.util.Log.d("WhisperSTT_Result", "🗣️ [진행중인 통화 중 실시간 STT]: $resultText")
         }
+        
+        whisperHelper.onAnalysisResult = { gmsResult ->
+            warningOverlayManager.updateAnalysisResult(gmsResult)
+        }
+        
         whisperHelper.initModel()
     }
     DisposableEffect(Unit) {
         onDispose {
             whisperHelper.onResult = null
+            whisperHelper.onAnalysisResult = null
         }
     }
 
@@ -205,7 +211,7 @@ fun VideoCallScreen(
     LaunchedEffect(isConnecting, callEnded, isRecording) {
         if (!isConnecting && !callEnded && isRecording) {
             while (isActive) {
-                delay(5000)
+                delay(4000)
                 try {
                     val chunkBytes: ByteArray
                     synchronized(sttBuffer) {
@@ -254,10 +260,10 @@ fun VideoCallScreen(
             override fun onEarMonitoringAudioFrame(type: Int, samplesPerChannel: Int, bytesPerSample: Int, channels: Int, samplesPerSec: Int, buffer: ByteBuffer, renderTimeMs: Long, avsync_type: Int): Boolean = true
             override fun onPlaybackAudioFrameBeforeMixing(channelId: String, userId: Int, type: Int, samplesPerChannel: Int, bytesPerSample: Int, channels: Int, samplesPerSec: Int, buffer: ByteBuffer, renderTimeMs: Long, avsync_type: Int): Boolean = true
             override fun getObservedAudioFramePosition(): Int = 0x000F
-            override fun getRecordAudioParams(): AudioParams = AudioParams(44100, 1, 0, 1024)
-            override fun getPlaybackAudioParams(): AudioParams = AudioParams(44100, 1, 0, 1024)
-            override fun getMixedAudioParams(): AudioParams = AudioParams(44100, 1, 0, 1024)
-            override fun getEarMonitoringAudioParams(): AudioParams = AudioParams(44100, 1, 0, 1024)
+            override fun getRecordAudioParams(): AudioParams = AudioParams(16000, 1, 0, 1024)
+            override fun getPlaybackAudioParams(): AudioParams = AudioParams(16000, 1, 0, 1024)
+            override fun getMixedAudioParams(): AudioParams = AudioParams(16000, 1, 0, 1024)
+            override fun getEarMonitoringAudioParams(): AudioParams = AudioParams(16000, 1, 0, 1024)
         }
     }
 
