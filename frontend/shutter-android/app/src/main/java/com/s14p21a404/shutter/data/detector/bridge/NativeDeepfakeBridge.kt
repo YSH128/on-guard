@@ -59,7 +59,7 @@ class NativeDeepfakeBridge(private val context: Context) {
             if (isOnnxInitialized) return
             try {
                 Log.d("NativeDeepfakeBridge", "ONNX C++ 네이티브 초기화 시작...")
-                val modelPath = getAssetFilePath(context, "ds_model_quantized.onnx")
+                val modelPath = getAssetFilePath(context, "ds_model_quantized_v5.onnx")
                 val ok = initOnnx(modelPath)
                 if (ok) {
                     isOnnxInitialized = true
@@ -89,6 +89,13 @@ class NativeDeepfakeBridge(private val context: Context) {
             try {
                 val facePath = getAssetFilePath(context, "face_deepfake.bin")
                 val filesDir = context.filesDir.absolutePath
+                val binFile = File(filesDir, "face_deepfake.bin")
+                if (!binFile.exists()) {
+                    Log.e("NativeDeepfakeBridge", "QNN 캐시 파일 없음! C++ 빌드/로드 병목을 우회하고 즉시 ONNX 폴백 시도...")
+                    isQnnSupported = false
+                    initOnnxFallback()
+                    return@thread
+                }
                 val cacheDir = context.cacheDir.absolutePath
                 val nativeLibDir = context.applicationInfo.nativeLibraryDir
                 
