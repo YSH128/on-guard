@@ -54,6 +54,10 @@ class VideoCallRepositoryImpl(
     @Volatile
     private var videoCallPackage: String? = null
 
+    /**
+     * 인앱(Agora) 영상통화 활성 상태 플래그.
+     * true이면 외부 앱 감지 조건(camera+callScreen+timer)을 우회하여 즉시 영상통화 상태로 전환.
+     */
     @Volatile
     private var inAppCallActive: Boolean = false
 
@@ -102,6 +106,7 @@ class VideoCallRepositoryImpl(
             } else {
                 // 포그라운드 패키지가 영상통화 패키지와 같거나,
                 // 시스템 전화 UI 패키지인 경우 true
+                // 인앱 통화 시 자기 앱 패키지도 포함
                 val isOnVideoCallScreen = currentPkg == targetPkg
                         || currentPkg in ForegroundAppMonitorService.CALL_UI_PACKAGES
                         || (inAppCallActive && currentPkg == context.packageName)
@@ -127,7 +132,7 @@ class VideoCallRepositoryImpl(
 
     override fun setInAppCallActive(active: Boolean) {
         inAppCallActive = active
-        Log.d(TAG, "인앱 영상통화 상태: $active")
+        Log.d(TAG, "인앱 영상통화 상태 설정: $active")
         if (active) {
             // 인앱 통화 시작 → 자기 앱 패키지를 영상통화 패키지로 설정하고 즉시 videoCallState = true
             videoCallPackage = context.packageName
@@ -137,15 +142,9 @@ class VideoCallRepositoryImpl(
             _videoCallState.value = false
             videoCallPackage = null
         }
-        Log.d(TAG, "인앱 영상통화 상태: $active")
     }
 
     override fun isInAppCallActive(): Boolean = inAppCallActive
-
-    override fun setVideoCallPackage(packageName: String?) {
-        videoCallPackage = packageName
-        Log.d(TAG, "영상통화 패키지 설정: $packageName")
-    }
 
     override fun startMonitoring() {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE)
@@ -191,7 +190,6 @@ class VideoCallRepositoryImpl(
 
         val currentFg = ForegroundAppMonitorService.foregroundPackage.value
         val isCallTimerVisible = ForegroundAppMonitorService.isCallConnected.value
-
 
         // 영상통화 판단: 카메라 사용 + 통화 UI 앱 포그라운드 + 타이머 텍스트 감지
         // 통신사/VoIP 구분 없이 동일한 조건 사용.
