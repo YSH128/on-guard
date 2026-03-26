@@ -1,1 +1,0 @@
-C:\Users\SSAFY\Desktop\SSAFY_14_yujin\2_specific_PJT\0_dev\S14P21A404\AI\shutter-android-AI\app\build\intermediates\cxx\Debug\1x5e3a4n\obj\arm64-v8a
