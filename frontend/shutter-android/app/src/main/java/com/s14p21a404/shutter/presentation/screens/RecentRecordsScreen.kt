@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.MailOutline
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +49,7 @@ private data class TimelineUiItem(
     val details: List<String>? = null,
     val footer: String? = null,
     val status: String? = null,
+    val analysisTag: String? = null,
 )
 
 // ── API → UI 변환 ──
@@ -64,6 +66,7 @@ private fun TimelineEntry.toUiItems(baseIndex: Int): List<TimelineUiItem> {
                 type = "alert",
                 title = "높은 위험 감지",
                 description = "AI 딥페이크 감지로 자동 알림이 발송되었습니다.",
+                analysisTag = "# 대화분석유형",
             ),
             TimelineUiItem(
                 id = baseIndex * 10 + 1,
@@ -111,6 +114,7 @@ private val ChipUnselectedText = Color(0xFF9CA3AF)
 // 화면
 // ════════════════════════════════════════════════════════════
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecentRecordsScreen(
     viewModel: RecentRecordsViewModel = viewModel(),
@@ -118,7 +122,7 @@ fun RecentRecordsScreen(
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
 
-    LaunchedEffect(Unit) { viewModel.loadWards() }
+    // init 블록에서 loadMyName → loadWards 순서 보장됨
 
     // 스크롤 50px 이상이면 collapsed
     val isCollapsed by remember {
@@ -218,37 +222,43 @@ fun RecentRecordsScreen(
         }
 
         // ── 콘텐츠 ──
-        when {
-            uiState.isLoading -> {
-                Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), Alignment.Center) {
-                    CircularProgressIndicator(color = ChipSelectedBg)
-                }
-            }
-            uiState.sessions.isEmpty() -> {
-                Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), Alignment.Center) {
-                    Text("알림 내역이 없습니다.", fontSize = 14.sp, color = TextSecondary)
-                }
-            }
-            else -> {
-                LazyColumn(
-                    state = listState,
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(
-                        items = uiState.sessions,
-                        key = { session -> session.sessionId }
-                    ) { session ->
-                        val isExpanded = session.sessionId in uiState.expandedSessions
-                        SessionCard(
-                            session = session,
-                            isExpanded = isExpanded,
-                            onToggle = { viewModel.toggleSession(session.sessionId) }
-                        )
+        PullToRefreshBox(
+            isRefreshing = uiState.isRefreshing,
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier.fillMaxSize()
+        ) {
+            when {
+                uiState.isLoading -> {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), Alignment.Center) {
+                        CircularProgressIndicator(color = ChipSelectedBg)
                     }
+                }
+                uiState.sessions.isEmpty() -> {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 60.dp), Alignment.Center) {
+                        Text("알림 내역이 없습니다.", fontSize = 14.sp, color = TextSecondary)
+                    }
+                }
+                else -> {
+                    LazyColumn(
+                        state = listState,
+                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(
+                            items = uiState.sessions,
+                            key = { session -> session.sessionId }
+                        ) { session ->
+                            val isExpanded = session.sessionId in uiState.expandedSessions
+                            SessionCard(
+                                session = session,
+                                isExpanded = isExpanded,
+                                onToggle = { viewModel.toggleSession(session.sessionId) },
+                            )
+                        }
 
-                    item { Spacer(Modifier.height(16.dp)) }
+                        item { Spacer(Modifier.height(16.dp)) }
+                    }
                 }
             }
         }
@@ -327,17 +337,25 @@ private fun SessionCard(
                 Spacer(Modifier.width(12.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = session.wardName,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "${session.sessionDate} ${session.sessionTime}",
+                            fontSize = 12.sp,
+                            color = TextSecondary,
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
                     Text(
-                        text = session.wardName,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary,
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = "${session.sessionDate} ${session.sessionTime}",
+                        text = "# 대화분석유형",
                         fontSize = 12.sp,
-                        color = TextSecondary,
+                        color = Color(0xFF6366F1),
                     )
                 }
 
@@ -499,6 +517,15 @@ private fun AlertCard(item: TimelineUiItem) {
                     Spacer(Modifier.height(3.dp))
                 }
                 Text(item.description, fontSize = 13.sp, color = TextPrimary)
+                item.analysisTag?.let { tag ->
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = tag,
+                        fontSize = 12.sp,
+                        color = Color(0xFF6366F1),
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
             }
         }
     }
