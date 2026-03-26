@@ -3,7 +3,11 @@ package com.s14p21a404.shutter.presentation.overlay
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.view.KeyEvent
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
@@ -20,6 +24,7 @@ import android.view.animation.OvershootInterpolator
 import android.widget.*
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners
+import com.s14p21a404.shutter.presentation.service.ForegroundAppMonitorService
 import kotlin.math.roundToInt
 
 /**
@@ -69,6 +74,9 @@ class FinancialBlockOverlayManager(private val context: Context) {
     private var cachedLat: Double? = null
     private var cachedLng: Double? = null
 
+    /** 홈/메뉴 버튼 감지용 BroadcastReceiver */
+    private var closeSystemDialogsReceiver: BroadcastReceiver? = null
+
     // ─────────────────────────────────────────────
     // Public API
     // ─────────────────────────────────────────────
@@ -106,6 +114,9 @@ class FinancialBlockOverlayManager(private val context: Context) {
 
         Log.d(TAG, "금융 차단 오버레이 표시")
 
+        // 홈버튼/메뉴(최근앱)버튼 감지 → 300ms 후 금융앱 여부 재확인
+        registerSystemButtonReceiver()
+
         // show 이전에 수신된 국기/위경도 데이터를 뷰에 반영 (뷰가 레이아웃된 후 적용)
         if (isInApp) {
             handler.postDelayed({ applyCachedData() }, 200)
@@ -113,6 +124,7 @@ class FinancialBlockOverlayManager(private val context: Context) {
     }
 
     fun dismiss() {
+        Log.d(TAG, "🔒 [FinancialBlockOverlay] dismiss() 호출됨. 현재 isShowing()=${isShowing()}")
         handler.removeCallbacksAndMessages(null)
         pulseAnimators.forEach { it.cancel() }
         pulseAnimators.clear()
@@ -122,15 +134,18 @@ class FinancialBlockOverlayManager(private val context: Context) {
         labelContainer = null
         mapContainer = null
 
+        unregisterSystemButtonReceiver()
+
         overlayViews.forEach { view ->
             try {
                 windowManager.removeView(view)
+                Log.d(TAG, "↳ 오버레이 뷰 제거 성공")
             } catch (e: Exception) {
                 Log.e(TAG, "overlay remove error", e)
             }
         }
         overlayViews.clear()
-        Log.d(TAG, "금융 차단 오버레이 해제")
+        Log.d(TAG, "금융 차단 오버레이 해제 처리 완료")
     }
 
     fun isShowing(): Boolean = overlayViews.isNotEmpty()
@@ -224,8 +239,8 @@ class FinancialBlockOverlayManager(private val context: Context) {
         yOffset: Int = 0
     ) {
         val flags = if (touchable) {
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+            // 뒤로가기 키 이벤트를 받기 위해 FLAG_NOT_FOCUSABLE 제거
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
         } else {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
@@ -255,7 +270,18 @@ class FinancialBlockOverlayManager(private val context: Context) {
     // ─────────────────────────────────────────────
 
     private fun buildFullScreenOverlay(isInApp: Boolean): View {
-        val root = FrameLayout(context).apply {
+        val root = object : FrameLayout(context) {
+            override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+                if (event.action == KeyEvent.ACTION_UP && event.keyCode == KeyEvent.KEYCODE_BACK) {
+                    Log.d(TAG, "🔙 뒤로가기 버튼 감지 → 오버레이 즉시 해제")
+                    this@FinancialBlockOverlayManager.dismiss()
+                    return true
+                }
+                return super.dispatchKeyEvent(event)
+            }
+        }.apply {
+            isFocusableInTouchMode = true
+            requestFocus()
             setOnTouchListener { _, _ -> true }  // 터치 차단
         }
 
@@ -741,6 +767,78 @@ class FinancialBlockOverlayManager(private val context: Context) {
     }
 
     // ─────────────────────────────────────────────
+    // 시스템 버튼 감지 (홈/뒤로가기/메뉴)
+    // ─────────────────────────────────────────────
+
+    /**
+     * 홈 버튼 / 최근 앱(메뉴) 버튼 감지를 위한 BroadcastReceiver를 등록한다.
+     * 버튼 감지 시 즉시 dismiss하지 않고, 300ms 후 포그라운드 앱이
+     * 금융 앱인지 재확인한 뒤 금융 앱이 아닐 때만 dismiss한다.
+     */
+    private fun registerSystemButtonReceiver() {
+        if (closeSystemDialogsReceiver != null) return
+
+        closeSystemDialogsReceiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context?, i: Intent?) {
+                if (i?.action == Intent.ACTION_CLOSE_SYSTEM_DIALOGS) {
+                    Log.d(TAG, "🏠 홈/최근앱 버튼 감지 → 오버레이 즉시 해제")
+                    dismiss()
+                }
+            }
+        }
+        try {
+            context.registerReceiver(
+                closeSystemDialogsReceiver,
+                IntentFilter(Intent.ACTION_CLOSE_SYSTEM_DIALOGS),
+                Context.RECEIVER_EXPORTED
+            )
+        } catch (e: Exception) {
+            try {
+                context.registerReceiver(
+                    closeSystemDialogsReceiver,
+                    IntentFilter(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
+                )
+            } catch (e2: Exception) {
+                Log.e(TAG, "리시버 등록 실패", e2)
+            }
+        }
+    }
+
+    private fun unregisterSystemButtonReceiver() {
+        closeSystemDialogsReceiver?.let {
+            try { context.unregisterReceiver(it) } catch (_: Exception) {}
+        }
+        closeSystemDialogsReceiver = null
+    }
+
+    /**
+     * 300ms 딜레이 후 현재 포그라운드 앱이 금융 앱이 아니면 오버레이를 해제한다.
+     *
+     * 홈/뒤로가기/메뉴 버튼을 누르면, 실제 포그라운드 앱이 전환되기까지
+     * 약 100~300ms 정도 걸린다. 따라서 즉시 확인하면 아직 금융 앱이
+     * 포그라운드일 수 있으므로, 짧은 딜레이 후 재확인한다.
+     *
+     * - 금융 앱 아님 → dismiss (빠른 반응)
+     * - 여전히 금융 앱 → 유지 (기존 observeForegroundIsFinancialApp에 위임)
+     */
+    private fun dismissIfNotFinancialAppDelayed() {
+        handler.postDelayed({
+            if (!isShowing()) return@postDelayed
+
+            val currentPkg = ForegroundAppMonitorService.foregroundPackage.value
+            val isStillFinancial = currentPkg in FINANCIAL_APP_PACKAGES
+            Log.d(TAG, "⏱ 지연 확인: 현재 포그라운드=$currentPkg, 금융앱=$isStillFinancial")
+
+            if (!isStillFinancial) {
+                Log.d(TAG, "✅ 금융 앱 이탈 확인 → 오버레이 즉시 해제")
+                dismiss()
+            } else {
+                Log.d(TAG, "↳ 아직 금융 앱 포그라운드 — 오버레이 유지")
+            }
+        }, BUTTON_DISMISS_DELAY_MS)
+    }
+
+    // ─────────────────────────────────────────────
     // Utils
     // ─────────────────────────────────────────────
 
@@ -751,5 +849,68 @@ class FinancialBlockOverlayManager(private val context: Context) {
 
     companion object {
         private const val TAG = "FinancialBlockOverlay"
+
+        /** 시스템 버튼 감지 후 포그라운드 앱 재확인까지 대기 시간 */
+        private const val BUTTON_DISMISS_DELAY_MS = 50L
+
+        /**
+         * 금융 앱 패키지 목록 (VideoCallRepositoryImpl과 동일).
+         * dismissIfNotFinancialAppDelayed()에서 직접 참조.
+         */
+        private val FINANCIAL_APP_PACKAGES = setOf(
+            // ── 은행 ──
+            "com.kbstar.kbbank",
+            "com.shinhan.sbanking",
+            "com.wooribank.smart.npib",
+            "com.kebhana.hanapush",
+            "nh.smart.banking",
+            "com.ibk.neobanking",
+            "com.kdb.talk",
+            "com.epost.psf.sdsi",
+            "com.sc.danb",
+            "com.citi.android.citibank.kr",
+            "com.bnk.busanbank",
+            "com.bnk.cbank",
+            "com.knb.psb",
+            "com.jeonbukbank.jbm",
+            "kr.co.kwangju.bank",
+            "com.jeju.jbank",
+            "com.suhyup.mbanking",
+            // ── 인터넷/디지털 뱅크 ──
+            "com.kakaobank.channel",
+            "com.kbanknow",
+            "viva.republica.toss",
+            // ── 증권 ──
+            "com.kiwoom.hero",
+            "com.kiwoom.herots",
+            "com.samsung.android.samsungpop",
+            "com.mirae.mstock",
+            "com.daishin.cybos",
+            "com.nhqv.namuh",
+            "com.shinhan.smartstock",
+            "com.kbsec.mstocku",
+            "com.hanwha.investment",
+            "com.hana.fnc.securities",
+            // ── 보험 ──
+            "com.samsung.life.samsunglife",
+            "kr.co.hanwhalife",
+            "com.kyobo.kcpi",
+            "com.samsung.android.samsungfire",
+            "com.dbins.smart",
+            "com.kbinsure.smart",
+            // ── 카드 ──
+            "com.shinhancard.smartshinhan",
+            "com.samsung.android.samsungcard",
+            "com.kbcard.cxh.appcard",
+            "com.hyundaicard.appcard",
+            "com.lottecard.app",
+            "com.wooricard.smartapp",
+            "com.hanacard.smart",
+            "kr.co.bccard.bcsmartpay",
+            // ── 간편결제/핀테크 ──
+            "com.nhn.android.search",
+            "com.kakaopay.app",
+            "com.nhnent.payapp",
+        )
     }
 }
