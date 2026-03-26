@@ -110,8 +110,8 @@ fun VideoCallScreen(
 
     // criminal_location FCM 수신 콜백 등록 (위치 데이터는 오버레이 바텀시트에 표시)
     DisposableEffect(Unit) {
-        CriminalLocationBridge.onLocationReceived = { country ->
-            android.util.Log.d("CriminalLocation", "위치 수신됨 — country: $country")
+        CriminalLocationBridge.onLocationReceived = { country, lat, lng ->
+            android.util.Log.d("CriminalLocation", "위치 수신됨 — country: $country lat=$lat lng=$lng")
             isRequestingLocation = false
             warningOverlayManager.updateCountry(country)
         }

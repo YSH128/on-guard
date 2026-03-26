@@ -1,4 +1,4 @@
-*.png
+
 *.iml
 *.svg
 .gradle
@@ -341,3 +341,5 @@ frontend_guide.md
 auth-flow-guide.md
 sumin.md
 server.py
+ui_guide
+ui_guide/
