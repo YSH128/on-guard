@@ -66,8 +66,15 @@ public class CallService {
         payloadMap.put("caller_name", caller.getName());
         payloadMap.put("channel_name", channelName);
 
-        alertService.sendDataAlertToUser(callee.getKakaoId(), payloadMap);
-        log.info("Sent INCOMING_CALL data push to callee: {}", calleeId);
+        try {
+            alertService.sendDataAlertToUser(callee.getKakaoId(), payloadMap);
+            log.info("Sent INCOMING_CALL data push to callee: {}", calleeId);
+        } catch (Exception e) {
+            log.error("Failed to send incoming call push. Rolling back redis session & lock for channel: {}", channelName, e);
+            callSessionService.deleteSession(channelName);
+            callSessionService.deleteCallerLock(callerId);
+            throw e;
+        }
 
         // 8. 응답 반환
         return CallResponse.builder()
@@ -98,25 +105,33 @@ public class CallService {
         User caller = userRepository.findById(session.getCallerId())
                 .orElseThrow(() -> new CallException(ErrorCode.USER_NOT_FOUND));
 
+        // 7. Redis 세션 삭제 및 발신자 락 해제 (푸시 로직 예외 발생과 무관하게 무조건 삭제되도록 선행 배치)
+        callSessionService.deleteSession(channelName);
+        callSessionService.deleteCallerLock(caller.getId());
+
         // 6. Data 전용 카카오 푸시 전송 (안드로이드 백그라운드 수신용)
         Map<String, String> payloadMap = new HashMap<>();
         payloadMap.put("type", "CALL_ACCEPTED");
         payloadMap.put("channel_name", channelName);
 
-        alertService.sendDataAlertToUser(caller.getKakaoId(), payloadMap);
-        log.info("Sent CALL_ACCEPTED data push to caller: {}", caller.getId());
+        try {
+            alertService.sendDataAlertToUser(caller.getKakaoId(), payloadMap);
+            log.info("Sent CALL_ACCEPTED data push to caller: {}", caller.getId());
+        } catch (Exception e) {
+            log.warn("Failed to send CALL_ACCEPTED push to caller {}, but continuing flow.", caller.getId(), e);
+        }
 
         // WebSocket 이벤트 발송 (발신자에게 수락 알림)
-        com.shutter.api.rtc.dto.response.CallEventResponse eventResponse = com.shutter.api.rtc.dto.response.CallEventResponse.builder()
-                .type("CALL_ACCEPTED")
-                .channelName(channelName)
-                .build();
-        messagingTemplate.convertAndSend("/topic/call/" + caller.getId(), eventResponse);
-        log.info("Published CALL_ACCEPTED via WebSocket to caller: {}", caller.getId());
-
-        // 7. Redis 세션 삭제 및 발신자 락 해제 (푸시 성공 후 삭제)
-        callSessionService.deleteSession(channelName);
-        callSessionService.deleteCallerLock(caller.getId());
+        try {
+            com.shutter.api.rtc.dto.response.CallEventResponse eventResponse = com.shutter.api.rtc.dto.response.CallEventResponse.builder()
+                    .type("CALL_ACCEPTED")
+                    .channelName(channelName)
+                    .build();
+            messagingTemplate.convertAndSend("/topic/call/" + caller.getId(), eventResponse);
+            log.info("Published CALL_ACCEPTED via WebSocket to caller: {}", caller.getId());
+        } catch (Exception e) {
+            log.warn("Failed to send CALL_ACCEPTED websocket to caller {}", caller.getId(), e);
+        }
 
         // 8. 결과 반환
         return CallResponse.builder()
