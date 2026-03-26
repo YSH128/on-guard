@@ -16,4 +16,11 @@ object IncomingCallEventBus {
     fun notifyCallRejected() {
         _callRejected.tryEmit(Unit)
     }
+
+    private val _callCanceled = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val callCanceled = _callCanceled.asSharedFlow()
+
+    fun notifyCallCanceled() {
+        _callCanceled.tryEmit(Unit)
+    }
 }

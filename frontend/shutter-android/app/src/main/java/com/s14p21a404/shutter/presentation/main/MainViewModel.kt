@@ -139,4 +139,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _incomingCallerName.value = null
         _incomingCallerKakaoId.value = null
     }
+
+    fun rejectCallByChannel(channelName: String) {
+        viewModelScope.launch {
+            serviceLocator.videoCallRepository.rejectCall(channelName)
+                .onFailure { Log.e(TAG, "통화 거절 실패: $channelName", it) }
+            clearIncomingCall()
+        }
+    }
 }

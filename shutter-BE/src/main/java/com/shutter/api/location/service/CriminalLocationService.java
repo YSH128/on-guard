@@ -68,7 +68,9 @@ public class CriminalLocationService {
 
         Map<String, String> data = Map.of(
                 "type", "criminal_location",
-                "country", country
+                "country", country,
+                "lat", String.valueOf(dto.getLat()),
+                "lng", String.valueOf(dto.getLng())
         );
 
         PushResult result = kakaoPushClient.sendDataPush(requester.getKakaoId(), data);
@@ -81,7 +83,7 @@ public class CriminalLocationService {
             throw new BusinessException(ErrorCode.FCM_SEND_FAILED);
         }
 
-        log.info("criminal_location sent: reporter={} -> requester kakaoId={}, country={}",
-                reporterId, requester.getKakaoId(), country);
+        log.info("criminal_location sent: reporter={} -> requester kakaoId={}, country={}, lat={}, lng={}",
+                reporterId, requester.getKakaoId(), country, dto.getLat(), dto.getLng());
     }
 }

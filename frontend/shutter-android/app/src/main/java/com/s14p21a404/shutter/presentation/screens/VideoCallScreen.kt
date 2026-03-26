@@ -81,6 +81,13 @@ fun VideoCallScreen(channelId: String, callerName: String = "", onCallEnded: () 
     fun endCall() {
         if (isEndingCall.value) return   // 이미 종료 처리 중이면 무시
         isEndingCall.value = true
+        // 상대방이 아직 수락 전이면 취소 API 호출
+        if (remoteUid == null) {
+            scope.launch {
+                videoCallRepository.cancelCall(channelId)
+                    .onFailure { android.util.Log.w("VideoCall", "cancelCall 실패 (무시): ${it.message}") }
+            }
+        }
         rtcEngine?.leaveChannel()
         callEnded = true
         // 인앱 통화 종료 → 딥페이크 감지 파이프라인에 통화 종료 알림

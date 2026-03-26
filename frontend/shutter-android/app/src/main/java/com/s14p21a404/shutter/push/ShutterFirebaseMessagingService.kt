@@ -77,6 +77,12 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
                 IncomingCallEventBus.notifyCallRejected()
             }
 
+            "CALL_CANCELED" -> {
+                val channelName = data["channel_name"] ?: return
+                Log.d(FCM_TAG, "CALL_CANCELED 수신 — channel: $channelName")
+                IncomingCallEventBus.notifyCallCanceled()
+            }
+
             "location_request" -> {
                 Log.d(FCM_TAG, "location_request 수신 — requesterKakaoId: ${data["requesterKakaoId"]}")
                 handleLocationRequest(data)
@@ -274,7 +280,7 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
         private const val CHANNEL_ID = "shutter_push_channel_v2"
         private const val CALL_CHANNEL_ID = "shutter_call_channel_v1"
         private const val NOTIFICATION_ID = 2001
-        private const val CALL_NOTIFICATION_ID = 2002
+        const val CALL_NOTIFICATION_ID = 2002
         private const val CALL_REQUEST_CODE = 3001
         private const val CALL_REJECT_REQUEST_CODE = 3002
         private const val CRIMINAL_LOCATION_NOTIFICATION_ID = 2003

@@ -245,7 +245,12 @@ class VideoCallRepositoryImpl(
 
     override suspend fun rejectCall(channelName: String): Result<Unit> = runCatching {
         val response = apiService.rejectCall(channelName)
-        check(response.isSuccessful) { "통화 거절 처리 실패" }
+        check(response.success) { response.message }
+    }
+
+    override suspend fun cancelCall(channelName: String): Result<Unit> = runCatching {
+        val response = apiService.cancelCall(channelName)
+        check(response.success) { response.message }
     }
 
     companion object {
