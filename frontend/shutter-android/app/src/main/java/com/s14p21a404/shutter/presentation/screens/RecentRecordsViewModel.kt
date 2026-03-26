@@ -38,6 +38,7 @@ data class RecentRecordsUiState(
     val sessions: List<SessionGroup> = emptyList(),
     val expandedSessions: Set<String> = emptySet(),
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
 )
 
 class RecentRecordsViewModel(application: Application) : AndroidViewModel(application) {
@@ -62,6 +63,20 @@ class RecentRecordsViewModel(application: Application) : AndroidViewModel(applic
                     _uiState.update { it.copy(wardFilters = filters) }
                     loadTimeline()
                 }
+        }
+    }
+
+    fun refresh() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isRefreshing = true) }
+            getMyWardsUseCase()
+                .onSuccess { wards ->
+                    val filters = listOf(WardFilter("전체", null)) +
+                            wards.map { WardFilter(it.name, it.wardId) }
+                    _uiState.update { it.copy(wardFilters = filters) }
+                }
+            loadTimeline()
+            _uiState.update { it.copy(isRefreshing = false) }
         }
     }
 
@@ -129,7 +144,14 @@ class RecentRecordsViewModel(application: Application) : AndroidViewModel(applic
                     )
                 }
 
-            _uiState.update { it.copy(sessions = sessions, isLoading = false) }
+            _uiState.update {
+                val firstSessionId = sessions.firstOrNull()?.sessionId
+                it.copy(
+                    sessions = sessions,
+                    isLoading = false,
+                    expandedSessions = if (firstSessionId != null) setOf(firstSessionId) else emptySet(),
+                )
+            }
         }
     }
 }
