@@ -77,6 +77,12 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
                 IncomingCallEventBus.notifyCallRejected()
             }
 
+            "CALL_CANCELED" -> {
+                val channelName = data["channel_name"] ?: return
+                Log.d(FCM_TAG, "CALL_CANCELED 수신 — channel: $channelName")
+                IncomingCallEventBus.notifyCallCanceled()
+            }
+
             "location_request" -> {
                 Log.d(FCM_TAG, "location_request 수신 — requesterKakaoId: ${data["requesterKakaoId"]}")
                 handleLocationRequest(data)
@@ -204,12 +210,14 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
             Log.w(FCM_TAG, "country 없음")
             return
         }
+        val lat = data["lat"]?.toDoubleOrNull()
+        val lng = data["lng"]?.toDoubleOrNull()
 
-        Log.d(FCM_TAG, "criminal_location 국가: $country")
+        Log.d(FCM_TAG, "criminal_location 국가: $country lat=$lat lng=$lng")
 
         // 1. VideoCallScreen UI에 콜백 (메인 스레드에서 실행)
         Handler(Looper.getMainLooper()).post {
-            CriminalLocationBridge.onLocationReceived?.invoke(country)
+            CriminalLocationBridge.onLocationReceived?.invoke(country, lat, lng)
         }
 
         // 2. 푸시 알림 표시
@@ -274,7 +282,7 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
         private const val CHANNEL_ID = "shutter_push_channel_v2"
         private const val CALL_CHANNEL_ID = "shutter_call_channel_v1"
         private const val NOTIFICATION_ID = 2001
-        private const val CALL_NOTIFICATION_ID = 2002
+        const val CALL_NOTIFICATION_ID = 2002
         private const val CALL_REQUEST_CODE = 3001
         private const val CALL_REJECT_REQUEST_CODE = 3002
         private const val CRIMINAL_LOCATION_NOTIFICATION_ID = 2003

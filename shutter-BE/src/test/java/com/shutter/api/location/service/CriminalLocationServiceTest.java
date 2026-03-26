@@ -107,7 +107,7 @@ class CriminalLocationServiceTest {
     // ─── reportCriminalLocation ──────────────────────────────────────────────
 
     @Test
-    @DisplayName("위치 보고 - 성공: 요청자에게 국가명 FCM 전송")
+    @DisplayName("위치 보고 - 성공: 요청자에게 국가명+위도+경도 FCM 전송")
     void reportCriminalLocation_success() {
         CriminalLocationReportDto dto = createReportDto(requester.getKakaoId(), 37.123456, 127.123456);
 
@@ -125,6 +125,8 @@ class CriminalLocationServiceTest {
         Map<String, String> sentData = dataCaptor.getValue();
         assertThat(sentData.get("type")).isEqualTo("criminal_location");
         assertThat(sentData.get("country")).isEqualTo("대한민국");
+        assertThat(sentData.get("lat")).isEqualTo("37.123456");
+        assertThat(sentData.get("lng")).isEqualTo("127.123456");
     }
 
     @Test

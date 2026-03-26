@@ -159,6 +159,9 @@ dependencies {
     implementation("com.qualcomm.qti:qnn-runtime:2.34.0")
     implementation("com.qualcomm.qti:qnn-litert-delegate:2.34.0")
     implementation("io.coil-kt:coil-gif:2.6.0")
+
+    // Glide (오버레이 View에서 국기 이미지 로딩)
+    implementation("com.github.bumptech.glide:glide:4.16.0")
 }
 
 

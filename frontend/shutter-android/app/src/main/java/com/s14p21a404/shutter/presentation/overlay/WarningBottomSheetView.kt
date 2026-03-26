@@ -13,8 +13,11 @@ import android.view.Gravity
 import android.view.View
 import android.view.animation.OvershootInterpolator
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import com.bumptech.glide.Glide
+import com.bumptech.glide.load.resource.bitmap.RoundedCorners
 
 /**
  * 하단에서 슬라이드업 되는 화이트 바텀시트 감지 결과 모달.
@@ -48,8 +51,10 @@ class WarningBottomSheetView(
     private val sheetFrame: FrameLayout
     private val titleContainer: View // 타이틀 (외부앱: 아이콘+텍스트 row / 인앱: 텍스트만)
     private var mapContainer: FrameLayout? = null
+    private var pinContainerRef: FrameLayout? = null
     private var detectionTypeRow: LinearLayout? = null
     private var countryNameTv: TextView? = null
+    private var flagImageView: ImageView? = null
     private var labelContainer: LinearLayout? = null
     private var typeLabelTv: TextView? = null
     private val buttonsContainer: LinearLayout
@@ -86,22 +91,49 @@ class WarningBottomSheetView(
 
         // ── 타이틀 영역 ──
         if (isInApp) {
-            // 인앱: "AI 위조 감지" 텍스트만
+            // 인앱: "AI 위조 감지" 텍스트 + X 닫기 버튼
+            val titleRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                alpha = 0f
+                translationY = dpToPx(24).toFloat()
+            }
+
+            // 왼쪽 spacer (X 버튼과 균형 맞추기 위해)
+            val spacer = View(context)
+            titleRow.addView(spacer, LinearLayout.LayoutParams(dpToPx(26), dpToPx(26)))
+
             val tv = TextView(context).apply {
                 text = "AI 위조 감지"
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
                 setTextColor(Color.parseColor("#111827"))
                 typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
                 gravity = Gravity.CENTER
-                alpha = 0f
-                translationY = dpToPx(24).toFloat()
             }
-            titleContainer = tv
-            sheetContainer.addView(tv, LinearLayout.LayoutParams(
+            titleRow.addView(tv, LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+            ))
+
+            // X 닫기 버튼 (재탐지)
+            val closeBtn = TextView(context).apply {
+                text = "✕"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextColor(Color.parseColor("#9CA3AF"))
+                gravity = Gravity.CENTER
+                val btnBg = GradientDrawable().apply {
+                    setColor(Color.parseColor("#F3F4F6"))
+                    shape = GradientDrawable.OVAL
+                }
+                background = btnBg
+                setOnClickListener { onRescan?.invoke() }
+            }
+            titleRow.addView(closeBtn, LinearLayout.LayoutParams(dpToPx(26), dpToPx(26)))
+
+            titleContainer = titleRow
+            sheetContainer.addView(titleRow, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                gravity = Gravity.CENTER_HORIZONTAL
                 bottomMargin = dpToPx(16)
             })
         } else {
@@ -179,7 +211,19 @@ class WarningBottomSheetView(
 
             // iconWrap 크기를 pulse 최대 크기보다 크게 설정하여 overflow 허용
             val iconWrapSize = dpToPx(56)
-            titleRow.addView(iconWrap, LinearLayout.LayoutParams(iconWrapSize, iconWrapSize).apply {
+
+            // 왼쪽 spacer (X 버튼과 균형 맞추되 아이콘 폭 감안해 좁게)
+            val spacer = View(context)
+            titleRow.addView(spacer, LinearLayout.LayoutParams(dpToPx(10), dpToPx(26)))
+
+            // 가운데 영역: 아이콘 + 텍스트를 감싸는 컨테이너
+            val centerContent = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                clipChildren = false
+                clipToPadding = false
+            }
+            centerContent.addView(iconWrap, LinearLayout.LayoutParams(iconWrapSize, iconWrapSize).apply {
                 marginEnd = dpToPx(6)
             })
 
@@ -190,11 +234,30 @@ class WarningBottomSheetView(
                 setTextColor(Color.parseColor("#111827"))
                 typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
             }
-            titleRow.addView(tv)
+            centerContent.addView(tv)
+
+            titleRow.addView(centerContent, LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+            ).apply { gravity = Gravity.CENTER_VERTICAL })
+
+            // X 닫기 버튼 (재탐지)
+            val closeBtn = TextView(context).apply {
+                text = "✕"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextColor(Color.parseColor("#9CA3AF"))
+                gravity = Gravity.CENTER
+                val btnBg = GradientDrawable().apply {
+                    setColor(Color.parseColor("#F3F4F6"))
+                    shape = GradientDrawable.OVAL
+                }
+                background = btnBg
+                setOnClickListener { onRescan?.invoke() }
+            }
+            titleRow.addView(closeBtn, LinearLayout.LayoutParams(dpToPx(26), dpToPx(26)))
 
             titleContainer = titleRow
             sheetContainer.addView(titleRow, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
@@ -276,18 +339,22 @@ class WarningBottomSheetView(
             translationY = dpToPx(16).toFloat()
         }
 
-        // 지도 View (Canvas로 대륙 그리기)
-        val worldMap = WorldMapView(context)
+        // 지도 View (res/drawable/map.png 이미지 사용)
+        val worldMap = ImageView(context).apply {
+            setImageResource(context.resources.getIdentifier("map", "drawable", context.packageName))
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        }
         mapContainer!!.addView(worldMap, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             dpToPx(160)
         ))
 
-        // 핀 컨테이너 (지도 위 동남아/캄보디아 부근)
+        // 핀 컨테이너 (좌표 수신 전: 동남아 기본 위치 → 수신 후: 실제 좌표로 이동)
         val pinContainer = FrameLayout(context).apply {
             clipChildren = false
             clipToPadding = false
         }
+        pinContainerRef = pinContainer
 
         // pulse circles (2개)
         for (i in 0..1) {
@@ -366,11 +433,23 @@ class WarningBottomSheetView(
         }
 
         countryNameTv = TextView(context).apply {
-            text = currentCountryName
+            text = "위치 확인 중..."
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setTextColor(Color.parseColor("#374151"))
         }
         labelContainer!!.addView(countryNameTv)
+
+        // 국기 이미지 — 국가명 오른쪽 (flagcdn CDN + Glide)
+        flagImageView = ImageView(context).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            visibility = View.GONE // 국가코드 수신 전까지 숨김
+        }
+        val flagSize = dpToPx(18)
+        labelContainer!!.addView(flagImageView, LinearLayout.LayoutParams(flagSize, (flagSize * 0.7f).toInt()).apply {
+            marginStart = dpToPx(4)
+            gravity = Gravity.CENTER_VERTICAL
+        })
+
 
         mapContainer!!.addView(labelContainer, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT
@@ -446,11 +525,109 @@ class WarningBottomSheetView(
 
     /**
      * 국가명을 업데이트한다. FCM 등으로 위치 데이터가 수신되면 호출.
+     * 국가명을 그대로 표시하고, 내부에서 국가코드로 변환하여 국기 이미지를 로드한다.
      */
     fun updateCountry(country: String) {
         currentCountryName = country
         handler.post {
             countryNameTv?.text = country
+
+            // 국가명 → 소문자 ISO 코드 변환 후 flagcdn CDN으로 국기 로드
+            val code = countryNameToCode(country)
+            if (code != null) {
+                flagImageView?.let { iv ->
+                    iv.visibility = View.VISIBLE
+                    val flagUrl = "https://flagcdn.com/w40/${code}.png"
+                    Glide.with(iv.context)
+                        .load(flagUrl)
+                        .transform(RoundedCorners(dpToPx(2)))
+                        .into(iv)
+                }
+            }
+        }
+    }
+
+    /**
+     * lat/lng 좌표를 지도 이미지 위 픽셀 위치로 변환하여 핀을 이동한다.
+     * 등장방형(equirectangular) 투영 기준으로 계산하며,
+     * mapContainer 실제 크기를 post{} 로 읽어 적용한다.
+     */
+    fun updatePinPosition(lat: Double, lng: Double) {
+        handler.post {
+            val mc = mapContainer ?: return@post
+            mc.post {
+                val mapW = mc.width.toFloat()
+                val mapH = mc.height.toFloat()
+                if (mapW <= 0 || mapH <= 0) return@post
+
+                val xRatio = ((lng + 180.0) / 360.0).toFloat().coerceIn(0f, 1f)
+                val yRatio = ((90.0 - lat) / 180.0).toFloat().coerceIn(0f, 1f)
+
+                val pinSize = dpToPx(80)
+                val pinX = (mapW * xRatio - pinSize / 2f).toInt().coerceAtLeast(0)
+                val pinY = (mapH * yRatio - pinSize / 2f).toInt().coerceAtLeast(0)
+
+                pinContainerRef?.let { pin ->
+                    (pin.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
+                        lp.leftMargin = pinX
+                        lp.topMargin = pinY
+                        pin.layoutParams = lp
+                    }
+                }
+                labelContainer?.let { label ->
+                    (label.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
+                        lp.leftMargin = (pinX - dpToPx(10)).coerceAtLeast(0)
+                        lp.topMargin = (pinY + pinSize - dpToPx(6)).coerceAtLeast(0)
+                        label.layoutParams = lp
+                    }
+                }
+            }
+        }
+    }
+
+    /** 한국어 국가명 → ISO 3166-1 alpha-2 소문자 코드 매핑 (국기 로딩용) */
+    private fun countryNameToCode(name: String): String? {
+        return when (name.trim()) {
+            "대한민국", "한국" -> "kr"
+            "캄보디아" -> "kh"
+            "미국" -> "us"
+            "중국" -> "cn"
+            "일본" -> "jp"
+            "베트남" -> "vn"
+            "태국" -> "th"
+            "필리핀" -> "ph"
+            "미얀마" -> "mm"
+            "라오스" -> "la"
+            "말레이시아" -> "my"
+            "싱가포르" -> "sg"
+            "인도네시아" -> "id"
+            "인도" -> "in"
+            "러시아" -> "ru"
+            "영국" -> "gb"
+            "독일" -> "de"
+            "프랑스" -> "fr"
+            "호주" -> "au"
+            "캐나다" -> "ca"
+            "브라질" -> "br"
+            "나이지리아" -> "ng"
+            "가나" -> "gh"
+            "케냐" -> "ke"
+            "북한" -> "kp"
+            "대만", "타이완" -> "tw"
+            "홍콩" -> "hk"
+            "멕시코" -> "mx"
+            "아르헨티나" -> "ar"
+            "이탈리아" -> "it"
+            "스페인" -> "es"
+            "네덜란드" -> "nl"
+            "스위스" -> "ch"
+            "터키", "튀르키예" -> "tr"
+            "사우디아라비아" -> "sa"
+            "이란" -> "ir"
+            "이라크" -> "iq"
+            "이집트" -> "eg"
+            "남아프리카공화국", "남아공" -> "za"
+            else -> null
         }
     }
 
@@ -563,111 +740,5 @@ class WarningBottomSheetView(
         context.resources.displayMetrics
     ).toInt()
 
-    // ─────────────────────────────────────────────
-    // 내부 뷰: 세계 지도
-    // ─────────────────────────────────────────────
 
-    /**
-     * 레퍼런스의 WorldMap SVG를 Canvas path로 그리는 커스텀 View.
-     * viewBox="0 0 400 200" 기준 7개 대륙.
-     */
-    private class WorldMapView(context: Context) : View(context) {
-        private val mapPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#E5E7EB") // gray-200
-            style = Paint.Style.FILL
-        }
-
-        private val paths = mutableListOf<Path>()
-
-        init {
-            paths.add(parseSvgPath("M50,40 Q80,30 100,45 L120,35 Q140,40 130,60 L110,80 Q90,90 70,85 L50,70 Q40,55 50,40"))
-            paths.add(parseSvgPath("M80,95 Q100,90 110,100 L115,130 Q110,150 95,160 L85,155 Q75,140 80,120 L75,105 Q75,95 80,95"))
-            paths.add(parseSvgPath("M175,35 Q190,30 200,35 L210,40 Q220,35 215,50 L205,55 Q195,60 185,55 L175,45 Q170,40 175,35"))
-            paths.add(parseSvgPath("M175,65 Q195,60 210,70 L215,100 Q210,130 195,140 L180,135 Q165,120 170,95 L175,65"))
-            paths.add(parseSvgPath("M220,30 Q260,25 300,35 L340,40 Q360,50 350,70 L320,85 Q280,95 250,85 L230,70 Q210,55 220,30"))
-            paths.add(parseSvgPath("M310,120 Q340,115 355,130 L350,150 Q335,160 315,155 L305,140 Q300,125 310,120"))
-            paths.add(parseSvgPath("M280,95 Q300,90 320,95 L330,105 Q325,115 305,115 L290,110 Q275,105 280,95"))
-        }
-
-        override fun onDraw(canvas: Canvas) {
-            super.onDraw(canvas)
-            val w = width.toFloat()
-            val h = height.toFloat()
-            if (w <= 0 || h <= 0) return
-
-            val sx = w / 400f
-            val sy = h / 200f
-
-            canvas.save()
-            canvas.scale(sx, sy)
-            for (p in paths) {
-                canvas.drawPath(p, mapPaint)
-            }
-            canvas.restore()
-        }
-
-        private fun parseSvgPath(svg: String): Path {
-            val path = Path()
-            val regex = Regex("([MLQZ])([^MLQZ]*)", RegexOption.IGNORE_CASE)
-            for (match in regex.findAll(svg)) {
-                val cmd = match.groupValues[1]
-                val coords = match.groupValues[2].trim()
-                    .split("[,\\s]+".toRegex())
-                    .filter { it.isNotEmpty() }
-                    .map { it.toFloat() }
-
-                when (cmd.uppercase()) {
-                    "M" -> if (coords.size >= 2) path.moveTo(coords[0], coords[1])
-                    "L" -> if (coords.size >= 2) path.lineTo(coords[0], coords[1])
-                    "Q" -> if (coords.size >= 4) path.quadTo(coords[0], coords[1], coords[2], coords[3])
-                    "Z" -> path.close()
-                }
-            }
-            return path
-        }
-    }
-
-    // ─────────────────────────────────────────────
-    // 내부 뷰: 캄보디아 국기
-    // ─────────────────────────────────────────────
-
-    /**
-     * 캄보디아 국기: 파랑/빨강/파랑 3줄 + 중앙 흰색 앙코르와트 실루엣(간략)
-     */
-    private class CambodiaFlagView(context: Context) : View(context) {
-        private val bluePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#032EA1"); style = Paint.Style.FILL
-        }
-        private val redPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#E00025"); style = Paint.Style.FILL
-        }
-        private val whitePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE; style = Paint.Style.FILL
-        }
-        private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#D1D5DB"); style = Paint.Style.STROKE; strokeWidth = 1f
-        }
-
-        override fun onDraw(canvas: Canvas) {
-            super.onDraw(canvas)
-            val w = width.toFloat()
-            val h = height.toFloat()
-
-            canvas.drawRect(0f, 0f, w, h * 0.28f, bluePaint)
-            canvas.drawRect(0f, h * 0.28f, w, h * 0.72f, redPaint)
-            canvas.drawRect(0f, h * 0.72f, w, h, bluePaint)
-
-            // 간략 앙코르와트 (흰 삼각형)
-            val cx = w / 2f; val cy = h / 2f
-            val triW = w * 0.2f; val triH = h * 0.25f
-            val triPath = Path().apply {
-                moveTo(cx, cy - triH)
-                lineTo(cx - triW, cy + triH * 0.5f)
-                lineTo(cx + triW, cy + triH * 0.5f)
-                close()
-            }
-            canvas.drawPath(triPath, whitePaint)
-            canvas.drawRoundRect(0f, 0f, w, h, 2f, 2f, borderPaint)
-        }
-    }
 }

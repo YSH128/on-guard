@@ -115,34 +115,46 @@ class ScanningPillView(context: Context) : LinearLayout(context) {
     // ─────────────────────────────────────────────
 
     /**
-     * 레퍼런스 SoundWaveAnimation:
-     * 12개 세로 바, pink→blue 그라데이션, scaleY 0.5~1 반복
+     * Home 페이지 시그니처 음파 애니메이션과 동일한 디자인.
+     * 28개 세로 바, blue(#6CAEEA)/pink(#D03770) 교차 색상,
+     * sin(phase + i*0.45) 패턴, 1400ms 주기.
      */
     private class SoundWaveView(context: Context) : View(context) {
-        // 고정 높이 비율 (0~1)
-        private val baseHeights = floatArrayOf(0.5f, 0.75f, 0.42f, 0.92f, 0.58f, 0.83f, 0.67f, 1f, 0.46f, 0.79f, 0.54f, 0.71f)
-        private val barCount = baseHeights.size
-        private val phases = FloatArray(barCount) // 각 바의 애니메이션 위상
+        // Home 페이지와 동일한 바 스케일 (28개)
+        private val barScales = floatArrayOf(
+            0.55f, 0.9f, 0.45f, 1.0f, 0.6f, 0.8f, 0.4f, 0.95f, 0.65f, 0.5f,
+            0.85f, 0.4f, 1.0f, 0.55f, 0.75f, 0.45f, 0.9f, 0.6f, 0.5f, 0.85f,
+            0.7f, 0.4f, 1.0f, 0.5f, 0.8f, 0.6f, 0.9f, 0.45f
+        )
+        private val barCount = barScales.size
 
-        private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+        // Home 페이지와 동일한 색상 패턴 (7개 순환)
+        private val barColors = intArrayOf(
+            Color.parseColor("#6CAEEA"),
+            Color.parseColor("#D03770"),
+            Color.parseColor("#6CAEEA"),
+            Color.parseColor("#D03770"),
+            Color.parseColor("#6CAEEA"),
+            Color.parseColor("#D03770"),
+            Color.parseColor("#6CAEEA")
+        )
 
+        private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+        }
+
+        private var phase = 0f
         private var animator: ValueAnimator? = null
 
         fun startAnimation() {
             animator?.cancel()
-            animator = ValueAnimator.ofFloat(0f, 1f).apply {
-                duration = 800
+            animator = ValueAnimator.ofFloat(0f, (2 * Math.PI).toFloat()).apply {
+                duration = 1400
                 repeatCount = ValueAnimator.INFINITE
-                repeatMode = ValueAnimator.REVERSE
+                repeatMode = ValueAnimator.RESTART
                 interpolator = LinearInterpolator()
                 addUpdateListener { anim ->
-                    val progress = anim.animatedValue as Float
-                    for (i in 0 until barCount) {
-                        // 각 바에 위상 오프셋을 줘서 wave 효과
-                        val offset = i * 0.1f
-                        val raw = Math.sin(((progress + offset) * Math.PI * 2).toDouble()).toFloat()
-                        phases[i] = 0.5f + raw * 0.5f // 0~1 범위
-                    }
+                    phase = anim.animatedValue as Float
                     invalidate()
                 }
                 start()
@@ -165,24 +177,25 @@ class ScanningPillView(context: Context) : LinearLayout(context) {
             val h = height.toFloat()
             if (w <= 0 || h <= 0) return
 
-            val barWidth = w / (barCount * 2f - 1f) // bar + gap
-            val gap = barWidth
+            // Home 페이지와 동일: barWidth ≈ 4dp 비율, gap ≈ 3dp 비율
+            // 전체 폭에 맞게 스케일링
+            val totalUnits = barCount * 4f + (barCount - 1) * 3f // 4dp bar + 3dp gap 비율
+            val unit = w / totalUnits
+            val barWidth = unit * 4f
+            val gap = unit * 3f
             val radius = barWidth / 2f
 
             for (i in 0 until barCount) {
                 val x = i * (barWidth + gap)
-                val barH = h * baseHeights[i] * phases[i].coerceIn(0.3f, 1f)
-                val top = h - barH
+                // Home 페이지와 동일한 높이 계산: sin(phase + i * 0.45) 패턴
+                val heightFraction = ((Math.sin((phase + i * 0.45f).toDouble()).toFloat() + 1f) / 2f) * barScales[i] * 0.8f + 0.1f
+                val barH = h * heightFraction
+                val top = (h - barH) / 2f  // 수직 중앙 정렬
 
-                // 그라데이션: pink-500 → blue-500
-                barPaint.shader = LinearGradient(
-                    x, h, x, top,
-                    Color.parseColor("#EC4899"), // pink-500
-                    Color.parseColor("#3B82F6"), // blue-500
-                    Shader.TileMode.CLAMP
-                )
+                barPaint.shader = null
+                barPaint.color = barColors[i % barColors.size]
 
-                canvas.drawRoundRect(x, top, x + barWidth, h, radius, radius, barPaint)
+                canvas.drawRoundRect(x, top, x + barWidth, top + barH, radius, radius, barPaint)
             }
         }
     }

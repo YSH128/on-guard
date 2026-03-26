@@ -112,10 +112,10 @@ fun VideoCallScreen(
 
     // criminal_location FCM 수신 콜백 등록 (위치 데이터는 오버레이 바텀시트에 표시)
     DisposableEffect(Unit) {
-        CriminalLocationBridge.onLocationReceived = { country ->
-            android.util.Log.d("CriminalLocation", "위치 수신됨 — country: $country")
+        CriminalLocationBridge.onLocationReceived = { country, lat, lng ->
+            android.util.Log.d("CriminalLocation", "위치 수신됨 — country: $country lat=$lat lng=$lng")
             isRequestingLocation = false
-            warningOverlayManager.updateCountry(country)
+            warningOverlayManager.updateLocation(country, lat, lng)
         }
         onDispose {
             CriminalLocationBridge.onLocationReceived = null
@@ -126,6 +126,13 @@ fun VideoCallScreen(
     fun endCall() {
         if (isEndingCall.value) return
         isEndingCall.value = true
+        // 상대방이 아직 수락 전이면 취소 API 호출
+        if (remoteUid == null) {
+            scope.launch {
+                videoCallRepository.cancelCall(channelId)
+                    .onFailure { android.util.Log.w("VideoCall", "cancelCall 실패 (무시): ${it.message}") }
+            }
+        }
         rtcEngine?.leaveChannel()
         callEnded = true
         videoCallRepository.setInAppCallActive(false)

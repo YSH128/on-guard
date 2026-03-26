@@ -42,4 +42,13 @@ public class CallController {
         callService.rejectCall(userId, channelName);
         return ApiResponse.of("통화 거절 처리가 완료되었습니다.", null);
     }
+
+    @PostMapping("/{channelName}/cancel")
+    public ApiResponse<Void> cancelCall(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable("channelName") String channelName) {
+        
+        callService.cancelCall(userId, channelName);
+        return ApiResponse.of("통화 취소 처리가 완료되었습니다.", null);
+    }
 }
