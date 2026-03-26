@@ -19,10 +19,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.SubcomposeAsyncImage
 
 // ── 색상 상수 ──
 private val BgColor = Color(0xFFF2F5F9)
@@ -199,6 +201,7 @@ fun GuardianRegistrationScreen(
                     val isSelected = friend.id in uiState.selectedIds
                     FriendSelectionCard(
                         name = friend.name,
+                        profileImageUrl = friend.profileImageUrl,
                         isSelected = isSelected,
                         onToggle = { viewModel.toggleFriendSelection(friend.id) }
                     )
@@ -279,6 +282,7 @@ fun GuardianRegistrationScreen(
 @Composable
 private fun FriendSelectionCard(
     name: String,
+    profileImageUrl: String? = null,
     isSelected: Boolean,
     onToggle: () -> Unit,
 ) {
@@ -306,12 +310,29 @@ private fun FriendSelectionCard(
                     .background(AvatarBg),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.Person,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp),
-                    tint = AvatarIconColor
-                )
+                if (!profileImageUrl.isNullOrEmpty()) {
+                    SubcomposeAsyncImage(
+                        model = profileImageUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        error = {
+                            Icon(
+                                imageVector = Icons.Outlined.Person,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                                tint = AvatarIconColor
+                            )
+                        },
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Outlined.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        tint = AvatarIconColor
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(12.dp))
