@@ -122,6 +122,7 @@ class WarningOverlayManager(
         dismissAll()
     }
 
+
     /**
      * 오버레이 표시 허용 여부를 설정한다.
      * 영상통화 시작 시 true, 종료 시 false로 설정하여

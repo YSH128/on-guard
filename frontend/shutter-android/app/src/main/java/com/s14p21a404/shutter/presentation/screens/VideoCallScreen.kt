@@ -114,6 +114,12 @@ fun VideoCallScreen(
             android.util.Log.d("CriminalLocation", "위치 수신됨 — country: $country lat=$lat lng=$lng")
             isRequestingLocation = false
             warningOverlayManager.updateLocation(country, lat, lng)
+            // 금융앱 차단 오버레이에도 위치 데이터 전달 (캐싱 → show 시 반영)
+            val fbManager = ServiceLocator.getInstance(context).financialBlockOverlayManager
+            fbManager.updateCountry(country)
+            if (lat != null && lng != null) {
+                fbManager.updatePinPosition(lat, lng)
+            }
         }
         onDispose {
             CriminalLocationBridge.onLocationReceived = null
