@@ -49,7 +49,7 @@ class TokenManager(context: Context) {
         prefs.edit().putBoolean(KEY_GPS_SHARING, enabled).apply()
     }
 
-    fun getGpsSharing(): Boolean = prefs.getBoolean(KEY_GPS_SHARING, false)
+    fun getGpsSharing(): Boolean = prefs.getBoolean(KEY_GPS_SHARING, true)
 
     fun clearTokens() {
         prefs.edit()
