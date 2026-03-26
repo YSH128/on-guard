@@ -7,5 +7,5 @@ package com.s14p21a404.shutter.presentation.service
  * VideoCallScreen 또는 VideoCallDetectService에서 등록/해제한다.
  */
 object CriminalLocationBridge {
-    var onLocationReceived: ((country: String) -> Unit)? = null
+    var onLocationReceived: ((country: String, lat: Double?, lng: Double?) -> Unit)? = null
 }

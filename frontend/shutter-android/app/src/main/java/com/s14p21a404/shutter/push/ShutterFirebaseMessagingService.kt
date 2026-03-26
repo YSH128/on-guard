@@ -210,12 +210,14 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
             Log.w(FCM_TAG, "country 없음")
             return
         }
+        val lat = data["lat"]?.toDoubleOrNull()
+        val lng = data["lng"]?.toDoubleOrNull()
 
-        Log.d(FCM_TAG, "criminal_location 국가: $country")
+        Log.d(FCM_TAG, "criminal_location 국가: $country lat=$lat lng=$lng")
 
         // 1. VideoCallScreen UI에 콜백 (메인 스레드에서 실행)
         Handler(Looper.getMainLooper()).post {
-            CriminalLocationBridge.onLocationReceived?.invoke(country)
+            CriminalLocationBridge.onLocationReceived?.invoke(country, lat, lng)
         }
 
         // 2. 푸시 알림 표시
