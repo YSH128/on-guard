@@ -56,9 +56,12 @@ class WarningOverlayManager(
     @Volatile
     private var bottomSheetShownForSession = false
 
-    /** 수신된 상대방 국가명 (바텀시트에 표시) */
     @Volatile
     private var receivedCountryName: String? = null
+
+    /** 수신된 최신 GMS 분석 결과 캐싱 (바텀시트 지연 표시용) */
+    @Volatile
+    private var latestGmsResult: String? = null
 
     /** 콜백: 전화 종료 */
     var onEndCall: (() -> Unit)? = null
@@ -140,6 +143,19 @@ class WarningOverlayManager(
     /** 기존 API 호환용. 새 UI에서는 face preview를 바텀시트 내에 포함하지 않으므로 no-op. */
     fun updateFacePreview(bitmap: Bitmap?) {
         // 새 디자인에서는 face preview 미사용 (ROI box로 대체)
+    }
+
+    /**
+     * GMS에서 분석된 대화 의도를 수신받아 하단 시트에 띄웁니다.
+     * 영상 위조가 감지되어 이미 바텀시트가 열려있을 때만 결과를 업데이트합니다.
+     */
+    fun updateAnalysisResult(result: String) {
+        if (!enabled) return
+        latestGmsResult = result  // 나중에 영상 위조가 감지되어 바텀시트가 열릴 때를 대비해 캐싱
+        handler.post {
+            bottomSheetView?.setAnalysisResult(result)
+        }
+        Log.d(TAG, "GMS 결과 오버레이 라우팅 완료: $result")
     }
 
     // ─────────────────────────────────────────────
@@ -236,7 +252,8 @@ class WarningOverlayManager(
                 onClose = {
                     Log.d(TAG, "닫기 버튼 클릭 → 바텀시트+dim만 닫기, ROI box는 유지")
                     dismissBottomSheetAndDim()
-                }
+                },
+                analysisResult = latestGmsResult
             )
             addOverlayView(
                 view = sheet,
@@ -390,6 +407,7 @@ class WarningOverlayManager(
         lastResult = null
         bottomSheetShownForSession = false
         receivedCountryName = null
+        latestGmsResult = null
     }
 
     /**
