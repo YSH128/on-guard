@@ -104,6 +104,7 @@ class VideoCallRepositoryImpl(
                 // 시스템 전화 UI 패키지인 경우 true
                 val isOnVideoCallScreen = currentPkg == targetPkg
                         || currentPkg in ForegroundAppMonitorService.CALL_UI_PACKAGES
+                        || (inAppCallActive && currentPkg == context.packageName)
                         || currentPkg.isEmpty()  // 아직 감지 전
                 Log.d(TAG, "포그라운드=$currentPkg, 영상통화앱=$targetPkg → onScreen=$isOnVideoCallScreen")
                 isOnVideoCallScreen
@@ -119,8 +120,23 @@ class VideoCallRepositoryImpl(
         }
     }
 
+    override fun setVideoCallPackage(packageName: String?) {
+        videoCallPackage = packageName
+        Log.d(TAG, "영상통화 패키지 설정: $packageName")
+    }
+
     override fun setInAppCallActive(active: Boolean) {
         inAppCallActive = active
+        Log.d(TAG, "인앱 영상통화 상태: $active")
+        if (active) {
+            // 인앱 통화 시작 → 자기 앱 패키지를 영상통화 패키지로 설정하고 즉시 videoCallState = true
+            videoCallPackage = context.packageName
+            _videoCallState.value = true
+        } else {
+            // 인앱 통화 종료 → videoCallState = false 및 패키지 초기화
+            _videoCallState.value = false
+            videoCallPackage = null
+        }
         Log.d(TAG, "인앱 영상통화 상태: $active")
     }
 
@@ -162,11 +178,20 @@ class VideoCallRepositoryImpl(
         stopForegroundObserver()
         _videoCallState.value = false
         videoCallPackage = null
+        inAppCallActive = false
     }
 
     private fun evaluate() {
+        // 인앱 영상통화가 활성 상태이면 외부 앱 감지 조건을 우회한다.
+        // setInAppCallActive()에서 이미 _videoCallState를 직접 제어하므로 여기서는 건드리지 않는다.
+        if (inAppCallActive) {
+            Log.d(TAG, "인앱 영상통화 활성 중 — evaluate() 스킵")
+            return
+        }
+
         val currentFg = ForegroundAppMonitorService.foregroundPackage.value
         val isCallTimerVisible = ForegroundAppMonitorService.isCallConnected.value
+
 
         // 영상통화 판단: 카메라 사용 + 통화 UI 앱 포그라운드 + 타이머 텍스트 감지
         // 통신사/VoIP 구분 없이 동일한 조건 사용.
