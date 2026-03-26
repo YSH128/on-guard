@@ -50,6 +50,7 @@ fun HomeScreen(
     onRequestOverlayPermission: () -> Unit = {},
     onRequestAccessibilityPermission: () -> Unit = {},
     onNavigateToVideoCall: (String, String, Long) -> Unit = { _, _, _ -> },
+    hasPendingIncomingCall: Boolean = false,
     homeViewModel: HomeViewModel = viewModel(),
 ) {
     val context = LocalContext.current
@@ -70,11 +71,15 @@ fun HomeScreen(
     var showOverlayDialog by remember { mutableStateOf(false) }
     var showAccessibilityDialog by remember { mutableStateOf(false) }
 
-    LaunchedEffect(allPermissionsGranted, overlayPermissionGranted, accessibilityServiceEnabled, isServiceRunning) {
+    LaunchedEffect(allPermissionsGranted, overlayPermissionGranted, accessibilityServiceEnabled, isServiceRunning, hasPendingIncomingCall) {
+        // 수신 통화 수락 중이어도 서비스는 반드시 시작해야 딥페이크 감지 오버레이가 동작함
+        if (!isServiceRunning && allPermissionsGranted && overlayPermissionGranted) {
+            onToggleService()
+        }
+        if (hasPendingIncomingCall) return@LaunchedEffect
         when {
             !allPermissionsGranted -> showPermissionDialog = true
             !overlayPermissionGranted -> showOverlayDialog = true
-            !isServiceRunning -> onToggleService()
             !accessibilityServiceEnabled -> showAccessibilityDialog = true
         }
     }

@@ -7,16 +7,11 @@ import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.s14p21a404.shutter.data.repository.VideoCallSessionStore
 import com.s14p21a404.shutter.presentation.navigation.AppScaffold
-import com.s14p21a404.shutter.di.ServiceLocator
-import kotlinx.coroutines.launch
 
 private val AccentColor = Color(0xFF6083EE)
 private val ButtonColor = Color(0xFF2B3A5C)
@@ -24,7 +19,6 @@ private val ButtonColor = Color(0xFF2B3A5C)
 @Composable
 fun MainScreen(
     uiState: MainUiState,
-    viewModel: MainViewModel,
     isNewUser: Boolean = false,
     onRegister: (name: String) -> Unit = {},
     onRequestPermissions: () -> Unit,
@@ -36,74 +30,7 @@ fun MainScreen(
     onDismissError: () -> Unit = {},
     pendingDeepLinkScreen: String? = null,
     onDeepLinkHandled: () -> Unit = {},
-
-    onNavigateToVideoCall: (String, String, Long) -> Unit
 ) {
-
-    val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
-
-    // 수신 상태
-    val incomingChannel by viewModel.incomingChannelName.collectAsState()
-    val incomingCaller by viewModel.incomingCallerName.collectAsState()
-    val incomingCallerKakaoId by viewModel.incomingCallerKakaoId.collectAsState()
-
-    // 수신 Dialog
-    if (incomingChannel != null) {
-
-        AlertDialog(
-            onDismissRequest = {},
-
-            title = { Text("영상통화 요청") },
-            text = { Text("${incomingCaller ?: "상대방"}님이 통화를 요청했습니다") },
-
-            confirmButton = {
-                TextButton(onClick = {
-
-                    coroutineScope.launch {
-
-                        val repo = ServiceLocator
-                            .getInstance(context)
-                            .videoCallRepository
-
-                        val result = repo.acceptCall(incomingChannel!!)
-
-                        result.onSuccess { data ->
-                            VideoCallSessionStore.agoraToken = data.token
-                            VideoCallSessionStore.channelName = data.channelName
-                            viewModel.clearIncomingCall()
-                            onNavigateToVideoCall(
-                                data.channelName,
-                                incomingCaller ?: "상대방",
-                                incomingCallerKakaoId ?: 0L,
-                            )
-                        }
-                    }
-
-                }) {
-                    Text("수락")
-                }
-            },
-
-            dismissButton = {
-                TextButton(onClick = {
-
-                    coroutineScope.launch {
-
-                        val repo = ServiceLocator
-                            .getInstance(context)
-                            .videoCallRepository
-
-                        repo.rejectCall(incomingChannel!!)
-                        viewModel.clearIncomingCall()
-                    }
-
-                }) {
-                    Text("거절")
-                }
-            }
-        )
-    }
 
     // 기존 유지
     if (isNewUser) {
