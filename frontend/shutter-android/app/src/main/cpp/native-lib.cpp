@@ -47,7 +47,7 @@ static const int   INPUT_W        = 256;
 static const float ROI_THRESHOLD  = 0.6f;
 // true  = 모델 입출력이 float16 (양자화 모델)
 // false = 모델 입출력이 float32 (원본 모델)
-static const bool  USE_FLOAT16_IO = true;
+static const bool  USE_FLOAT16_IO = false;
 // ──────────────────────────────────────────────────────────
 
 float get_ms(std::chrono::high_resolution_clock::time_point start) {
@@ -282,13 +282,15 @@ static bool ort_init_session(const char* model_path) {
         int64_t shape[] = {1, 3, INPUT_H, INPUT_W};
         size_t elem = (size_t)(INPUT_H * INPUT_W * 3);
         OrtValue* in_t = nullptr;
+        std::vector<uint16_t> dummyF16;
+        std::vector<float>    dummyF32;
         if (USE_FLOAT16_IO) {
-            std::vector<uint16_t> dummy(elem, f32_to_f16(0.0f));
-            g_ort->CreateTensorWithDataAsOrtValue(mem, dummy.data(), elem * sizeof(uint16_t),
+            dummyF16.assign(elem, f32_to_f16(0.0f));
+            g_ort->CreateTensorWithDataAsOrtValue(mem, dummyF16.data(), elem * sizeof(uint16_t),
                 shape, 4, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16, &in_t);
         } else {
-            std::vector<float> dummy(elem, 0.0f);
-            g_ort->CreateTensorWithDataAsOrtValue(mem, dummy.data(), elem * sizeof(float),
+            dummyF32.assign(elem, 0.0f);
+            g_ort->CreateTensorWithDataAsOrtValue(mem, dummyF32.data(), elem * sizeof(float),
                 shape, 4, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, &in_t);
         }
         g_ort->ReleaseMemoryInfo(mem);
@@ -379,24 +381,27 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
     g_ort->CreateCpuMemoryInfo(OrtArenaAllocator, OrtMemTypeDefault, &mem_info);
     int64_t in_shape[] = {1, 3, INPUT_H, INPUT_W};
     OrtValue* in_tensor = nullptr;
+    // Run() 호출 시까지 데이터가 살아있어야 하므로 if 블록 밖에 선언
+    std::vector<uint16_t> inputDataF16;
+    std::vector<float>    inputDataF32;
     if (USE_FLOAT16_IO) {
-        std::vector<uint16_t> inputData(3 * numPx);
+        inputDataF16.resize(3 * numPx);
         for (int i = 0; i < 3; ++i) {
             if (!ch[i].isContinuous()) ch[i] = ch[i].clone();
             const float* src = (const float*)ch[i].datastart;
             for (int j = 0; j < numPx; ++j)
-                inputData[i * numPx + j] = f32_to_f16(src[j]);
+                inputDataF16[i * numPx + j] = f32_to_f16(src[j]);
         }
-        g_ort->CreateTensorWithDataAsOrtValue(mem_info, inputData.data(), inputData.size() * sizeof(uint16_t), in_shape, 4, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16, &in_tensor);
+        g_ort->CreateTensorWithDataAsOrtValue(mem_info, inputDataF16.data(), inputDataF16.size() * sizeof(uint16_t), in_shape, 4, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16, &in_tensor);
     } else {
-        std::vector<float> inputData(3 * numPx);
+        inputDataF32.resize(3 * numPx);
         for (int i = 0; i < 3; ++i) {
             if (!ch[i].isContinuous()) ch[i] = ch[i].clone();
             const float* src = (const float*)ch[i].datastart;
             for (int j = 0; j < numPx; ++j)
-                inputData[i * numPx + j] = src[j];
+                inputDataF32[i * numPx + j] = src[j];
         }
-        g_ort->CreateTensorWithDataAsOrtValue(mem_info, inputData.data(), inputData.size() * sizeof(float), in_shape, 4, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, &in_tensor);
+        g_ort->CreateTensorWithDataAsOrtValue(mem_info, inputDataF32.data(), inputDataF32.size() * sizeof(float), in_shape, 4, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, &in_tensor);
     }
     g_ort->ReleaseMemoryInfo(mem_info);
 

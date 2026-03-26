@@ -59,7 +59,7 @@ class NativeDeepfakeBridge(private val context: Context) {
             if (isOnnxInitialized) return
             try {
                 Log.d("NativeDeepfakeBridge", "ONNX C++ 네이티브 초기화 시작...")
-                val modelPath = getAssetFilePath(context, "ds_model_quantized_v5.onnx")
+                val modelPath = getAssetFilePath(context, "ds_model.onnx")
                 val ok = initOnnx(modelPath)
                 if (ok) {
                     isOnnxInitialized = true
