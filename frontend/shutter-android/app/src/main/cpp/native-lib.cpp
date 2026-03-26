@@ -17,37 +17,10 @@
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 #define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
 
-// ─── Float16 변환 헬퍼 ────────────────────────────────────
-static uint16_t f32_to_f16(float f) {
-    uint32_t x;
-    memcpy(&x, &f, sizeof(x));
-    uint16_t sign = (uint16_t)((x >> 31) << 15);
-    int      exp  = (int)((x >> 23) & 0xFF) - 127 + 15;
-    uint32_t mant = x & 0x7FFFFF;
-    if (exp <= 0) return sign;
-    if (exp >= 31) return sign | 0x7C00;
-    return sign | (uint16_t)(exp << 10) | (uint16_t)(mant >> 13);
-}
-
-static float f16_to_f32(uint16_t h) {
-    uint32_t sign = (uint32_t)(h >> 15) << 31;
-    uint32_t exp  = (uint32_t)((h >> 10) & 0x1F);
-    uint32_t mant = (uint32_t)(h & 0x3FF);
-    uint32_t v;
-    if (exp == 0)       { v = sign; }
-    else if (exp == 31) { v = sign | 0x7F800000 | mant; }
-    else                { v = sign | ((exp - 15 + 127) << 23) | (mant << 13); }
-    float r; memcpy(&r, &v, sizeof(r)); return r;
-}
-// ──────────────────────────────────────────────────────────
-
 // ─── Model Parameters ─────────────────────────────────────
-static const int   INPUT_H        = 256;
-static const int   INPUT_W        = 256;
-static const float ROI_THRESHOLD  = 0.6f;
-// true  = 모델 입출력이 float16 (양자화 모델)
-// false = 모델 입출력이 float32 (원본 모델)
-static const bool  USE_FLOAT16_IO = false;
+static const int   INPUT_H       = 256;
+static const int   INPUT_W       = 256;
+static const float ROI_THRESHOLD = 0.6f;
 // ──────────────────────────────────────────────────────────
 
 float get_ms(std::chrono::high_resolution_clock::time_point start) {
@@ -260,63 +233,35 @@ static bool ort_init_session(const char* model_path) {
     OrtSessionOptions* opts = nullptr;
     ORT_CHECK(g_ort->CreateSessionOptions(&opts));
 
-    // NNAPI GPU/NPU 가속 (GPU 미사용 시 CPU 자동 폴백)
-    // TODO: 영상통화 중 GPU 충돌 재발 시 아래 블록 주석 처리 후 CPU 전용 모드로 전환
-    uint32_t nnapi_flags = 0;
-    OrtStatus* nnapi_status = OrtSessionOptionsAppendExecutionProvider_Nnapi(opts, nnapi_flags);
-    if (nnapi_status) {
-        LOGW("NNAPI not available, falling back to CPU. Error: %s", g_ort->GetErrorMessage(nnapi_status));
-        g_ort->ReleaseStatus(nnapi_status);
-    } else {
-        LOGD("NNAPI GPU/NPU acceleration enabled!");
-    }
+    // TODO: NNAPI GPU/NPU 가속 — 영상통화 중 GPU 자원 충돌로 프로세스 kill 발생
+    //  영상통화 앱이 GPU 점유 중일 때 NNAPI가 GPU를 추가 요청하면 드라이버 fault → 프로세스 kill
+    //  QNN HTP 재컴파일 완료 후 아래 주석 해제 + CPU 코드 제거
+    //  (QNN HTP는 카메라/GPU와 독립적인 DSP 자원 사용으로 충돌 없음)
+    // uint32_t nnapi_flags = 0;
+    // OrtStatus* nnapi_status = OrtSessionOptionsAppendExecutionProvider_Nnapi(opts, nnapi_flags);
+    // if (nnapi_status) {
+    //     LOGW("NNAPI not available, falling back to CPU. Error: %s", g_ort->GetErrorMessage(nnapi_status));
+    //     g_ort->ReleaseStatus(nnapi_status);
+    // } else {
+    //     LOGD("NNAPI GPU/NPU acceleration enabled!");
+    // }
+
+    // [임시] CPU 전용 추론 — NNAPI GPU 충돌 방지용 (QNN 재컴파일 전까지 사용)
+    LOGD("ONNX CPU 전용 추론 모드 (임시 — NNAPI 비활성화)");
 
     g_ort->SetIntraOpNumThreads(opts, 2);
     ORT_CHECK(g_ort->CreateSession(g_ort_env, model_path, opts, &g_ort_session));
     g_ort->ReleaseSessionOptions(opts);
 
-    // CAM 출력 크기 자동 검출 (warmup 추론)
-    {
-        OrtMemoryInfo* mem = nullptr;
-        g_ort->CreateCpuMemoryInfo(OrtArenaAllocator, OrtMemTypeDefault, &mem);
-        int64_t shape[] = {1, 3, INPUT_H, INPUT_W};
-        size_t elem = (size_t)(INPUT_H * INPUT_W * 3);
-        OrtValue* in_t = nullptr;
-        std::vector<uint16_t> dummyF16;
-        std::vector<float>    dummyF32;
-        if (USE_FLOAT16_IO) {
-            dummyF16.assign(elem, f32_to_f16(0.0f));
-            g_ort->CreateTensorWithDataAsOrtValue(mem, dummyF16.data(), elem * sizeof(uint16_t),
-                shape, 4, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16, &in_t);
-        } else {
-            dummyF32.assign(elem, 0.0f);
-            g_ort->CreateTensorWithDataAsOrtValue(mem, dummyF32.data(), elem * sizeof(float),
-                shape, 4, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, &in_t);
-        }
-        g_ort->ReleaseMemoryInfo(mem);
-        const char* in_n[]  = {"input"};
-        const char* out_n[] = {"logits", "cam"};
-        OrtValue* out_t[2]  = {nullptr, nullptr};
-        OrtStatus* st = g_ort->Run(g_ort_session, nullptr, in_n, (const OrtValue* const*)&in_t, 1, out_n, 2, out_t);
-        g_ort->ReleaseValue(in_t);
-        if (st) {
-            LOGE("Warmup failed: %s", g_ort->GetErrorMessage(st));
-            g_ort->ReleaseStatus(st);
-            return false;
-        }
-        OrtTensorTypeAndShapeInfo* info = nullptr;
-        g_ort->GetTensorTypeAndShape(out_t[1], &info);
-        size_t ndim = 0;
-        g_ort->GetDimensionsCount(info, &ndim);
-        std::vector<int64_t> dims(ndim);
-        g_ort->GetDimensions(info, dims.data(), ndim);
-        g_ort->ReleaseTensorTypeAndShapeInfo(info);
-        g_ort_cam_h = (ndim >= 3) ? (int)dims[ndim - 2] : 1;
-        g_ort_cam_w = (ndim >= 4) ? (int)dims[ndim - 1] : 1;
-        g_ort->ReleaseValue(out_t[0]);
-        g_ort->ReleaseValue(out_t[1]);
-    }
-    LOGD("ONNX session init OK. cam: %d x %d (auto-detected)", g_ort_cam_h, g_ort_cam_w);
+    // [수정] CAM 출력 크기 하드코딩 (ForensicsAdapter: cam [7,7]) — warmup 추론 제거로 init 속도 개선.
+    // 앱 설치 후 첫 통화 전 모델 적재 완료를 위해 init 시간을 단축.
+    // 기존 warmup 추론으로 동적 검출하던 방식은 init에 추론 1회 비용이 추가되어 적재 지연 야기.
+    // // TODO: 모델 CAM 출력 크기가 변경될 경우 아래 값 수정 (현재 ForensicsAdapter: 7x7)
+    // // 원래 warmup 코드 참고:
+    // // OrtValue* out_vals[2]; g_ort->Run(...); → dims → g_ort_cam_h/w
+    g_ort_cam_h = 7;
+    g_ort_cam_w = 7;
+    LOGD("ONNX session init OK. cam: %d x %d (hardcoded)", g_ort_cam_h, g_ort_cam_w);
     return true;
 }
 
@@ -375,34 +320,18 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
     ch[2] = (ch[2] - 0.406f) / 0.225f;
 
     int numPx = INPUT_W * INPUT_H;
+    std::vector<float> inputData(3 * numPx);
+    for (int i = 0; i < 3; ++i) {
+        if (!ch[i].isContinuous()) ch[i] = ch[i].clone();
+        std::copy((float*)ch[i].datastart, (float*)ch[i].dataend, inputData.data() + i * numPx);
+    }
     env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
 
     OrtMemoryInfo* mem_info = nullptr;
     g_ort->CreateCpuMemoryInfo(OrtArenaAllocator, OrtMemTypeDefault, &mem_info);
     int64_t in_shape[] = {1, 3, INPUT_H, INPUT_W};
     OrtValue* in_tensor = nullptr;
-    // Run() 호출 시까지 데이터가 살아있어야 하므로 if 블록 밖에 선언
-    std::vector<uint16_t> inputDataF16;
-    std::vector<float>    inputDataF32;
-    if (USE_FLOAT16_IO) {
-        inputDataF16.resize(3 * numPx);
-        for (int i = 0; i < 3; ++i) {
-            if (!ch[i].isContinuous()) ch[i] = ch[i].clone();
-            const float* src = (const float*)ch[i].datastart;
-            for (int j = 0; j < numPx; ++j)
-                inputDataF16[i * numPx + j] = f32_to_f16(src[j]);
-        }
-        g_ort->CreateTensorWithDataAsOrtValue(mem_info, inputDataF16.data(), inputDataF16.size() * sizeof(uint16_t), in_shape, 4, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16, &in_tensor);
-    } else {
-        inputDataF32.resize(3 * numPx);
-        for (int i = 0; i < 3; ++i) {
-            if (!ch[i].isContinuous()) ch[i] = ch[i].clone();
-            const float* src = (const float*)ch[i].datastart;
-            for (int j = 0; j < numPx; ++j)
-                inputDataF32[i * numPx + j] = src[j];
-        }
-        g_ort->CreateTensorWithDataAsOrtValue(mem_info, inputDataF32.data(), inputDataF32.size() * sizeof(float), in_shape, 4, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, &in_tensor);
-    }
+    g_ort->CreateTensorWithDataAsOrtValue(mem_info, inputData.data(), inputData.size() * sizeof(float), in_shape, 4, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, &in_tensor);
     g_ort->ReleaseMemoryInfo(mem_info);
 
     const char* in_names[]  = {"input"};
@@ -421,42 +350,22 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
     results[2] = 0.f;
     results[3] = get_ms(t0);
 
-    // logits 읽기 (USE_FLOAT16_IO 분기)
-    float logit0, logit1;
-    if (USE_FLOAT16_IO) {
-        uint16_t* logits_fp16 = nullptr;
-        g_ort->GetTensorMutableData(out_vals[0], (void**)&logits_fp16);
-        logit0 = f16_to_f32(logits_fp16[0]);
-        logit1 = f16_to_f32(logits_fp16[1]);
-    } else {
-        float* logits_fp32 = nullptr;
-        g_ort->GetTensorMutableData(out_vals[0], (void**)&logits_fp32);
-        logit0 = logits_fp32[0];
-        logit1 = logits_fp32[1];
-    }
-    float max_v = std::max(logit0, logit1);
-    float e0 = std::exp(logit0 - max_v);
-    float e1 = std::exp(logit1 - max_v);
+    float* logits_ptr = nullptr;
+    g_ort->GetTensorMutableData(out_vals[0], (void**)&logits_ptr);
+    float max_v = std::max(logits_ptr[0], logits_ptr[1]);
+    float e0 = std::exp(logits_ptr[0] - max_v);
+    float e1 = std::exp(logits_ptr[1] - max_v);
     float s  = e0 + e1;
     results[0] = e1 / s;
     results[1] = e0 / s;
     g_ort->ReleaseValue(out_vals[0]);
 
-    // cam 읽기 (USE_FLOAT16_IO 분기) 후 OpenCV 처리
+    float* cam_ptr = nullptr;
+    g_ort->GetTensorMutableData(out_vals[1], (void**)&cam_ptr);
+
     int cam_h = g_ort_cam_h, cam_w = g_ort_cam_w;
     if (cam_h > 0 && cam_w > 0) {
-        std::vector<float> cam_f32(cam_h * cam_w);
-        if (USE_FLOAT16_IO) {
-            uint16_t* cam_fp16 = nullptr;
-            g_ort->GetTensorMutableData(out_vals[1], (void**)&cam_fp16);
-            for (int i = 0; i < cam_h * cam_w; ++i)
-                cam_f32[i] = f16_to_f32(cam_fp16[i]);
-        } else {
-            float* cam_fp32 = nullptr;
-            g_ort->GetTensorMutableData(out_vals[1], (void**)&cam_fp32);
-            std::copy(cam_fp32, cam_fp32 + cam_h * cam_w, cam_f32.begin());
-        }
-        cv::Mat cam_mat(cam_h, cam_w, CV_32F, cam_f32.data());
+        cv::Mat cam_mat(cam_h, cam_w, CV_32F, cam_ptr);
 
         // sigmoid 출력이지만 절대값이 0.02~0.03 수준으로 작아 직접 threshold 불가.
         // min-max 정규화로 상대적 활성화 패턴 기반 ROI 추출.

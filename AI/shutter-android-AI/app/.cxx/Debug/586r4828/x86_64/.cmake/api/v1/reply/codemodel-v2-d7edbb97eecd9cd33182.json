@@ -1,0 +1,60 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"jsonFile" : "directory-.-Debug-d0094a50bb2071803777.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.10.0"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "shutter_android_ai",
+					"targetIndexes" : 
+					[
+						0
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "shutter_android_ai::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-shutter_android_ai-Debug-e4a1920c9e7453ff98e0.json",
+					"name" : "shutter_android_ai",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "C:/Users/SSAFY/Desktop/SSAFY_14_yujin/2_specific_PJT/0_dev/S14P21A404/AI/shutter-android-AI/app/.cxx/Debug/586r4828/x86_64",
+		"source" : "C:/Users/SSAFY/Desktop/SSAFY_14_yujin/2_specific_PJT/0_dev/S14P21A404/AI/shutter-android-AI/app/src/main/cpp"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 3
+	}
+}

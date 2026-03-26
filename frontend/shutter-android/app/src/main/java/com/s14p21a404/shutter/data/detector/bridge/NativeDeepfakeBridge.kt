@@ -13,8 +13,8 @@ import kotlin.concurrent.thread
  * JNI 브릿지 (Kotlin 쪽) — NDK 네이티브 함수 request_deepfake_detection 호출
  * 
  * ┌────────────────────────────────────────────────────────┐
- * │  담당 경계                                              │
- * │  • 이 파일 (NativeDeepfakeBridge.kt)  → 앱(Kotlin) 담당 │
+ * │  담당 경계                                               │
+ * │  • 이 파일 (NativeDeepfakeBridge.kt)  → 앱(Kotlin) 담당  │
  * │  • shutter-native SO + deepfake_jni.cpp → NDK 담당      │
  * └────────────────────────────────────────────────────────┘
  *
