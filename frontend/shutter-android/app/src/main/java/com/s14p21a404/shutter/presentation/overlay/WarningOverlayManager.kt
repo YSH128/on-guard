@@ -161,7 +161,7 @@ class WarningOverlayManager(
             height = WindowManager.LayoutParams.WRAP_CONTENT,
             gravity = Gravity.TOP or Gravity.END,
             touchable = false, // 터치 통과
-            xOffset = dpToPx(12),
+            xOffset = dpToPx(24),
             yOffset = dpToPx(80) // 상태바 + 통화 헤더 아래
         )
         pill.startAnimation()
