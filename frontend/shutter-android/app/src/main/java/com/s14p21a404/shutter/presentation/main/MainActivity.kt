@@ -20,6 +20,7 @@ import com.s14p21a404.shutter.presentation.login.LoginUiState
 import com.s14p21a404.shutter.presentation.login.LoginViewModel
 import com.s14p21a404.shutter.presentation.service.VideoCallDetectService
 import com.s14p21a404.shutter.push.IncomingCallEventBus
+import com.s14p21a404.shutter.push.ShutterFirebaseMessagingService
 import com.s14p21a404.shutter.ui.theme.ShutterandroidTheme
 
 class MainActivity : ComponentActivity() {
@@ -56,6 +57,14 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(Unit) {
                     IncomingCallEventBus.callRejected.collect {
                         viewModel.onCallRejected()
+                    }
+                }
+
+                LaunchedEffect(Unit) {
+                    IncomingCallEventBus.callCanceled.collect {
+                        viewModel.clearIncomingCall()
+                        val nm = getSystemService(android.app.NotificationManager::class.java)
+                        nm.cancel(ShutterFirebaseMessagingService.CALL_NOTIFICATION_ID)
                     }
                 }
 

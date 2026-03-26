@@ -271,6 +271,11 @@ class VideoCallRepositoryImpl(
         check(response.success) { response.message }
     }
 
+    override suspend fun cancelCall(channelName: String): Result<Unit> = runCatching {
+        val response = apiService.cancelCall(channelName)
+        check(response.success) { response.message }
+    }
+
     companion object {
         private const val TAG = "VideoCallRepo"
 

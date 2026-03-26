@@ -285,6 +285,9 @@ interface ApiService {
     @POST("api/v1/calls/{channelName}/reject")
     suspend fun rejectCall(@Path("channelName") channelName: String): MessageResponse
 
+    @POST("api/v1/calls/{channelName}/cancel")
+    suspend fun cancelCall(@Path("channelName") channelName: String): MessageResponse
+
     @POST("api/v1/location/criminal-request")
     suspend fun requestCriminalLocation(@Body request: CriminalLocationRequestBody): MessageResponse
 
