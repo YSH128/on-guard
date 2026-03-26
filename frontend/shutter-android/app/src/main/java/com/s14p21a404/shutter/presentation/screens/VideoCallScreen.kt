@@ -184,8 +184,8 @@ fun VideoCallScreen(
     // ── 통화 시간 타이머 ──
     LaunchedEffect(isConnecting, callEnded) {
         if (!isConnecting && !callEnded) {
-            while (isActive) {
-                delay(1000)
+            while (true) {
+                kotlinx.coroutines.delay(1000)
                 callDuration++
             }
         }
