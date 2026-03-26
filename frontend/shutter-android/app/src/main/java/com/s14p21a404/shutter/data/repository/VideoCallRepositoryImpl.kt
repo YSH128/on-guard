@@ -54,7 +54,6 @@ class VideoCallRepositoryImpl(
     @Volatile
     private var videoCallPackage: String? = null
 
-
     /**
      * 인앱(Agora) 영상통화 활성 상태 플래그.
      * true이면 외부 앱 감지 조건(camera+callScreen+timer)을 우회하여 즉시 영상통화 상태로 전환.

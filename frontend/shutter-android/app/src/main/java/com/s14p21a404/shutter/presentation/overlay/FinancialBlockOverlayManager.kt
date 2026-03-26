@@ -20,7 +20,6 @@ import android.view.animation.OvershootInterpolator
 import android.widget.*
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners
-import com.s14p21a404.shutter.domain.repository.VideoCallRepository
 import kotlin.math.roundToInt
 
 /**
@@ -41,10 +40,7 @@ import kotlin.math.roundToInt
  * ── isInApp = false (외부앱: 페이스톡/통신사 전화) ──
  * - 금지 아이콘(pulse) + '금융앱 접근 제한' 타이틀만 표시
  */
-class FinancialBlockOverlayManager(
-    private val context: Context,
-    private val videoCallRepository: VideoCallRepository? = null
-) {
+class FinancialBlockOverlayManager(private val context: Context) {
 
     private val windowManager =
         context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -67,15 +63,11 @@ class FinancialBlockOverlayManager(
     private var labelContainer: LinearLayout? = null
     private var mapContainer: FrameLayout? = null
 
-    /** 현재 표시 중인 국가명 */
-    private var currentCountryName: String = "위치 확인 중..."
-
-    /** 수신된 위경도 (show 이전 수신 시 캐싱 → show 후 반영) */
+    // ── 캐시: show() 이전에 수신된 데이터를 보관하여 뷰 생성 시 반영 ──
+    private var cachedCountryName: String = "위치 확인 중..."
+    private var cachedCountryCode: String? = null
     private var cachedLat: Double? = null
     private var cachedLng: Double? = null
-
-    /** 국기 코드 캐싱 (show 이전 수신 시 캐싱 → show 후 반영) */
-    private var cachedCountryCode: String? = null
 
     // ─────────────────────────────────────────────
     // Public API
@@ -85,7 +77,11 @@ class FinancialBlockOverlayManager(
         enabled = value
     }
 
-    fun show() {
+    /**
+     * 금융 앱 접근 제한 오버레이를 표시한다.
+     * @param isInApp true=자체앱 통화 (지도+국기+감지유형), false=외부앱 (금지아이콘+타이틀)
+     */
+    fun show(isInApp: Boolean) {
         if (!enabled) {
             Log.d(TAG, "금융 차단 오버레이 비활성 상태 — 표시 무시")
             return
@@ -101,7 +97,7 @@ class FinancialBlockOverlayManager(
 
         // 전체 화면을 덮는 단일 윈도우 (터치 차단)
         addOverlay(
-            view = buildFullScreenOverlay(),
+            view = buildFullScreenOverlay(isInApp),
             width = WindowManager.LayoutParams.MATCH_PARENT,
             height = WindowManager.LayoutParams.MATCH_PARENT,
             gravity = Gravity.CENTER,
@@ -111,61 +107,8 @@ class FinancialBlockOverlayManager(
         Log.d(TAG, "금융 차단 오버레이 표시")
 
         // show 이전에 수신된 국기/위경도 데이터를 뷰에 반영 (뷰가 레이아웃된 후 적용)
-        handler.postDelayed({
-            applyCachedData()
-        }, 200)
-    }
-
-    /**
-     * 캐싱된 국가코드(국기)와 위경도를 뷰에 반영한다.
-     * show() 이전에 updateCountry/updatePinPosition이 호출된 경우,
-     * 뷰가 아직 없어서 적용하지 못한 데이터를 여기서 처리한다.
-     */
-    private fun applyCachedData() {
-        // 국기 로드
-        val code = cachedCountryCode
-        if (code != null) {
-            flagImageView?.let { iv ->
-                iv.visibility = View.VISIBLE
-                val flagUrl = "https://flagcdn.com/w40/${code}.png"
-                Glide.with(iv.context)
-                    .load(flagUrl)
-                    .transform(RoundedCorners(dpToPx(2)))
-                    .into(iv)
-            }
-        }
-        // 핀 위치 반영
-        val lat = cachedLat
-        val lng = cachedLng
-        if (lat != null && lng != null) {
-            val mc = mapContainer ?: return
-            mc.post {
-                val mapW = mc.width.toFloat()
-                val mapH = mc.height.toFloat()
-                if (mapW <= 0 || mapH <= 0) return@post
-
-                val xRatio = ((lng + 180.0) / 360.0).toFloat().coerceIn(0f, 1f)
-                val yRatio = ((90.0 - lat) / 180.0).toFloat().coerceIn(0f, 1f)
-
-                val pinSize = dpToPx(80)
-                val pinX = (mapW * xRatio - pinSize / 2f).toInt().coerceAtLeast(0)
-                val pinY = (mapH * yRatio - pinSize / 2f).toInt().coerceAtLeast(0)
-
-                pinContainerRef?.let { pin ->
-                    (pin.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
-                        lp.leftMargin = pinX
-                        lp.topMargin = pinY
-                        pin.layoutParams = lp
-                    }
-                }
-                labelContainer?.let { label ->
-                    (label.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
-                        lp.leftMargin = (pinX - dpToPx(10)).coerceAtLeast(0)
-                        lp.topMargin = (pinY + pinSize - dpToPx(6)).coerceAtLeast(0)
-                        label.layoutParams = lp
-                    }
-                }
-            }
+        if (isInApp) {
+            handler.postDelayed({ applyCachedData() }, 200)
         }
     }
 
@@ -193,33 +136,51 @@ class FinancialBlockOverlayManager(
     fun isShowing(): Boolean = overlayViews.isNotEmpty()
 
     // ─────────────────────────────────────────────
-    // 국가명 / 핀 위치 업데이트 (인앱 전용)
+    // 위치 데이터 캐시 (인앱 전용)
     // ─────────────────────────────────────────────
 
+    /** 국가명 + 국기코드를 캐싱한다. 오버레이가 표시 중이면 즉시 반영. */
     fun updateCountry(country: String) {
-        currentCountryName = country
-        val code = countryNameToCode(country)
-        cachedCountryCode = code
-        handler.post {
-            countryNameTv?.text = country
-            if (code != null) {
-                flagImageView?.let { iv ->
-                    iv.visibility = View.VISIBLE
-                    val flagUrl = "https://flagcdn.com/w40/${code}.png"
-                    Glide.with(iv.context)
-                        .load(flagUrl)
-                        .transform(RoundedCorners(dpToPx(2)))
-                        .into(iv)
-                }
-            }
-        }
+        cachedCountryName = country
+        cachedCountryCode = countryNameToCode(country)
+        if (isShowing()) handler.post { applyCachedData() }
     }
 
+    /** 핀 위경도를 캐싱한다. 오버레이가 표시 중이면 즉시 반영. */
     fun updatePinPosition(lat: Double, lng: Double) {
         cachedLat = lat
         cachedLng = lng
-        handler.post {
-            val mc = mapContainer ?: return@post
+        if (isShowing()) handler.post { applyCachedData() }
+    }
+
+    // ─────────────────────────────────────────────
+    // 캐시 → 뷰 반영
+    // ─────────────────────────────────────────────
+
+    /**
+     * 캐싱된 국가명·국기·위경도를 뷰에 일괄 반영한다.
+     */
+    private fun applyCachedData() {
+        // 국가명
+        countryNameTv?.text = cachedCountryName
+
+        // 국기
+        val code = cachedCountryCode
+        if (code != null) {
+            flagImageView?.let { iv ->
+                iv.visibility = View.VISIBLE
+                Glide.with(iv.context)
+                    .load("https://flagcdn.com/w40/${code}.png")
+                    .transform(RoundedCorners(dpToPx(2)))
+                    .into(iv)
+            }
+        }
+
+        // 핀 위치
+        val lat = cachedLat
+        val lng = cachedLng
+        if (lat != null && lng != null) {
+            val mc = mapContainer ?: return
             mc.post {
                 val mapW = mc.width.toFloat()
                 val mapH = mc.height.toFloat()
@@ -293,9 +254,7 @@ class FinancialBlockOverlayManager(
     // Full Screen Overlay (dim + white card, center popup)
     // ─────────────────────────────────────────────
 
-    private fun buildFullScreenOverlay(): View {
-        val isInApp = videoCallRepository?.isInAppCallActive() ?: false
-
+    private fun buildFullScreenOverlay(isInApp: Boolean): View {
         val root = FrameLayout(context).apply {
             setOnTouchListener { _, _ -> true }  // 터치 차단
         }
@@ -530,7 +489,7 @@ class FinancialBlockOverlayManager(
         }
 
         countryNameTv = TextView(context).apply {
-            text = currentCountryName
+            text = cachedCountryName
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setTextColor(Color.parseColor("#374151"))
         }
@@ -794,4 +753,3 @@ class FinancialBlockOverlayManager(
         private const val TAG = "FinancialBlockOverlay"
     }
 }
-
