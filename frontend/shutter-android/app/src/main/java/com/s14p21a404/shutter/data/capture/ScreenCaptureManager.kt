@@ -44,7 +44,8 @@ class ScreenCaptureManager(
     private var lastCaptureTime = 0L
 
     @Volatile
-    private var isCapturing = false
+    var isCapturing = false
+        private set
 
     /** 일시정지 상태: true이면 프레임 수신은 하되 Detector에 전달하지 않는다. */
     @Volatile

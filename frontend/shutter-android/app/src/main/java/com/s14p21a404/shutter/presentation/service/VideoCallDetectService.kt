@@ -95,6 +95,7 @@ class VideoCallDetectService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isRunning = true
         Log.d(TAG, "서비스 생성")
 
         val locator = ServiceLocator.getInstance(this)
@@ -311,7 +312,7 @@ class VideoCallDetectService : Service() {
                 if (isFinancialApp && isDeepfakeDetected) {
                     if (!financialBlockOverlayManager.isShowing()) {
                         Log.d(TAG, "🏦 금융 앱 감지 → 접근 제한 오버레이 표시")
-                        financialBlockOverlayManager.show(videoCallRepository.isInAppCallActive())
+                        financialBlockOverlayManager.show()
                     }
                 } else {
                     if (financialBlockOverlayManager.isShowing()) {
@@ -353,6 +354,7 @@ class VideoCallDetectService : Service() {
     }
 
     override fun onDestroy() {
+        isRunning = false
         super.onDestroy()
         Log.d(TAG, "서비스 종료")
 
@@ -558,6 +560,10 @@ class VideoCallDetectService : Service() {
 
     companion object {
         private const val TAG = "VideoCallDetectService"
+
+        /** 서비스 실제 실행 여부 — 프로세스 재시작 후에도 정확히 반영됨 */
+        @Volatile
+        var isRunning: Boolean = false
         private const val NOTIFICATION_ID = 1001
 
         /** 비딥페이크 사이클 후 재탐지까지 대기 시간: 20초 */

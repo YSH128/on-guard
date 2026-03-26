@@ -50,6 +50,7 @@ fun HomeScreen(
     onRequestOverlayPermission: () -> Unit = {},
     onRequestAccessibilityPermission: () -> Unit = {},
     onNavigateToVideoCall: (String, String, Long) -> Unit = { _, _, _ -> },
+    hasPendingIncomingCall: Boolean = false,
     homeViewModel: HomeViewModel = viewModel(),
 ) {
     val context = LocalContext.current
@@ -70,7 +71,8 @@ fun HomeScreen(
     var showOverlayDialog by remember { mutableStateOf(false) }
     var showAccessibilityDialog by remember { mutableStateOf(false) }
 
-    LaunchedEffect(allPermissionsGranted, overlayPermissionGranted, accessibilityServiceEnabled, isServiceRunning) {
+    LaunchedEffect(allPermissionsGranted, overlayPermissionGranted, accessibilityServiceEnabled, isServiceRunning, hasPendingIncomingCall) {
+        if (hasPendingIncomingCall) return@LaunchedEffect
         when {
             !allPermissionsGranted -> showPermissionDialog = true
             !overlayPermissionGranted -> showOverlayDialog = true
