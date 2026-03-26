@@ -394,9 +394,9 @@ fun VideoCallScreen(
             VideoCallDetectService.onInAppCallEnd = null
 
             recordingFile?.let { pcmFile ->
-                if (pcmFile.exists() && pcmFile.length() > 0) {
-                    val wavFile = File(context.getExternalFilesDir(null), "remote_only.wav")
-                    convertPcmToWav(pcmFile, wavFile, 44100, 1, 16)
+                if (pcmFile.exists()) {
+                    // val wavFile = File(context.getExternalFilesDir(null), "remote_only.wav")
+                    // convertPcmToWav(pcmFile, wavFile, 44100, 1, 16)
                     pcmFile.delete()
                     // sendWavToJetson(wavFile) // [Modified] 온디바이스 추론 전환으로 서버 전송 중단
                 }
@@ -839,6 +839,7 @@ private fun formatDuration(seconds: Int): String {
     return "%02d:%02d".format(mins, secs)
 }
 
+/*
 private fun sendWavToJetson(wavFile: File) {
     Thread {
         try {
@@ -910,3 +911,4 @@ private fun shortToBytes(value: Short): ByteArray =
         (value.toInt() and 0xFF).toByte(),
         (value.toInt() shr 8 and 0xFF).toByte()
     )
+*/
