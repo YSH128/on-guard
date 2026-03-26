@@ -270,6 +270,14 @@ function setSourceType(type) {
   document.getElementById('tab-webcam').classList.toggle('active', type === 'webcam');
   document.getElementById('src-file').style.display   = type === 'file'   ? 'block' : 'none';
   document.getElementById('src-webcam').style.display = type === 'webcam' ? 'block' : 'none';
+
+  // 파일 탭으로 전환 시 웹캠 즉시 정지
+  if (type === 'file' && webcamStream) {
+    webcamStream.getTracks().forEach(t => t.stop());
+    webcamStream = null;
+    sourceEl = null;
+    document.getElementById('preview-wrap').style.display = 'none';
+  }
 }
 
 function onFileSelect(input) {
@@ -415,34 +423,36 @@ async function joinChannel() {
 
   await client.join(APP_ID, channelName, agoraToken, 0);
 
-  let videoTrack, audioTrack;
-  if (webcamStream) {
-    // 웹캠: MediaStream에서 직접 트랙 취득 (captureStream 불필요)
-    videoTrack = webcamStream.getVideoTracks()[0];
-    // 웹캠은 마이크 오디오 사용
-    localAudio = await AgoraRTC.createMicrophoneAudioTrack();
+  // video element 재생 준비 대기 (파일/웹캠 공통)
+  if (sourceEl.readyState < 2) {
+    await new Promise(resolve => {
+      sourceEl.oncanplay = resolve;
+      setTimeout(resolve, 3000);
+    });
+  }
+
+  const rawStream = sourceEl.captureStream
+    ? sourceEl.captureStream(30)
+    : sourceEl.mozCaptureStream(30);
+
+  const videoTrack = rawStream.getVideoTracks()[0];
+  localVideo = await AgoraRTC.createCustomVideoTrack({ mediaStreamTrack: videoTrack });
+
+  // 오디오: 파일은 영상 오디오 트랙, 웹캠은 마이크 (권한 없으면 영상만 송출)
+  const audioTrack = rawStream.getAudioTracks()[0];
+  if (audioTrack) {
+    localAudio = await AgoraRTC.createCustomAudioTrack({ mediaStreamTrack: audioTrack });
   } else {
-    // 파일: video element가 재생 준비될 때까지 대기 후 captureStream
-    if (sourceEl.readyState < 2) {
-      await new Promise(resolve => {
-        sourceEl.oncanplay = resolve;
-        setTimeout(resolve, 3000);
-      });
-    }
-    const rawStream = sourceEl.captureStream
-      ? sourceEl.captureStream(30)
-      : sourceEl.mozCaptureStream(30);
-    videoTrack = rawStream.getVideoTracks()[0];
-    // 파일: 영상 자체 오디오 트랙 사용 (있을 경우), 없으면 마이크 폴백
-    audioTrack = rawStream.getAudioTracks()[0];
-    if (audioTrack) {
-      localAudio = await AgoraRTC.createCustomAudioTrack({ mediaStreamTrack: audioTrack });
-    } else {
+    try {
       localAudio = await AgoraRTC.createMicrophoneAudioTrack();
+    } catch (e) {
+      console.warn('마이크 권한 없음 — 영상만 송출:', e.message);
+      localAudio = null;
     }
   }
-  localVideo = await AgoraRTC.createCustomVideoTrack({ mediaStreamTrack: videoTrack });
-  await client.publish([localVideo, localAudio]);
+
+  const tracks = localAudio ? [localVideo, localAudio] : [localVideo];
+  await client.publish(tracks);
 }
 
 // ── 통화 취소 ─────────────────────────────────────────────────
