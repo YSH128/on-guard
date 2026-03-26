@@ -283,7 +283,7 @@ interface ApiService {
     suspend fun acceptCall(@Path("channelName") channelName: String): CallResponse
 
     @POST("api/v1/calls/{channelName}/reject")
-    suspend fun rejectCall(@Path("channelName") channelName: String): retrofit2.Response<Unit>
+    suspend fun rejectCall(@Path("channelName") channelName: String): MessageResponse
 
     @POST("api/v1/location/criminal-request")
     suspend fun requestCriminalLocation(@Body request: CriminalLocationRequestBody): MessageResponse

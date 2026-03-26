@@ -140,6 +140,7 @@ class MainActivity : ComponentActivity() {
             "reject_call" -> {
                 val channelName = intent?.getStringExtra("channel_name") ?: return
                 Log.d(TAG, "reject_call 처리: $channelName")
+                viewModel.rejectCallByChannel(channelName)
             }
 
             "call_accepted" -> {
