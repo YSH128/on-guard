@@ -60,6 +60,12 @@ class WarningOverlayManager(
     @Volatile
     private var receivedCountryName: String? = null
 
+    /** 수신된 상대방 위도/경도 (지도 핀 위치에 사용) */
+    @Volatile
+    private var receivedLat: Double? = null
+    @Volatile
+    private var receivedLng: Double? = null
+
     /** 콜백: 전화 종료 */
     var onEndCall: (() -> Unit)? = null
 
@@ -246,8 +252,11 @@ class WarningOverlayManager(
                 touchable = true
             )
             sheet.startEntranceAnimation()
-            // 이미 수신된 국가명이 있으면 바텀시트에 반영
+            // 이미 수신된 국가명/좌표가 있으면 바텀시트에 반영
             receivedCountryName?.let { country -> sheet.updateCountry(country) }
+            val lat = receivedLat
+            val lng = receivedLng
+            if (lat != null && lng != null) sheet.updatePinPosition(lat, lng)
             bottomSheetView = sheet
             Log.d(TAG, "바텀시트 표시")
 
@@ -390,19 +399,26 @@ class WarningOverlayManager(
         lastResult = null
         bottomSheetShownForSession = false
         receivedCountryName = null
+        receivedLat = null
+        receivedLng = null
     }
 
     /**
-     * 상대방 위치(국가명)를 업데이트한다.
+     * 상대방 위치(국가명 + 위경도)를 업데이트한다.
      * 바텀시트가 이미 표시 중이면 즉시 반영하고,
      * 아직 표시되지 않았으면 저장해두었다가 바텀시트 생성 시 반영한다.
      */
-    fun updateCountry(country: String) {
+    fun updateLocation(country: String, lat: Double? = null, lng: Double? = null) {
         receivedCountryName = country
+        receivedLat = lat
+        receivedLng = lng
         handler.post {
             bottomSheetView?.updateCountry(country)
+            if (lat != null && lng != null) {
+                bottomSheetView?.updatePinPosition(lat, lng)
+            }
         }
-        Log.d(TAG, "국가명 업데이트: $country")
+        Log.d(TAG, "위치 업데이트: $country lat=$lat lng=$lng")
     }
 
     // ─────────────────────────────────────────────

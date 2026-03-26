@@ -113,7 +113,7 @@ fun VideoCallScreen(
         CriminalLocationBridge.onLocationReceived = { country, lat, lng ->
             android.util.Log.d("CriminalLocation", "위치 수신됨 — country: $country lat=$lat lng=$lng")
             isRequestingLocation = false
-            warningOverlayManager.updateCountry(country)
+            warningOverlayManager.updateLocation(country, lat, lng)
         }
         onDispose {
             CriminalLocationBridge.onLocationReceived = null

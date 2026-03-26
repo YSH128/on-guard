@@ -50,6 +50,7 @@ class WarningBottomSheetView(
     private val sheetFrame: FrameLayout
     private val titleContainer: View // 타이틀 (외부앱: 아이콘+텍스트 row / 인앱: 텍스트만)
     private var mapContainer: FrameLayout? = null
+    private var pinContainerRef: FrameLayout? = null
     private var detectionTypeRow: LinearLayout? = null
     private var countryNameTv: TextView? = null
     private var flagImageView: ImageView? = null
@@ -337,11 +338,12 @@ class WarningBottomSheetView(
             dpToPx(160)
         ))
 
-        // 핀 컨테이너 (지도 위 동남아/캄보디아 부근)
+        // 핀 컨테이너 (좌표 수신 전: 동남아 기본 위치 → 수신 후: 실제 좌표로 이동)
         val pinContainer = FrameLayout(context).apply {
             clipChildren = false
             clipToPadding = false
         }
+        pinContainerRef = pinContainer
 
         // pulse circles (2개)
         for (i in 0..1) {
@@ -525,6 +527,44 @@ class WarningBottomSheetView(
                         .load(flagUrl)
                         .transform(RoundedCorners(dpToPx(2)))
                         .into(iv)
+                }
+            }
+        }
+    }
+
+    /**
+     * lat/lng 좌표를 지도 이미지 위 픽셀 위치로 변환하여 핀을 이동한다.
+     * 등장방형(equirectangular) 투영 기준으로 계산하며,
+     * mapContainer 실제 크기를 post{} 로 읽어 적용한다.
+     */
+    fun updatePinPosition(lat: Double, lng: Double) {
+        handler.post {
+            val mc = mapContainer ?: return@post
+            mc.post {
+                val mapW = mc.width.toFloat()
+                val mapH = mc.height.toFloat()
+                if (mapW <= 0 || mapH <= 0) return@post
+
+                val xRatio = ((lng + 180.0) / 360.0).toFloat().coerceIn(0f, 1f)
+                val yRatio = ((90.0 - lat) / 180.0).toFloat().coerceIn(0f, 1f)
+
+                val pinSize = dpToPx(80)
+                val pinX = (mapW * xRatio - pinSize / 2f).toInt().coerceAtLeast(0)
+                val pinY = (mapH * yRatio - pinSize / 2f).toInt().coerceAtLeast(0)
+
+                pinContainerRef?.let { pin ->
+                    (pin.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
+                        lp.leftMargin = pinX
+                        lp.topMargin = pinY
+                        pin.layoutParams = lp
+                    }
+                }
+                labelContainer?.let { label ->
+                    (label.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
+                        lp.leftMargin = (pinX - dpToPx(10)).coerceAtLeast(0)
+                        lp.topMargin = (pinY + pinSize - dpToPx(6)).coerceAtLeast(0)
+                        label.layoutParams = lp
+                    }
                 }
             }
         }
