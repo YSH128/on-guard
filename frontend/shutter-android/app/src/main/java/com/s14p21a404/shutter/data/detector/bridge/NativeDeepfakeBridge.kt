@@ -62,7 +62,8 @@ class NativeDeepfakeBridge(private val context: Context) {
         synchronized(onnxLock) {
             if (isOnnxInitialized) return
             try {
-                Log.d("NativeDeepfakeBridge", "ONNX Runtime 폴백 초기화 시작...")
+                val initStartTime = System.currentTimeMillis()
+                Log.d("NativeDeepfakeBridge", "🔄 ONNX Runtime 폴백 초기화 시작...")
                 ortEnv = OrtEnvironment.getEnvironment()
                 val options = OrtSession.SessionOptions()
                 options.addNnapi() // Android NNAPI 가속 활성화
@@ -71,6 +72,7 @@ class NativeDeepfakeBridge(private val context: Context) {
                 
                 // Warmup Inference (VRAM 사전 적재 및 셰이더 컴파일 강제실행)
                 try {
+                    val warmupStartTime = System.currentTimeMillis()
                     val dummyFloatArray = FloatArray(1 * 3 * 256 * 256) { 0f }
                     val dummyTensor = OnnxTensor.createTensor(
                         ortEnv, 
@@ -82,15 +84,17 @@ class NativeDeepfakeBridge(private val context: Context) {
                     dummyTensor.close()
                     
                     val providers = "NNAPI (OS 자율할당)"
-                    Log.d("NativeDeepfakeBridge", "ONNX Runtime (NNAPI) 웜업 완료 / 활성화된 가속기: $providers")
+                    val warmupElapsed = System.currentTimeMillis() - warmupStartTime
+                    Log.d("NativeDeepfakeBridge", "✅ ONNX Runtime (NNAPI) 웜업 완료 / 활성화된 가속기: $providers (웜업 소요시간: ${warmupElapsed}ms)")
                 } catch(e: Exception) {
-                    Log.e("NativeDeepfakeBridge", "ONNX 웜업 실패: ${e.message}")
+                    Log.e("NativeDeepfakeBridge", "❌ ONNX 웜업 실패: ${e.message}")
                 }
 
                 isOnnxInitialized = true
-                Log.d("NativeDeepfakeBridge", "ONNX Runtime 폴백 초기화 및 적재 완료")
+                val totalInitElapsed = System.currentTimeMillis() - initStartTime
+                Log.d("NativeDeepfakeBridge", "✅ ONNX Runtime 폴백 초기화 및 적재 전체 완료 (총 소요시간: ${totalInitElapsed}ms)")
             } catch (e: Exception) {
-                Log.e("NativeDeepfakeBridge", "ONNX 초기화 실패: ${e.message}")
+                Log.e("NativeDeepfakeBridge", "❌ ONNX 초기화 실패: ${e.message}")
             }
         }
     }
@@ -147,6 +151,9 @@ class NativeDeepfakeBridge(private val context: Context) {
                 }
             } catch (e: Exception) {
                 Log.e("NativeDeepfakeBridge", "QNN 컴파일 에러: ${e.message}")
+                isQnnSupported = false
+                Log.e("NativeDeepfakeBridge", "QNN 파일 로드 실패로 즉시 ONNX 폴백 시도...")
+                initOnnxFallback()
             }
         }
     }
@@ -175,6 +182,15 @@ class NativeDeepfakeBridge(private val context: Context) {
                 if (!qnnInitSuccess) {
                     isQnnSupported = false
                     Log.e("NativeDeepfakeBridge", "QNN 시스템 초기화 실패! (비 퀄컴칩 지원안됨)")
+                    initOnnxFallback()
+                    onComplete()
+                    return@thread
+                }
+
+                val binFile = File(filesDir, "face_deepfake.bin")
+                if (!binFile.exists()) {
+                    Log.e("NativeDeepfakeBridge", "QNN 캐시 파일 없음! C++ 빌드/로드 병목을 우회하고 즉시 ONNX 폴백 시도...")
+                    isQnnSupported = false
                     initOnnxFallback()
                     onComplete()
                     return@thread
