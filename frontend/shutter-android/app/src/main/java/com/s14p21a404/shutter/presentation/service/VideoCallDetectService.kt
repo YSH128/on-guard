@@ -261,23 +261,46 @@ class VideoCallDetectService : Service() {
         Log.d(TAG, "포그라운드 앱 모니터링 시작 (인앱=${videoCallRepository.isInAppCallActive()})")
         foregroundMonitorJob = serviceScope.launch {
             videoCallRepository.observeForegroundIsVideoCallApp().collect { isOnVideoCallScreen ->
-                Log.d(TAG, "영상통화 화면 여부: $isOnVideoCallScreen, 오버레이 표시 중: ${warningOverlayManager.isShowing()}")
+                Log.d(TAG, "영상통화 화면 여부: $isOnVideoCallScreen, 오버레이 표시 중: ${warningOverlayManager.isShowing()}, 딥페이크감지=$isDeepfakeDetected")
 
                 if (isOnVideoCallScreen) {
-                    // 영상통화 화면으로 복귀 → 오버레이가 이전에 표시 중이었으면 복원
-                    if (wasOverlayShowing && !warningOverlayManager.isShowing()) {
-                        Log.d(TAG, "📱 영상통화 화면 복귀 → 오버레이 복원")
+                    // ── 영상통화 화면으로 복귀 ──
+                    if (wasOverlayShowing) {
+                        Log.d(TAG, "📱 영상통화 화면 복귀 → 오버레이 복원 → 추론 재시작")
+
+                        // 오버레이 활성화
                         warningOverlayManager.setEnabled(true)
-                        warningOverlayManager.showWarning()
+
+                        if (isDeepfakeDetected) {
+                            // 딥페이크 확정 상태에서 복귀 → 경고 오버레이 먼저 복원 후 추론 재시작
+                            warningOverlayManager.showWarning()
+                        } else {
+                            // 아직 딥페이크 미확정 → 스캐닝 pill 먼저 표시 후 추론 시작
+                            warningOverlayManager.showScanningPill()
+                        }
+
+                        // 오버레이가 완전히 렌더링된 후 추론 재시작 (500ms 딜레이)
+                        delay(500)
+                        monitorUseCase.startDetection()
+                        Log.d(TAG, "📱 추론 재시작 완료")
                     }
                 } else {
-                    // 영상통화 화면 이탈 → 오버레이 숨김
-                    if (warningOverlayManager.isShowing()) {
+                    // ── 영상통화 화면 이탈 ──
+                    Log.d(TAG, "📱 영상통화 화면 이탈 → 추론 중단 + 오버레이 숨김")
+
+                    // 현재 오버레이가 표시 중이었거나 딥페이크 감지 상태라면 복귀 시 복원할 수 있도록 플래그 세팅
+                    if (warningOverlayManager.isShowing() || isDeepfakeDetected) {
                         wasOverlayShowing = true
-                        Log.d(TAG, "📱 영상통화 화면 이탈 → 오버레이 숨김")
-                        warningOverlayManager.dismissWarning()
-                        warningOverlayManager.setEnabled(false)
                     }
+
+                    // 추론 중단 (화면 캡처 + 모델 추론 모두 멈춤)
+                    monitorUseCase.stopDetection()
+                    cooldownJob?.cancel()
+                    cooldownJob = null
+
+                    // 오버레이 숨김
+                    warningOverlayManager.dismissWarning()
+                    warningOverlayManager.setEnabled(false)
                 }
             }
         }
@@ -307,16 +330,16 @@ class VideoCallDetectService : Service() {
         Log.d(TAG, "금융 앱 모니터링 시작")
         financialAppMonitorJob = serviceScope.launch {
             videoCallRepository.observeForegroundIsFinancialApp().collect { isFinancialApp ->
-                Log.d(TAG, "금융 앱 여부: $isFinancialApp, 딥페이크 감지: $isDeepfakeDetected")
+                Log.d(TAG, "▶ [FinancialMonitor] isFinancialApp=$isFinancialApp, isDeepfake=$isDeepfakeDetected, isShowing=${financialBlockOverlayManager.isShowing()}")
 
                 if (isFinancialApp && isDeepfakeDetected) {
                     if (!financialBlockOverlayManager.isShowing()) {
-                        Log.d(TAG, "🏦 금융 앱 감지 → 접근 제한 오버레이 표시")
+                        Log.d(TAG, "🏦 [FinancialMonitor] 금융 앱 진입 감지 → 접근 제한 오버레이 표시")
                         financialBlockOverlayManager.show(isInApp = videoCallRepository.isInAppCallActive())
                     }
                 } else {
                     if (financialBlockOverlayManager.isShowing()) {
-                        Log.d(TAG, "🏦 금융 앱 이탈 → 접근 제한 오버레이 해제")
+                        Log.d(TAG, "🏦 [FinancialMonitor] 금융 앱 이탈 감지 (또는 딥페이크 해제) → 접근 제한 오버레이 해제")
                         financialBlockOverlayManager.dismiss()
                     }
                 }

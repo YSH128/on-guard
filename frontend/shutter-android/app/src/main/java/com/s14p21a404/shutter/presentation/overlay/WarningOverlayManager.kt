@@ -96,9 +96,9 @@ class WarningOverlayManager(
                 // 이미 바텀시트가 표시된 적 있음 → ROI box 위치만 갱신
                 updateRoiBoxOnly(result)
             } else {
-                // 최초 감지 → ROI box + dim + 바텀시트 모두 표시
-                showDetectionOverlays(result)
+                // 최초 감지 → 플래그를 먼저 세팅하여 중복 호출 방지
                 bottomSheetShownForSession = true
+                showDetectionOverlays(result)
             }
         } else {
             // detected=false → ROI box만 업데이트 (없으면 제거)
@@ -263,7 +263,7 @@ class WarningOverlayManager(
 
             // ── 푸쉬 알림 pills (바텀시트 등장 후 표시) ──
             showNotificationPills()
-        }, 500)
+        }, 50)
     }
 
     // ─────────────────────────────────────────────

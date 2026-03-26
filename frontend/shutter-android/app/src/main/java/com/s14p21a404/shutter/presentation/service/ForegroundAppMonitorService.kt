@@ -32,7 +32,7 @@ class ForegroundAppMonitorService : AccessibilityService() {
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
             flags = AccessibilityServiceInfo.DEFAULT or
                     AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
-            notificationTimeout = 200
+            notificationTimeout = 50
         }
     }
 
@@ -55,9 +55,14 @@ class ForegroundAppMonitorService : AccessibilityService() {
     private fun handleWindowStateChanged(event: AccessibilityEvent) {
         val pkg = event.packageName?.toString() ?: return
 
+        Log.d(TAG, "📍 [Accessibility] TYPE_WINDOW_STATE_CHANGED 이벤트 감지: pkg=$pkg, className=${event.className}")
+
         // 시스템 UI(볼륨 패널, 알림바, 네비게이션 바 등)는 포그라운드 앱 변경으로 취급하지 않는다.
         // 볼륨 버튼, 알림 풀다운 등에 의해 영상통화 상태가 리셋되는 것을 방지.
-        if (pkg in IGNORED_SYSTEM_PACKAGES) return
+        if (pkg in IGNORED_SYSTEM_PACKAGES) {
+            Log.d(TAG, "↳ 무시됨: 시스템 UI 패키지입니다 ($pkg)")
+            return
+        }
 
         // Activity 전환만 추적 (팝업, 토스트 등 제외)
         val className = event.className?.toString() ?: return
@@ -65,11 +70,12 @@ class ForegroundAppMonitorService : AccessibilityService() {
             && !className.startsWith("android.app")
             && !className.startsWith("com.")
         ) {
+            Log.d(TAG, "↳ 무시됨: Activity가 아님 ($className)")
             return
         }
 
         if (pkg != _foregroundPackage.value) {
-            Log.d(TAG, "포그라운드 앱 변경: ${_foregroundPackage.value} → $pkg")
+            Log.d(TAG, "✅ [포그라운드 앱 실제 변경]: ${_foregroundPackage.value} → $pkg (className: $className)")
             _foregroundPackage.value = pkg
         }
 
