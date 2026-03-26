@@ -415,10 +415,12 @@ async function joinChannel() {
 
   await client.join(APP_ID, channelName, agoraToken, 0);
 
-  let videoTrack;
+  let videoTrack, audioTrack;
   if (webcamStream) {
     // 웹캠: MediaStream에서 직접 트랙 취득 (captureStream 불필요)
     videoTrack = webcamStream.getVideoTracks()[0];
+    // 웹캠은 마이크 오디오 사용
+    localAudio = await AgoraRTC.createMicrophoneAudioTrack();
   } else {
     // 파일: video element가 재생 준비될 때까지 대기 후 captureStream
     if (sourceEl.readyState < 2) {
@@ -431,10 +433,15 @@ async function joinChannel() {
       ? sourceEl.captureStream(30)
       : sourceEl.mozCaptureStream(30);
     videoTrack = rawStream.getVideoTracks()[0];
+    // 파일: 영상 자체 오디오 트랙 사용 (있을 경우), 없으면 마이크 폴백
+    audioTrack = rawStream.getAudioTracks()[0];
+    if (audioTrack) {
+      localAudio = await AgoraRTC.createCustomAudioTrack({ mediaStreamTrack: audioTrack });
+    } else {
+      localAudio = await AgoraRTC.createMicrophoneAudioTrack();
+    }
   }
   localVideo = await AgoraRTC.createCustomVideoTrack({ mediaStreamTrack: videoTrack });
-
-  localAudio = await AgoraRTC.createMicrophoneAudioTrack();
   await client.publish([localVideo, localAudio]);
 }
 
