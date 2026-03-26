@@ -253,15 +253,33 @@ static bool ort_init_session(const char* model_path) {
     ORT_CHECK(g_ort->CreateSession(g_ort_env, model_path, opts, &g_ort_session));
     g_ort->ReleaseSessionOptions(opts);
 
-    // [수정] CAM 출력 크기 하드코딩 (ForensicsAdapter: cam [7,7]) — warmup 추론 제거로 init 속도 개선.
-    // 앱 설치 후 첫 통화 전 모델 적재 완료를 위해 init 시간을 단축.
-    // 기존 warmup 추론으로 동적 검출하던 방식은 init에 추론 1회 비용이 추가되어 적재 지연 야기.
-    // // TODO: 모델 CAM 출력 크기가 변경될 경우 아래 값 수정 (현재 ForensicsAdapter: 7x7)
-    // // 원래 warmup 코드 참고:
-    // // OrtValue* out_vals[2]; g_ort->Run(...); → dims → g_ort_cam_h/w
-    g_ort_cam_h = 7;
-    g_ort_cam_w = 7;
-    LOGD("ONNX session init OK. cam: %d x %d (hardcoded)", g_ort_cam_h, g_ort_cam_w);
+    // CAM 출력 크기를 모델 메타데이터에서 동적으로 읽기 (추론 없이 shape만 조회)
+    OrtTypeInfo* cam_type_info = nullptr;
+    OrtStatus* shape_status = g_ort->SessionGetOutputTypeInfo(g_ort_session, 1, &cam_type_info);
+    if (!shape_status && cam_type_info) {
+        const OrtTensorTypeAndShapeInfo* shape_info = nullptr;
+        g_ort->CastTypeInfoToTensorInfo(cam_type_info, &shape_info);
+        size_t dim_count = 0;
+        g_ort->GetDimensionsCount(shape_info, &dim_count);
+        if (dim_count >= 4) {
+            int64_t dims[4] = {0};
+            g_ort->GetDimensions(shape_info, dims, 4);
+            g_ort_cam_h = (int)dims[2];
+            g_ort_cam_w = (int)dims[3];
+        } else if (dim_count >= 2) {
+            int64_t dims[2] = {0};
+            g_ort->GetDimensions(shape_info, dims, 2);
+            g_ort_cam_h = (int)dims[0];
+            g_ort_cam_w = (int)dims[1];
+        }
+        g_ort->ReleaseTypeInfo(cam_type_info);
+    } else {
+        // 조회 실패 시 폴백
+        if (shape_status) g_ort->ReleaseStatus(shape_status);
+        g_ort_cam_h = 7;
+        g_ort_cam_w = 7;
+    }
+    LOGD("ONNX session init OK. cam: %d x %d (dynamic)", g_ort_cam_h, g_ort_cam_w);
     return true;
 }
 
