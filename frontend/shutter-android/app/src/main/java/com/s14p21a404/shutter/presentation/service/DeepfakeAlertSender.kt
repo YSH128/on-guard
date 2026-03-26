@@ -100,18 +100,29 @@ class DeepfakeAlertSender(
      * 저장된 kakaoId로 친구를 찾아 UUID를 가져오고, 이후 재사용을 위해 저장한다.
      */
     private fun recoverUuid(guardianId: Long, name: String, friends: List<Friend>?): String? {
-        val kakaoId = guardianUuidStore.getKakaoId(guardianId) ?: run {
-            Log.w(TAG, "보호자 $name(id=$guardianId) — 저장된 카카오 ID 없음, fallback 불가")
-            return null
-        }
         if (friends == null) {
             Log.w(TAG, "보호자 $name(id=$guardianId) — 친구 목록 없어 UUID 복구 불가")
             return null
         }
-        val friend = friends.find { it.id == kakaoId } ?: run {
-            Log.w(TAG, "보호자 $name(id=$guardianId) — 카카오 친구 목록에서 찾을 수 없음")
-            return null
-        }
+
+        val kakaoId = guardianUuidStore.getKakaoId(guardianId)
+        val friend = if (kakaoId != null) {
+            // 1차: 저장된 kakaoId로 매칭
+            friends.find { it.id == kakaoId } ?: run {
+                Log.w(TAG, "보호자 $name(id=$guardianId) — 카카오 친구 목록에서 찾을 수 없음 (kakaoId=$kakaoId)")
+                null
+            }
+        } else {
+            // 2차: kakaoId 없을 경우 닉네임으로 매칭 (앱 데이터 초기화 후 복구)
+            val matchName = guardianUuidStore.getKakaoName(guardianId) ?: name
+            friends.find { it.profileNickname == matchName }.also {
+                if (it == null) Log.w(TAG, "보호자 $name(id=$guardianId) — 이름 매칭 실패 (matchName=$matchName)")
+                else Log.d(TAG, "보호자 $name(id=$guardianId) — 이름으로 UUID 복구 시도")
+            }
+        } ?: return null
+
+        // 복구 성공: 다음 호출을 위해 저장
+        friend.id?.let { guardianUuidStore.saveKakaoId(guardianId, it) }
         guardianUuidStore.saveUuid(guardianId, friend.uuid)
         Log.d(TAG, "보호자 $name(id=$guardianId) — UUID 복구 성공: ${friend.uuid}")
         return friend.uuid

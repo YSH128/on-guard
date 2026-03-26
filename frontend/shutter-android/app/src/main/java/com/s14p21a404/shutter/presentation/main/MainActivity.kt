@@ -90,7 +90,6 @@ class MainActivity : ComponentActivity() {
 
                         MainScreen(
                             uiState = uiState,
-                            viewModel = viewModel,
                             pendingDeepLinkScreen = pendingScreen,
                             onDeepLinkHandled = { viewModel.setDeepLinkScreen(null) },
                             onRequestPermissions = { requestAllPermissions() },
@@ -98,13 +97,6 @@ class MainActivity : ComponentActivity() {
                             onRequestAccessibilityPermission = { requestAccessibilityPermission() },
                             onToggleService = { toggleService() },
                             onLogout = { loginViewModel.logout() },
-
-                                            // 영상통화 진입
-                            onNavigateToVideoCall = { channelId, callerName, opponentKakaoId ->
-                                Log.d(TAG, "영상통화 진입: $channelId")
-                                isInCall = true
-                                viewModel.setDeepLinkScreen("video_call:$channelId:$callerName:$opponentKakaoId")
-                            }
                         )
                     }
                 }
@@ -135,20 +127,19 @@ class MainActivity : ComponentActivity() {
 
         when (screen) {
 
-            "incoming_call" -> {
+            "accept_call" -> {
                 val channelName = intent?.getStringExtra("channel_name") ?: return
-                val callerName = intent?.getStringExtra("caller_name") ?: "알 수 없음"
+                val callerName = intent?.getStringExtra("caller_name") ?: "상대방"
                 val callerKakaoId = intent?.getLongExtra("caller_kakao_id", 0L) ?: 0L
-
-                Log.d(TAG, "incoming_call 처리: $channelName / $callerName / kakaoId=$callerKakaoId")
-
-                viewModel.onIncomingCall(channelName, callerName, callerKakaoId)
-                viewModel.setDeepLinkScreen("incoming_call")
+                Log.d(TAG, "accept_call 처리: $channelName / $callerName / kakaoId=$callerKakaoId")
+                isInCall = true
+                viewModel.acceptIncomingCall(channelName, callerName, callerKakaoId)
             }
 
             "reject_call" -> {
                 val channelName = intent?.getStringExtra("channel_name") ?: return
                 Log.d(TAG, "reject_call 처리: $channelName")
+                viewModel.rejectCallByChannel(channelName)
                 viewModel.rejectCallByChannel(channelName)
             }
 

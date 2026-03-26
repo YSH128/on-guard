@@ -37,6 +37,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.s14p21a404.shutter.data.repository.VideoCallSessionStore
 import com.s14p21a404.shutter.presentation.main.MainUiState
 import com.s14p21a404.shutter.presentation.screens.GuardianRegistrationScreen
 import com.s14p21a404.shutter.presentation.screens.HomeScreen
@@ -138,6 +139,8 @@ fun AppScaffold(
                     onNavigateToVideoCall = { channelId, callerName, opponentKakaoId ->
                         navController.navigate(Screen.VideoCall.createRoute(channelId, callerName, opponentKakaoId))
                     },
+                    hasPendingIncomingCall = pendingDeepLinkScreen == "accept_call_pending"
+                            || pendingDeepLinkScreen?.startsWith("video_call:") == true,
                 )
             }
             composable(Screen.RecentRecords.route) {
@@ -174,7 +177,10 @@ fun AppScaffold(
                     channelId = channelId,
                     callerName = callerName,
                     opponentKakaoId = opponentKakaoId,
-                    onCallEnded = { navController.popBackStack() }
+                    onCallEnded = {
+                        VideoCallSessionStore.clear()
+                        navController.popBackStack()
+                    }
                 )
             }
         }
