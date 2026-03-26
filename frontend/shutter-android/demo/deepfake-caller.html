@@ -1,0 +1,498 @@
+file:///C:/S14P21A404/frontend/shutter-android/demo/deepfake-caller.html 근데 이거 <!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shutter 시연 — 딥페이크 발신자</title>
+  <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.22.0.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0c0e16;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .container { width: 100%; max-width: 500px; }
+    .card {
+      background: #161926;
+      border-radius: 20px;
+      padding: 32px;
+      border: 1px solid #252a3d;
+    }
+    h1 { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+    .subtitle { font-size: 13px; color: #64748b; margin-bottom: 28px; }
+
+    .btn {
+      width: 100%; padding: 14px; border-radius: 12px; border: none;
+      font-size: 15px; font-weight: 600; cursor: pointer;
+      transition: transform 0.1s, opacity 0.2s;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-kakao  { background: #FEE500; color: #191919; }
+    .btn-primary { background: #6083EE; color: #fff; margin-top: 8px; }
+    .btn-danger  { background: #EF4444; color: #fff; margin-top: 8px; }
+    .btn-secondary { background: #252a3d; color: #e2e8f0; margin-top: 8px; }
+
+    .input-group { margin-bottom: 18px; }
+    label { font-size: 12px; color: #64748b; margin-bottom: 6px; display: block; letter-spacing: 0.5px; text-transform: uppercase; }
+    input[type="number"], input[type="file"], textarea {
+      width: 100%; padding: 12px 14px;
+      background: #0c0e16; border: 1px solid #252a3d;
+      border-radius: 10px; color: #e2e8f0; font-size: 14px; outline: none;
+      font-family: inherit;
+    }
+    input:focus, textarea:focus { border-color: #6083EE; }
+    input[type="file"] { cursor: pointer; }
+    textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
+    details summary { color: #64748b; font-size: 12px; cursor: pointer; margin-top: 10px; }
+    details p { color: #64748b; font-size: 12px; margin-top: 8px; line-height: 1.7; padding: 10px; background: #0c0e16; border-radius: 8px; }
+    code { background: #252a3d; padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+
+    .source-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+    .tab {
+      flex: 1; padding: 9px; border-radius: 9px;
+      border: 1px solid #252a3d; background: transparent;
+      color: #64748b; font-size: 13px; cursor: pointer; transition: all 0.15s;
+    }
+    .tab.active { background: #252a3d; color: #fff; border-color: #6083EE; }
+
+    .status-row {
+      display: flex; align-items: center; gap: 10px;
+      background: #1a1f30; border-radius: 10px; padding: 10px 14px;
+      margin-bottom: 20px; font-size: 13px;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dot.green  { background: #22c55e; animation: blink 1.4s infinite; }
+    .dot.yellow { background: #eab308; animation: blink 1s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+    .video-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+    .video-wrap {
+      background: #0c0e16; border-radius: 12px; overflow: hidden;
+      position: relative; aspect-ratio: 4/3; border: 1px solid #252a3d;
+    }
+    .video-wrap video, .video-wrap canvas { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .video-tag {
+      position: absolute; bottom: 8px; left: 8px;
+      background: rgba(0,0,0,0.65); color: #fff;
+      font-size: 11px; padding: 2px 8px; border-radius: 4px;
+    }
+    .video-wrap-full {
+      background: #0c0e16; border-radius: 12px; overflow: hidden;
+      position: relative; aspect-ratio: 16/9; border: 1px solid #252a3d;
+      margin-bottom: 20px;
+    }
+    .video-wrap-full canvas { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    .user-box {
+      display: flex; align-items: center; gap: 12px;
+      background: #0c0e16; border: 1px solid #252a3d;
+      border-radius: 10px; padding: 12px 14px; margin-bottom: 20px;
+    }
+    .avatar {
+      width: 38px; height: 38px; border-radius: 50%;
+      background: #6083EE; display: flex; align-items: center;
+      justify-content: center; font-size: 18px; flex-shrink: 0;
+    }
+    .user-name { font-size: 14px; font-weight: 600; }
+    .user-sub  { font-size: 12px; color: #64748b; }
+
+    .err { color: #f87171; font-size: 13px; margin-top: 10px; min-height: 18px; }
+
+    /* hidden sections */
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* hidden master canvas (Agora 소스용) */
+    #master-canvas { display: none; }
+  </style>
+</head>
+<body>
+<canvas id="master-canvas" width="640" height="480"></canvas>
+
+<div class="container">
+
+  <!-- ── LOGIN ─────────────────────────────────── -->
+  <div id="sec-login" class="section active">
+    <div class="card">
+      <h1>🕵️ Shutter 시연</h1>
+      <p class="subtitle">딥페이크 영상 송출 — 발신자 페이지</p>
+      <div class="input-group">
+        <label for="jwt-input">서버 JWT 액세스 토큰</label>
+        <textarea id="jwt-input" placeholder="앱 로그캣에서 복사한 accessToken 붙여넣기"></textarea>
+        <details>
+          <summary>토큰 얻는 방법 ▾</summary>
+          <p>
+            1. Android Studio → Logcat 열기<br>
+            2. 검색창에 <code>accessToken</code> 입력<br>
+            3. 앱에서 카카오 로그인 → 출력된 토큰 복사<br><br>
+            또는 아래 명령어로 추출:<br>
+            <code>adb logcat | findstr accessToken</code>
+          </p>
+        </details>
+      </div>
+      <button class="btn btn-primary" style="margin-top:0" onclick="doJwtLogin()">로그인</button>
+      <p id="err-login" class="err"></p>
+    </div>
+  </div>
+
+  <!-- ── READY ──────────────────────────────────── -->
+  <div id="sec-ready" class="section">
+    <div class="card">
+      <h1>📞 전화 걸기</h1>
+      <p class="subtitle">피해자 카카오 ID와 송출할 영상을 설정하세요</p>
+
+      <div id="user-box" class="user-box">
+        <div class="avatar">👤</div>
+        <div>
+          <div class="user-name" id="ui-name">-</div>
+          <div class="user-sub"  id="ui-sub">-</div>
+        </div>
+      </div>
+
+      <div class="input-group">
+        <label>피해자 카카오 ID</label>
+        <input type="number" id="callee-id" placeholder="예: 1234567890">
+      </div>
+
+      <div class="input-group">
+        <label>영상 소스</label>
+        <div class="source-tabs">
+          <button class="tab active" id="tab-file"   onclick="setSourceType('file')">📁 동영상 파일</button>
+          <button class="tab"        id="tab-webcam" onclick="setSourceType('webcam')">📷 웹캠</button>
+        </div>
+        <div id="src-file">
+          <input type="file" id="file-input" accept="video/*" onchange="onFileSelect(this)">
+        </div>
+        <div id="src-webcam" style="display:none;">
+          <button class="btn btn-secondary" style="margin-top:0" onclick="startWebcam()">웹캠 시작</button>
+        </div>
+      </div>
+
+      <div id="preview-wrap" class="video-wrap-full" style="display:none;">
+        <canvas id="preview-canvas"></canvas>
+        <div class="video-tag">미리보기</div>
+      </div>
+
+      <button class="btn btn-primary" onclick="makeCall()">📞 전화 걸기</button>
+      <p id="err-ready" class="err"></p>
+    </div>
+  </div>
+
+  <!-- ── CALLING ────────────────────────────────── -->
+  <div id="sec-calling" class="section">
+    <div class="card">
+      <h1>📲 연결 중...</h1>
+      <div class="status-row">
+        <div class="dot yellow"></div>
+        <span>피해자가 수락하기를 기다리는 중</span>
+      </div>
+      <div class="video-wrap-full">
+        <canvas id="calling-canvas"></canvas>
+        <div class="video-tag">내 영상 (딥페이크)</div>
+      </div>
+      <button class="btn btn-danger" onclick="cancelCall()">📵 통화 취소</button>
+    </div>
+  </div>
+
+  <!-- ── IN CALL ─────────────────────────────────── -->
+  <div id="sec-incall" class="section">
+    <div class="card">
+      <h1>🔴 통화 중</h1>
+      <div class="status-row">
+        <div class="dot green"></div>
+        <span id="ui-duration">00:00</span>
+      </div>
+      <div class="video-grid">
+        <div class="video-wrap">
+          <div id="remote-container" style="width:100%;height:100%;"></div>
+          <div class="video-tag">상대방</div>
+        </div>
+        <div class="video-wrap">
+          <canvas id="local-canvas"></canvas>
+          <div class="video-tag">나 (딥페이크)</div>
+        </div>
+      </div>
+      <button class="btn btn-danger" onclick="endCall()">📵 통화 종료</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── 설정 ──────────────────────────────────────────────────────
+const SERVER  = 'https://j14a404.p.ssafy.io';
+const APP_ID  = '6c6109e0b9644b599072a68b514d77a8';
+const KAK_KEY = 'da0a9b620f9bce1e3b6c841ddebd72c0';
+
+// ── 상태 ──────────────────────────────────────────────────────
+let jwt          = null;
+let channelName  = null;
+let agoraToken   = null;
+let client       = null;
+let localVideo   = null;
+let localAudio   = null;
+let sourceEl     = null;   // HTMLVideoElement (파일 or 웹캠)
+let sourceType   = 'file';
+let webcamStream = null;   // 웹캠 MediaStream (명시적 정지용)
+let rafId        = null;   // requestAnimationFrame id (미리보기용)
+let masterRafId  = null;   // master canvas 렌더링 loop
+let durationId   = null;
+let durationSec  = 0;
+
+// ── 섹션 전환 ─────────────────────────────────────────────────
+function show(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById('sec-' + id).classList.add('active');
+}
+
+// ── JWT 로그인 ────────────────────────────────────────────────
+function doJwtLogin() {
+  setErr('login', '');
+  const token = document.getElementById('jwt-input').value.trim();
+  if (!token) return setErr('login', 'JWT 토큰을 입력하세요.');
+  jwt = token;
+  document.getElementById('ui-name').textContent = '시연 계정';
+  document.getElementById('ui-sub').textContent  = '토큰으로 로그인됨';
+  show('ready');
+}
+
+// ── 소스 타입 선택 ────────────────────────────────────────────
+function setSourceType(type) {
+  sourceType = type;
+  document.getElementById('tab-file').classList.toggle('active', type === 'file');
+  document.getElementById('tab-webcam').classList.toggle('active', type === 'webcam');
+  document.getElementById('src-file').style.display   = type === 'file'   ? 'block' : 'none';
+  document.getElementById('src-webcam').style.display = type === 'webcam' ? 'block' : 'none';
+}
+
+function onFileSelect(input) {
+  const file = input.files[0];
+  if (!file) return;
+  // 웹캠이 켜져 있으면 명시적으로 정지
+  if (webcamStream) {
+    webcamStream.getTracks().forEach(t => t.stop());
+    webcamStream = null;
+  }
+  const el = document.createElement('video');
+  el.src = URL.createObjectURL(file);
+  el.loop = true; el.muted = true; el.autoplay = true; el.playsInline = true;
+  el.play();
+  setSource(el);
+}
+
+async function startWebcam() {
+  try {
+    // 이전 웹캠 스트림이 있으면 먼저 정지
+    if (webcamStream) {
+      webcamStream.getTracks().forEach(t => t.stop());
+      webcamStream = null;
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    webcamStream = stream;
+    const el = document.createElement('video');
+    el.srcObject = stream; el.muted = true; el.autoplay = true; el.playsInline = true;
+    el.play();
+    setSource(el);
+  } catch (e) {
+    setErr('ready', '웹캠 접근 실패: ' + e.message);
+  }
+}
+
+function setSource(el) {
+  sourceEl = el;
+  document.getElementById('preview-wrap').style.display = 'block';
+  startRenderLoop(el, 'preview-canvas', true);
+}
+
+// ── 캔버스 렌더링 ─────────────────────────────────────────────
+// targetCanvasId에 sourceEl을 그린다. isPreview=true면 rafId, false면 masterRafId 사용
+function startRenderLoop(videoEl, targetCanvasId, isPreview) {
+  const canvas = document.getElementById(targetCanvasId);
+  const ctx = canvas.getContext('2d');
+
+  function draw() {
+    if (videoEl.readyState >= 2) {
+      const w = videoEl.videoWidth  || 640;
+      const h = videoEl.videoHeight || 480;
+      if (canvas.width !== w)  canvas.width  = w;
+      if (canvas.height !== h) canvas.height = h;
+      ctx.drawImage(videoEl, 0, 0, w, h);
+    }
+    const id = requestAnimationFrame(draw);
+    if (isPreview) rafId = id; else masterRafId = id;
+  }
+  if (isPreview && rafId) cancelAnimationFrame(rafId);
+  draw();
+}
+
+// master-canvas 전용 렌더 루프 (Agora 스트림 소스)
+function startMasterLoop() {
+  if (masterRafId) cancelAnimationFrame(masterRafId);
+  const canvas = document.getElementById('master-canvas');
+  const ctx = canvas.getContext('2d');
+
+  function draw() {
+    if (sourceEl && sourceEl.readyState >= 2) {
+      const w = sourceEl.videoWidth  || 640;
+      const h = sourceEl.videoHeight || 480;
+      if (canvas.width !== w)  canvas.width  = w;
+      if (canvas.height !== h) canvas.height = h;
+      ctx.drawImage(sourceEl, 0, 0, w, h);
+    }
+    masterRafId = requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+// section-canvas 에도 master-canvas 내용을 미러링
+function mirrorTo(targetCanvasId) {
+  const master = document.getElementById('master-canvas');
+  const target = document.getElementById(targetCanvasId);
+  const ctx = target.getContext('2d');
+
+  function draw() {
+    if (master.width > 0) {
+      if (target.width !== master.width)   target.width  = master.width;
+      if (target.height !== master.height) target.height = master.height;
+      ctx.drawImage(master, 0, 0);
+    }
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+// ── 전화 걸기 ─────────────────────────────────────────────────
+async function makeCall() {
+  setErr('ready', '');
+  const calleeId = document.getElementById('callee-id').value.trim();
+  if (!calleeId)   return setErr('ready', '피해자 카카오 ID를 입력하세요.');
+  if (!sourceEl)   return setErr('ready', '영상 소스를 선택하세요.');
+
+  try {
+    const r = await apiFetch('/api/v1/calls', 'POST', jwt, { callee_kakao_id: parseInt(calleeId) });
+    channelName = r.data.channel_name;
+    agoraToken  = r.data.token;
+
+    show('calling');
+    startMasterLoop();
+    mirrorTo('calling-canvas');
+    await joinChannel();
+  } catch (e) {
+    setErr('ready', '전화 걸기 실패: ' + e.message);
+  }
+}
+
+// ── Agora 채널 입장 ───────────────────────────────────────────
+async function joinChannel() {
+  client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+
+  client.on('user-published', async (user, mediaType) => {
+    await client.subscribe(user, mediaType);
+
+    if (mediaType === 'video') {
+      show('incall');
+      mirrorTo('local-canvas');
+      startDuration();
+      const container = document.getElementById('remote-container');
+      container.innerHTML = '';
+      user.videoTrack.play(container);
+    }
+    if (mediaType === 'audio') {
+      user.audioTrack.play();
+    }
+  });
+
+  client.on('user-unpublished', (user, mediaType) => {
+    if (mediaType === 'video') endCall();
+  });
+
+  await client.join(APP_ID, channelName, agoraToken, 0);
+
+  let videoTrack;
+  if (webcamStream) {
+    // 웹캠: MediaStream에서 직접 트랙 취득 (captureStream 불필요)
+    videoTrack = webcamStream.getVideoTracks()[0];
+  } else {
+    // 파일: video element가 재생 준비될 때까지 대기 후 captureStream
+    if (sourceEl.readyState < 2) {
+      await new Promise(resolve => {
+        sourceEl.oncanplay = resolve;
+        setTimeout(resolve, 3000);
+      });
+    }
+    const rawStream = sourceEl.captureStream
+      ? sourceEl.captureStream(30)
+      : sourceEl.mozCaptureStream(30);
+    videoTrack = rawStream.getVideoTracks()[0];
+  }
+  localVideo = await AgoraRTC.createCustomVideoTrack({ mediaStreamTrack: videoTrack });
+
+  localAudio = await AgoraRTC.createMicrophoneAudioTrack();
+  await client.publish([localVideo, localAudio]);
+}
+
+// ── 통화 취소 ─────────────────────────────────────────────────
+async function cancelCall() {
+  if (channelName) {
+    apiFetch(`/api/v1/calls/${channelName}/cancel`, 'POST', jwt).catch(() => {});
+  }
+  cleanup();
+  show('ready');
+}
+
+// ── 통화 종료 ─────────────────────────────────────────────────
+async function endCall() {
+  cleanup();
+  show('ready');
+}
+
+function cleanup() {
+  clearInterval(durationId); durationId = null; durationSec = 0;
+  document.getElementById('ui-duration').textContent = '00:00';
+  localVideo?.close(); localVideo = null;
+  localAudio?.close(); localAudio = null;
+  client?.leave(); client = null;
+  channelName = null; agoraToken = null;
+}
+
+// ── 통화 시간 ─────────────────────────────────────────────────
+function startDuration() {
+  durationSec = 0;
+  durationId = setInterval(() => {
+    durationSec++;
+    const m = String(Math.floor(durationSec / 60)).padStart(2, '0');
+    const s = String(durationSec % 60).padStart(2, '0');
+    document.getElementById('ui-duration').textContent = `${m}:${s}`;
+  }, 1000);
+}
+
+// ── 공통 fetch ────────────────────────────────────────────────
+async function apiFetch(path, method, token, body) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(SERVER + path, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`HTTP ${res.status}: ${text}`);
+  }
+  return res.json();
+}
+
+// ── 에러 표시 ─────────────────────────────────────────────────
+function setErr(id, msg) {
+  document.getElementById('err-' + id).textContent = msg;
+}
+</script>
+</body>
+</html>

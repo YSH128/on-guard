@@ -1,6 +1,7 @@
 package com.s14p21a404.shutter.data.token
 
 import android.content.Context
+import android.util.Log
 import java.util.UUID
 
 private const val PREFS_NAME = "shutter_auth"
@@ -19,6 +20,7 @@ class TokenManager(context: Context) {
             .putString(KEY_ACCESS_TOKEN, accessToken)
             .putString(KEY_REFRESH_TOKEN, refreshToken)
             .apply()
+        Log.d("ShutterToken", "accessToken: $accessToken")
     }
 
     fun saveAccessToken(accessToken: String) {
