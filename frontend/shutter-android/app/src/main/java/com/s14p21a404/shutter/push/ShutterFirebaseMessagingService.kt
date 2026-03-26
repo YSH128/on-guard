@@ -7,6 +7,8 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.LocationManager
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -108,6 +110,11 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
     private fun handleIncomingCall(callerId: Long, callerKakaoId: Long, callerName: String, channelName: String) {
         // 1) 풀스크린 알림용 채널 생성
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        val ringtoneUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+        val audioAttributes = AudioAttributes.Builder()
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+            .build()
         val channel = NotificationChannel(
             CALL_CHANNEL_ID,
             "Shutter 수신 전화",
@@ -115,6 +122,7 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
         ).apply {
             description = "영상통화 수신 알림"
             enableVibration(true)
+            setSound(ringtoneUri, audioAttributes)
         }
         notificationManager.createNotificationChannel(channel)
 
@@ -156,6 +164,7 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setAutoCancel(true)
             .setOngoing(true)
+            .setSound(ringtoneUri)
             .setFullScreenIntent(fullScreenPendingIntent, true)
             .setContentIntent(pendingIntent)
             .addAction(
@@ -284,7 +293,7 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
     companion object {
         private const val FCM_TAG = "ShutterFCMService"
         private const val CHANNEL_ID = "shutter_push_channel_v2"
-        private const val CALL_CHANNEL_ID = "shutter_call_channel_v1"
+        private const val CALL_CHANNEL_ID = "shutter_call_channel_v2"
         private const val NOTIFICATION_ID = 2001
         const val CALL_NOTIFICATION_ID = 2002
         private const val CALL_REQUEST_CODE = 3001
