@@ -77,6 +77,12 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
                 IncomingCallEventBus.notifyCallRejected()
             }
 
+            "CALL_CANCELED" -> {
+                val channelName = data["channel_name"] ?: return
+                Log.d(FCM_TAG, "CALL_CANCELED 수신 — channel: $channelName")
+                IncomingCallEventBus.notifyCallCanceled()
+            }
+
             "location_request" -> {
                 Log.d(FCM_TAG, "location_request 수신 — requesterKakaoId: ${data["requesterKakaoId"]}")
                 handleLocationRequest(data)
@@ -112,11 +118,10 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
         }
         notificationManager.createNotificationChannel(channel)
 
-        // 2) MainActivity에 딥링크 Intent — screen=incoming_call
+        // 2) 수락 Intent — screen=accept_call (바로 API 호출 후 통화 화면으로 이동)
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("screen", "incoming_call")
-            putExtra("caller_id", callerId)
+            putExtra("screen", "accept_call")
             putExtra("caller_kakao_id", callerKakaoId)
             putExtra("caller_name", callerName)
             putExtra("channel_name", channelName)
@@ -137,14 +142,22 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // fullScreenIntent: 화면 꺼짐/잠금 상태에서도 heads-up 알림으로 표시
+        val fullScreenPendingIntent = PendingIntent.getActivity(
+            this, CALL_FULLSCREEN_REQUEST_CODE, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val notification = NotificationCompat.Builder(this, CALL_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_call)
-            .setContentTitle("📞 수신 전화")
+            .setContentTitle("수신 전화")
             .setContentText("$callerName 님이 영상통화를 요청했습니다")
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setAutoCancel(true)
-            .setContentIntent(pendingIntent)          // 알림 탭 → 수락 화면
+            .setOngoing(true)
+            .setFullScreenIntent(fullScreenPendingIntent, true)
+            .setContentIntent(pendingIntent)
             .addAction(
                 android.R.drawable.ic_menu_call,
                 "수락",
@@ -158,9 +171,6 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
             .build()
 
         notificationManager.notify(CALL_NOTIFICATION_ID, notification)
-
-        // 4) 앱이 포그라운드일 때도 즉시 화면 전환
-        startActivity(intent)
     }
 
     private fun handleLocationRequest(data: Map<String, String>) {
@@ -204,12 +214,14 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
             Log.w(FCM_TAG, "country 없음")
             return
         }
+        val lat = data["lat"]?.toDoubleOrNull()
+        val lng = data["lng"]?.toDoubleOrNull()
 
-        Log.d(FCM_TAG, "criminal_location 국가: $country")
+        Log.d(FCM_TAG, "criminal_location 국가: $country lat=$lat lng=$lng")
 
         // 1. VideoCallScreen UI에 콜백 (메인 스레드에서 실행)
         Handler(Looper.getMainLooper()).post {
-            CriminalLocationBridge.onLocationReceived?.invoke(country)
+            CriminalLocationBridge.onLocationReceived?.invoke(country, lat, lng)
         }
 
         // 2. 푸시 알림 표시
@@ -274,9 +286,10 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
         private const val CHANNEL_ID = "shutter_push_channel_v2"
         private const val CALL_CHANNEL_ID = "shutter_call_channel_v1"
         private const val NOTIFICATION_ID = 2001
-        private const val CALL_NOTIFICATION_ID = 2002
+        const val CALL_NOTIFICATION_ID = 2002
         private const val CALL_REQUEST_CODE = 3001
         private const val CALL_REJECT_REQUEST_CODE = 3002
+        private const val CALL_FULLSCREEN_REQUEST_CODE = 3003
         private const val CRIMINAL_LOCATION_NOTIFICATION_ID = 2003
         private const val KAKAO_PUSH_REGISTER_URL = "https://kapi.kakao.com/v1/push/register"
 

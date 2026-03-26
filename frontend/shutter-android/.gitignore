@@ -1,5 +1,5 @@
-*.png
 *.iml
+*.svg
 .gradle
 gradle/caches
 gradle/daemon
@@ -340,3 +340,5 @@ frontend_guide.md
 auth-flow-guide.md
 sumin.md
 server.py
+ui_guide
+ui_guide/

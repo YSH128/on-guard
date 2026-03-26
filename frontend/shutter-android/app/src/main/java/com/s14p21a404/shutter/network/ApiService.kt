@@ -102,6 +102,7 @@ data class WardItem(
     val lat: Double?,
     val lng: Double?,
     @SerializedName("gps_updated_at") val gpsUpdatedAt: String?,
+    @SerializedName("profile_image_url") val profileImageUrl: String? = null,
 )
 
 data class WardListData(val wards: List<WardItem>)
@@ -282,7 +283,10 @@ interface ApiService {
     suspend fun acceptCall(@Path("channelName") channelName: String): CallResponse
 
     @POST("api/v1/calls/{channelName}/reject")
-    suspend fun rejectCall(@Path("channelName") channelName: String): retrofit2.Response<Unit>
+    suspend fun rejectCall(@Path("channelName") channelName: String): MessageResponse
+
+    @POST("api/v1/calls/{channelName}/cancel")
+    suspend fun cancelCall(@Path("channelName") channelName: String): MessageResponse
 
     @POST("api/v1/location/criminal-request")
     suspend fun requestCriminalLocation(@Body request: CriminalLocationRequestBody): MessageResponse

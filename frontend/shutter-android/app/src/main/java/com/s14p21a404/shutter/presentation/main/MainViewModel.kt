@@ -10,6 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.s14p21a404.shutter.di.ServiceLocator
 import com.s14p21a404.shutter.presentation.service.ForegroundAppMonitorService
+import com.s14p21a404.shutter.presentation.service.VideoCallDetectService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -98,6 +99,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         _uiState.update {
             it.copy(
+                isServiceRunning = VideoCallDetectService.isRunning,
                 allPermissionsGranted = hasPhoneState && hasNotification && hasLocation && hasAnswerPhoneCalls,
                 overlayPermissionGranted = hasOverlay,
                 accessibilityServiceEnabled = hasAccessibility
@@ -138,5 +140,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _incomingChannelName.value = null
         _incomingCallerName.value = null
         _incomingCallerKakaoId.value = null
+    }
+
+    fun rejectCallByChannel(channelName: String) {
+        viewModelScope.launch {
+            serviceLocator.videoCallRepository.rejectCall(channelName)
+                .onFailure { Log.e(TAG, "통화 거절 실패: $channelName", it) }
+            clearIncomingCall()
+        }
+    }
+
+    fun acceptIncomingCall(channelName: String, callerName: String, callerKakaoId: Long) {
+        // HomeScreen의 자동 서비스 시작(화면공유 다이얼로그)을 막기 위해 즉시 상태 설정
+        _pendingDeepLinkScreen.value = "accept_call_pending"
+        viewModelScope.launch {
+            serviceLocator.videoCallRepository.acceptCall(channelName)
+                .onSuccess { data ->
+                    com.s14p21a404.shutter.data.repository.VideoCallSessionStore.agoraToken = data.token
+                    com.s14p21a404.shutter.data.repository.VideoCallSessionStore.channelName = data.channelName
+                    clearIncomingCall()
+                    setDeepLinkScreen("video_call:${data.channelName}:$callerName:$callerKakaoId")
+                }
+                .onFailure { e ->
+                    Log.e(TAG, "acceptIncomingCall 실패: $channelName", e)
+                    setDeepLinkScreen("call_accept_failed")
+                }
+        }
     }
 }

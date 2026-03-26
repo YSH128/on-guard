@@ -19,6 +19,7 @@ data class WardWithLocation(
     val lng: Double?,
     val updatedAt: String?,
     val isSharing: Boolean,
+    val profileImageUrl: String? = null,
 )
 
 sealed class LocationUiState {
@@ -69,6 +70,7 @@ class LocationViewModel(application: Application) : AndroidViewModel(application
                                     lng = gps.lng,
                                     updatedAt = gps.updatedAt,
                                     isSharing = gps.isSharing,
+                                    profileImageUrl = ward.profileImageUrl,
                                 )
                             } ?: WardWithLocation(
                                 wardId = ward.wardId,
@@ -77,6 +79,7 @@ class LocationViewModel(application: Application) : AndroidViewModel(application
                                 lng = null,
                                 updatedAt = null,
                                 isSharing = false,
+                                profileImageUrl = ward.profileImageUrl,
                             )
                     }
 
