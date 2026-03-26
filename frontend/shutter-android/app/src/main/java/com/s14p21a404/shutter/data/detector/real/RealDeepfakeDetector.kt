@@ -94,8 +94,8 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
         if (!bridge!!.isModelReady) {
             Log.d(TAG, "⏳ 메모리에 AI 모델 적재 중입니다... 프레임 추론 건너뜀")
-            // 화면 쪽으로 로딩 상태를 전달하기 위해 가짜 결과 발행
-            callback(DeepfakeDetectionResult(detected = false, rawResultJson = "AI 모델 빌드 및 적재 중입니다..."))
+            // 화면 쪽으로 로딩 상태를 전달하기 위해 가짜 결과 발행 (단, 최종 callback이 아닌 프레임별 callback으로 넘겨야 전체 사이클이 중단되지 않음)
+            onFrameResultCallback?.invoke(DeepfakeDetectionResult(detected = false, rawResultJson = "AI 모델 빌드 및 적재 중입니다..."))
             return
         }
 
@@ -189,7 +189,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
     companion object {
         private const val TAG = "RealDeepfakeDetector"
-        private const val BUFFER_SIZE = 10
+        private const val BUFFER_SIZE = 7
     }
 }
 
