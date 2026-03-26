@@ -164,4 +164,44 @@ public class CallService {
         messagingTemplate.convertAndSend("/topic/call/" + caller.getId(), eventResponse);
         log.info("Published CALL_REJECTED via WebSocket to caller: {}", caller.getId());
     }
+
+    /**
+     * 통화 취소(Cancel) 기능 처리 (발신자가 통화 연결 전에 취소하는 경우)
+     */
+    public void cancelCall(Long userId, String channelName) {
+        // 1. Redis 통화 세션 조회 (없으면 CALL_NOT_FOUND)
+        CallSession session = callSessionService.getSession(channelName);
+        if (session == null) {
+            throw new CallException(ErrorCode.CALL_NOT_FOUND);
+        }
+
+        // 2. 발신자 권한 확인 (userId != callerId 이면 403)
+        if (!userId.equals(session.getCallerId())) {
+            throw new CallException(ErrorCode.UNAUTHORIZED_ACCESS);
+        }
+
+        // 3. Redis 세션 삭제 및 발신자 락 해제
+        callSessionService.deleteSession(channelName);
+        callSessionService.deleteCallerLock(userId);
+
+        // 4. 수신자 조회 -> kakaoId 획득
+        User callee = userRepository.findById(session.getCalleeId())
+                .orElseThrow(() -> new CallException(ErrorCode.USER_NOT_FOUND));
+
+        // 5. Data 전용 카카오 푸시 전송 (안드로이드 백그라운드 수신용)
+        Map<String, String> payloadMap = new HashMap<>();
+        payloadMap.put("type", "CALL_CANCELED");
+        payloadMap.put("channel_name", channelName);
+
+        alertService.sendDataAlertToUser(callee.getKakaoId(), payloadMap);
+        log.info("Sent CALL_CANCELED data push to callee: {}", callee.getId());
+
+        // WebSocket 이벤트 발송 (수신자에게 취소 알림)
+        com.shutter.api.rtc.dto.response.CallEventResponse eventResponse = com.shutter.api.rtc.dto.response.CallEventResponse.builder()
+                .type("CALL_CANCELED")
+                .channelName(channelName)
+                .build();
+        messagingTemplate.convertAndSend("/topic/call/" + callee.getId(), eventResponse);
+        log.info("Published CALL_CANCELED via WebSocket to callee: {}", callee.getId());
+    }
 }
