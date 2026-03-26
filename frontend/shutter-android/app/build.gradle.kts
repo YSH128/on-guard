@@ -141,6 +141,9 @@ dependencies {
     // 이미지 로딩 (카카오 프로필 사진, GIF)
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("io.coil-kt:coil-gif:2.6.0")
+
+    // Glide (오버레이 View에서 국기 이미지 로딩)
+    implementation("com.github.bumptech.glide:glide:4.16.0")
 }
 
 
