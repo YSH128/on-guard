@@ -24,9 +24,18 @@ class OnDeviceWhisperHelper(private val context: Context) {
     var onAnalysisResult: ((String) -> Unit)? = null
     
     private var isProcessingChunk = false
+    private var lastTranscribeStartTime = 0L
+
+    private var firstTranscribeTime = 0L
+    private var isGmsCalled = false
+    private var latestCleanText = ""
 
     suspend fun initModel() = withContext(Dispatchers.IO) {
         try {
+            firstTranscribeTime = 0L
+            isGmsCalled = false
+            latestCleanText = ""
+            
             Log.d("WhisperSTT", "Initializing WhisperKit...")
             
             whisperKit = WhisperKit.Builder()
@@ -41,6 +50,9 @@ class OnDeviceWhisperHelper(private val context: Context) {
                             isInitialized = true
                         }
                         WhisperKit.TextOutputCallback.MSG_TEXT_OUT -> {
+                            val textOutTime = System.currentTimeMillis()
+                            val sttElapsed = textOutTime - lastTranscribeStartTime
+                            Log.d("WhisperSTT", "⚡ 콜백 MSG_TEXT_OUT 수신! STT 시작부터 걸린 시간: ${sttElapsed}ms")
                             // val rawText = result.text
                             // if (rawText.contains("<|translate|>")) {
                             //     Log.d("WhisperSTT", "⚠️ 번역 모드 감지 → 영어 결과 폐기: $rawText")
@@ -54,13 +66,16 @@ class OnDeviceWhisperHelper(private val context: Context) {
                                 .replace(Regex("\\[.*?\\]|\\(.*?\\)|♪.*?♪|\\*.*?\\*"), "")
                                 .trim()
 
-                            // Log.d("WhisperSTT", "Transcribed (clean): $cleanText")
+                            latestCleanText = cleanText
                             if (cleanText.isNotBlank()) {
                                 onResult?.invoke(cleanText)
-                                // GMS 분석 자동 실행
+                                Log.d("WhisperSTT", "🗣️ [누적 STT 결과 갱신]: $cleanText")
+                                Log.d("WhisperSTT", "🚀 STT 텍스트 갱신 감지됨. GMS API로 누적 텍스트 전체를 실시간 전송합니다.")
                                 sttScope.launch {
                                     analyzeTextWithGMS(cleanText)
                                 }
+                            } else {
+                                Log.d("WhisperSTT", "⚠️ 텍스트 필터링됨")
                             }
                         }
                         WhisperKit.TextOutputCallback.MSG_CLOSE -> {
@@ -97,11 +112,18 @@ class OnDeviceWhisperHelper(private val context: Context) {
             try {
                 isProcessingChunk = true
                 
+                if (firstTranscribeTime == 0L) {
+                    firstTranscribeTime = System.currentTimeMillis()
+                    Log.d("WhisperSTT", "⏰ 첫 STT 음성 스트림 유입됨 (통화 시작으로 간주)")
+                }
+
+                lastTranscribeStartTime = System.currentTimeMillis()
                 Log.d("WhisperSTT", "🔄 JNI Native STT 추론 시작... 크기: ${audioChunk.size} bytes")
                 
                 val seconds = whisperKit?.transcribe(audioChunk) ?: 0
                 
-                Log.d("WhisperSTT", "✅ Inference completed. Processed $seconds seconds of audio.")
+                val elapsed = System.currentTimeMillis() - lastTranscribeStartTime
+                Log.d("WhisperSTT", "✅ Inference completed. Processed $seconds seconds of audio. 추론 소요시간: ${elapsed}ms")
                 
             } catch (e: Exception) {
                 Log.e("WhisperSTT", "❌ Inference error: ${e.message}", e)
@@ -145,7 +167,8 @@ class OnDeviceWhisperHelper(private val context: Context) {
 
         return@withContext try {
             val requestBody = buildGMSRequestJson(systemPrompt, text)
-            Log.d("GMSAPI", "🔄 GMS API 요청 시작... 텍스트: $text")
+            val gmsStartTime = System.currentTimeMillis()
+            Log.d("GMSAPI", "🔄 GMS API 네트워크 요청 시작... (텍스트: $text)")
 
             val urlConnection = URL(url).openConnection() as HttpsURLConnection
             urlConnection.apply {
@@ -163,17 +186,21 @@ class OnDeviceWhisperHelper(private val context: Context) {
             }
 
             val responseCode = urlConnection.responseCode
+            val gmsElapsed = System.currentTimeMillis() - gmsStartTime
+            Log.d("GMSAPI", "✅ GMS API Response Code 수신 (소요시간: ${gmsElapsed}ms, Code: $responseCode)")
+
             val responseBody = if (responseCode == HttpsURLConnection.HTTP_OK) {
                 urlConnection.inputStream.bufferedReader().use { it.readText() }
             } else {
                 urlConnection.errorStream.bufferedReader().use { it.readText() }
             }
 
-            Log.d("GMSAPI", "Response Code: $responseCode, Body: $responseBody")
+            Log.d("GMSAPI", "Response Body: $responseBody")
 
             if (responseCode == HttpsURLConnection.HTTP_OK) {
                 val analysisResult = parseGMSResponse(responseBody)
-                Log.d("GMSAPI", "✅ 분석 완료: $analysisResult")
+                val totalElapsed = System.currentTimeMillis() - firstTranscribeTime
+                Log.d("GMSAPI", "✅ 분석 완료: $analysisResult (통화 시작 후 총 소요시간: ${totalElapsed}ms)")
                 onAnalysisResult?.invoke(analysisResult)
                 analysisResult
             } else {
