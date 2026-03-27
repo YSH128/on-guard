@@ -122,6 +122,32 @@ class WarningOverlayManager(
         dismissAll()
     }
 
+    /**
+     * 오버레이 뷰만 숨기고 세션 상태(lastResult, bottomSheetShownForSession 등)는 보존한다.
+     * 영상통화 화면 이탈 시 호출하여, 복귀 시 오버레이를 즉시 복원할 수 있게 한다.
+     */
+    fun hideOverlaysKeepState() {
+        dismissScanningPill()
+        // ROI box
+        roiBoundingBoxView?.let {
+            it.stopAnimations()
+            removeOverlayView(it)
+        }
+        roiBoundingBoxView = null
+        // Bottom sheet
+        bottomSheetView?.let {
+            it.stopAnimations()
+            removeOverlayView(it)
+        }
+        bottomSheetView = null
+        // Notification pills
+        notificationPillViews.forEach { removeOverlayView(it) }
+        notificationPillViews.clear()
+        handler.removeCallbacksAndMessages(null)
+        // lastResult, bottomSheetShownForSession, receivedCountryName 등은 유지
+        Log.d(TAG, "오버레이 뷰 숨김 (세션 상태 보존)")
+    }
+
 
     /**
      * 오버레이 표시 허용 여부를 설정한다.
@@ -228,6 +254,11 @@ class WarningOverlayManager(
         // ── Warning Bottom Sheet (500ms 지연 후 표시) ──
         handler.postDelayed({
             if (!enabled) return@postDelayed
+            // 이미 바텀시트가 존재하면 중복 생성 방지 (복귀 복원과 재탐지 결과가 겹칠 때)
+            if (bottomSheetView != null) {
+                Log.d(TAG, "바텀시트 이미 존재 → 중복 생성 스킵")
+                return@postDelayed
+            }
             val isInApp = videoCallRepository?.isInAppCallActive() ?: false
             val sheet = WarningBottomSheetView(
                 context = context,

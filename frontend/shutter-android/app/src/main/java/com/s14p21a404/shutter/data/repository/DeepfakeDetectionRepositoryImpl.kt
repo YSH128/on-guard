@@ -120,10 +120,11 @@ class DeepfakeDetectionRepositoryImpl(
         Log.d(TAG, "감지 중단")
         isModelReady = false
 
-        // ── 화면 캡처 일시정지 (VirtualDisplay·MediaProjection 유지) ──
-        screenCaptureManager?.pauseCapture()
-
+        // ── 1) Detector 먼저 중단: 캡처 스레드의 processFrame이 결과를 emit하지 않도록 차단 ──
         detector.stopDetection()
+
+        // ── 2) 화면 캡처 일시정지 (VirtualDisplay·MediaProjection 유지) ──
+        screenCaptureManager?.pauseCapture()
     }
 
     override fun setMediaProjection(context: Context, mediaProjection: MediaProjection) {

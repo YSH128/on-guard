@@ -25,9 +25,15 @@ import com.s14p21a404.shutter.domain.model.DeepfakeDetectionResult
 class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
     private var bridge: NativeDeepfakeBridge? = null
+    @Volatile
     private var onResultCallback: ((DeepfakeDetectionResult) -> Unit)? = null
+    @Volatile
     private var onFrameResultCallback: ((DeepfakeDetectionResult) -> Unit)? = null
     private var nativeAvailable = false
+
+    /** stopDetection 호출 후 true — processFrame에서 결과 emit을 차단한다. */
+    @Volatile
+    private var stopped = true
 
     /** NDK 결과를 받을 더미 TextView (NDK 쪽에서 setText로 결과를 써줄 예정) -> 폐기: 직관적인 String Return 사용 */
 
@@ -50,6 +56,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
         onFrameResult: (DeepfakeDetectionResult) -> Unit,
         onReady: () -> Unit
     ) {
+        stopped = false
         onResultCallback = onResult
         onFrameResultCallback = onFrameResult
         resultBuffer.clear()  // 시작 시 초기화
@@ -85,6 +92,8 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
      * @param rowStride Image.Plane의 rowStride
      */
     override fun processFrame(buffer: ByteArray, width: Int, height: Int, rowStride: Int) {
+        // 감지 중단 후 캡처 스레드에서 늦게 도착하는 프레임을 즉시 버린다.
+        if (stopped) return
         val callback = onResultCallback ?: return
 
         if (!nativeAvailable || bridge == null) {
@@ -107,6 +116,12 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
             Log.d(TAG, "JNI 결과: $resultText")
 
             val result = parseResult(resultText)
+
+            // JNI 추론 중 stopDetection이 호출되었으면 결과를 버린다.
+            if (stopped) {
+                Log.d(TAG, "추론 완료 후 stopped 상태 → 결과 폐기")
+                return
+            }
 
             onFrameResultCallback?.invoke(result)
 
@@ -151,7 +166,9 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
     }
 
     override fun stopDetection() {
+        stopped = true      // 캡처 스레드의 processFrame이 즉시 bail-out 하도록 먼저 설정
         onResultCallback = null
+        onFrameResultCallback = null
         resultBuffer.clear()
         Log.d(TAG, "RealDeepfakeDetector 중단")
     }
