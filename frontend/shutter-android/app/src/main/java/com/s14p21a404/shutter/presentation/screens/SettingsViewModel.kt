@@ -43,7 +43,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 .onSuccess { guardians ->
                     val displayGuardians = guardians.map { guardian ->
                         val kakaoName = guardianUuidStore.getKakaoName(guardian.guardianId)
-                        val profileImageUrl = guardianUuidStore.getProfileImageUrl(guardian.guardianId)
+                        val profileImageUrl = guardian.profileImageUrl
+                            ?: guardianUuidStore.getProfileImageUrl(guardian.guardianId)
                         guardian.copy(
                             name = kakaoName ?: guardian.name,
                             profileImageUrl = profileImageUrl,
