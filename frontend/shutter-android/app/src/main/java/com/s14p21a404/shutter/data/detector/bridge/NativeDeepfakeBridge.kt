@@ -8,6 +8,10 @@ import com.s14p21a404.shutter.telemetry.DeviceStatusProvider
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.concurrent.thread
+import ai.onnxruntime.OnnxTensor
+import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtSession
+import java.nio.FloatBuffer
 
 /**
  * JNI 브릿지 (Kotlin 쪽) — NDK 네이티브 함수 request_deepfake_detection 호출
@@ -36,6 +40,9 @@ class NativeDeepfakeBridge(private val context: Context) {
     @Volatile
     var isQnnSupported = true // 기본 지원가정. 초기화 실패시 false.
 
+    private var ortEnv: OrtEnvironment? = null
+    private var ortSession: OrtSession? = null
+
     @Volatile
     var isOnnxInitialized = false
     private val onnxLock = Any()
@@ -58,17 +65,42 @@ class NativeDeepfakeBridge(private val context: Context) {
         synchronized(onnxLock) {
             if (isOnnxInitialized) return
             try {
-                Log.d("NativeDeepfakeBridge", "ONNX C++ 네이티브 초기화 시작...")
-                val modelPath = getAssetFilePath(context, "ds_model.onnx")
-                val ok = initOnnx(modelPath)
-                if (ok) {
-                    isOnnxInitialized = true
-                    Log.d("NativeDeepfakeBridge", "ONNX C++ 세션 초기화 완료 (워밍업 포함)")
-                } else {
-                    Log.e("NativeDeepfakeBridge", "ONNX C++ 세션 초기화 실패")
+                Log.d("NativeDeepfakeBridge", "ONNX Runtime 폴백 초기화 시작...")
+                ortEnv = OrtEnvironment.getEnvironment()
+                val options = OrtSession.SessionOptions()
+                // INT8 CPU
+                options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                val modelPath = getAssetFilePath(context, "face_deepfake_v6.onnx")
+                ortSession = ortEnv?.createSession(modelPath, options)
+
+                // Warmup Inference (VRAM 사전 적재 및 셰이더 컴파일 강제실행)
+                try {
+                    val dummyFloatArray = FloatArray(1 * 3 * 256 * 256) { 0f }
+                    val dummyTensor = OnnxTensor.createTensor(
+                        ortEnv,
+                        FloatBuffer.wrap(dummyFloatArray),
+                        longArrayOf(1, 3, 256, 256)
+                    )
+                    val inputName = ortSession?.inputNames?.iterator()?.next() ?: "input"
+                    ortSession?.run(mapOf(inputName to dummyTensor))?.close()
+                    dummyTensor.close()
+                    Log.d("NativeDeepfakeBridge", "ONNX Runtime 웜업 완료 (CPU 최적화)")
+                } catch (e: Exception) {
+                    Log.e("NativeDeepfakeBridge", "ONNX 웜업 실패: ${e.message}")
                 }
+
+                // C++ 네이티브 ONNX 세션도 초기화 (detectDeepfakeOnnx JNI에서 사용)
+                val nativeOk = initOnnx(modelPath)
+                if (nativeOk) {
+                    Log.d("NativeDeepfakeBridge", "C++ ONNX 네이티브 세션 초기화 성공")
+                } else {
+                    Log.e("NativeDeepfakeBridge", "C++ ONNX 네이티브 세션 초기화 실패")
+                }
+
+                isOnnxInitialized = true
+                Log.d("NativeDeepfakeBridge", "ONNX Runtime 폴백 초기화 및 적재 완료")
             } catch (e: Exception) {
-                Log.e("NativeDeepfakeBridge", "ONNX 초기화 에러: ${e.message}")
+                Log.e("NativeDeepfakeBridge", "ONNX 초기화 실패: ${e.message}")
             }
         }
     }
@@ -249,10 +281,10 @@ class NativeDeepfakeBridge(private val context: Context) {
                     }.toString()
                 }
 
-                val fakeProb      = results[0]
-                val realProb      = results[1]
+                val fakeProb      = results[0]  // softmax(logits)[1] = fake 확률
+                val realProb      = results[1]  // softmax(logits)[0] = real 확률
                 val inferenceTime = results[3]
-                val isFake        = fakeProb > realProb
+                val isFake        = fakeProb > 0.3f  // 원본 모델 threshold: 0.3
                 val status        = if (isFake) "FAKE" else "REAL"
 
                 var roi: FloatArray? = null
