@@ -68,7 +68,7 @@ public class AlertService {
         // 4. 각 보호자에게 푸시 발송 및 로그 저장
         for (UserRelationship rel : relationships) {
             User guardian = rel.getGuardian();
-            PushResult pushResult = kakaoPushClient.sendPush(guardian.getKakaoId(), request.getEventType(), pushMessage);
+            PushResult pushResult = kakaoPushClient.sendPush(guardian.getKakaoId(), ward.getName(), request.getEventType(), pushMessage);
             boolean pushSuccess = (pushResult == PushResult.SUCCESS);
 
             NotificationLog notificationLog = NotificationLog.builder()
@@ -117,7 +117,7 @@ public class AlertService {
      * 단일 대상에게 커스텀 푸시 메시지(JSON) 전송
      */
     public void sendAlertToUser(Long kakaoId, String payloadJson) {
-        PushResult pushResult = kakaoPushClient.sendPush(kakaoId, NotificationEventType.MESSAGE, payloadJson);
+        PushResult pushResult = kakaoPushClient.sendPush(kakaoId, null, NotificationEventType.MESSAGE, payloadJson);
 
         if (pushResult == PushResult.CONFIG_ERROR) {
             log.error("❌ [PUSH FAIL] kakaoId={}, payload={}, error=KAKAO_PUSH_CONFIG_ERROR", kakaoId, payloadJson);

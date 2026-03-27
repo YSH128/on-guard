@@ -23,9 +23,10 @@ public class KakaoPushRequest {
     private PushMessage pushMessage;
 
     @Builder
-    public KakaoPushRequest(String kakaoId, String message, String eventType) {
+    public KakaoPushRequest(String kakaoId, String title, String message, String eventType) {
         this.uuids = Collections.singletonList(kakaoId);
         this.pushMessage = PushMessage.builder()
+                .title(title)
                 .message(message)
                 .eventType(eventType)
                 .build();
@@ -41,11 +42,12 @@ public class KakaoPushRequest {
         private FcmMessage forFcm;
 
         @Builder
-        public PushMessage(String message, String eventType) {
+        public PushMessage(String title, String message, String eventType) {
             this.forApns = ApnsMessage.builder()
                     .message(message)
                     .build();
             this.forFcm = FcmMessage.builder()
+                    .title(title)
                     .message(message)
                     .eventType(eventType)
                     .build();
@@ -74,8 +76,8 @@ public class KakaoPushRequest {
         private Map<String, String> customField;
 
         @Builder
-        public FcmMessage(String message, String eventType) {
-            this.notification = new FcmNotification(message);
+        public FcmMessage(String title, String message, String eventType) {
+            this.notification = new FcmNotification(title, message);
             this.customField = Map.of("event_type", eventType);
         }
     }
@@ -83,10 +85,11 @@ public class KakaoPushRequest {
     @Getter
     @NoArgsConstructor(access = AccessLevel.PROTECTED)
     public static class FcmNotification {
-        private String title = "SHUTTER 긴급 알림";
+        private String title;
         private String body;
 
-        public FcmNotification(String body) {
+        public FcmNotification(String title, String body) {
+            this.title = (title != null && !title.isBlank()) ? title : "SHUTTER 긴급 알림";
             this.body = body;
         }
     }
