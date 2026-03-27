@@ -37,6 +37,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     private val loginUseCase: LoginUseCase = serviceLocator.loginUseCase
     private val logoutUseCase: LogoutUseCase = serviceLocator.logoutUseCase
     private val getAccessTokenUseCase: GetAccessTokenUseCase = serviceLocator.getAccessTokenUseCase
+    private val tokenManager = serviceLocator.tokenManager
 
     private val _loginUiState = MutableStateFlow<LoginUiState>(LoginUiState.Checking)
     val loginUiState: StateFlow<LoginUiState> = _loginUiState.asStateFlow()
@@ -119,6 +120,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                         is KakaoLoginResult.LoggedIn -> {
                             Log.d(TAG, "로그인 완료 — userId: ${result.userId}")
                             registerFcmToken()
+                            saveMyProfileImage()
                             _loginUiState.value = LoginUiState.LoggedIn
                         }
                     }
@@ -128,6 +130,17 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     _loginError.value = e.message ?: "서버 연결에 실패했습니다."
                     _loginUiState.value = LoginUiState.LoggedOut
                 }
+        }
+    }
+
+    private fun saveMyProfileImage() {
+        UserApiClient.instance.me { user, error ->
+            if (error == null) {
+                val imageUrl = user?.kakaoAccount?.profile?.thumbnailImageUrl
+                if (!imageUrl.isNullOrEmpty()) {
+                    tokenManager.saveMyProfileImageUrl(imageUrl)
+                }
+            }
         }
     }
 

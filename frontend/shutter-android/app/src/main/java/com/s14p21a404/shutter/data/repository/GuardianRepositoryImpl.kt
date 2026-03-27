@@ -30,6 +30,7 @@ class GuardianRepositoryImpl(
                 guardianId = it.guardianId,
                 name = it.guardianName,
                 createdAt = it.createdAt,
+                profileImageUrl = it.profileImageUrl,
             )
         }
     }

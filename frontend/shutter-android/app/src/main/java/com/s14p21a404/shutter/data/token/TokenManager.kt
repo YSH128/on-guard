@@ -9,6 +9,7 @@ private const val KEY_REFRESH_TOKEN = "refresh_token"
 private const val KEY_USER_ID = "user_id"
 private const val KEY_DEVICE_UUID = "device_uuid"
 private const val KEY_GPS_SHARING = "gps_sharing"
+private const val KEY_MY_PROFILE_IMAGE_URL = "my_profile_image_url"
 
 class TokenManager(context: Context) {
 
@@ -44,6 +45,12 @@ class TokenManager(context: Context) {
         prefs.edit().putString(KEY_DEVICE_UUID, newUuid).apply()
         return newUuid
     }
+
+    fun saveMyProfileImageUrl(url: String) {
+        prefs.edit().putString(KEY_MY_PROFILE_IMAGE_URL, url).apply()
+    }
+
+    fun getMyProfileImageUrl(): String? = prefs.getString(KEY_MY_PROFILE_IMAGE_URL, null)
 
     fun saveGpsSharing(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_GPS_SHARING, enabled).apply()

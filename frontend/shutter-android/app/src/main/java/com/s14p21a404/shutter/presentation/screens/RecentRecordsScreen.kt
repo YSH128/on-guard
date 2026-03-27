@@ -23,6 +23,8 @@ import androidx.compose.material.icons.outlined.MailOutline
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.*
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.SubcomposeAsyncImage
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -326,12 +328,29 @@ private fun SessionCard(
                         .background(Color(0xFFD6E0F5)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Person,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = Color(0xFF5B7FD6)
-                    )
+                    if (!session.profileImageUrl.isNullOrEmpty()) {
+                        SubcomposeAsyncImage(
+                            model = session.profileImageUrl,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                            error = {
+                                Icon(
+                                    imageVector = Icons.Outlined.Person,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = Color(0xFF5B7FD6)
+                                )
+                            },
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Outlined.Person,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = Color(0xFF5B7FD6)
+                        )
+                    }
                 }
 
                 Spacer(Modifier.width(12.dp))

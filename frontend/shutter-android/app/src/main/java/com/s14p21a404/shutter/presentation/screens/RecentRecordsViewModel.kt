@@ -17,6 +17,7 @@ import java.time.LocalDate
 data class WardFilter(
     val name: String,
     val wardId: Long?,
+    val profileImageUrl: String? = null,
 )
 
 data class TimelineEntry(
@@ -30,6 +31,7 @@ data class SessionGroup(
     val sessionDate: String,      // "오늘" or "MM월 DD일"
     val sessionTime: String,      // "HH:mm"
     val entries: List<TimelineEntry>,
+    val profileImageUrl: String? = null,
 )
 
 data class RecentRecordsUiState(
@@ -46,6 +48,7 @@ class RecentRecordsViewModel(application: Application) : AndroidViewModel(applic
     private val locator = ServiceLocator.getInstance(application)
     private val getMyWardsUseCase = locator.getMyWardsUseCase
     private val alertRepository = locator.alertRepository
+    private val tokenManager = locator.tokenManager
 
     private val _uiState = MutableStateFlow(RecentRecordsUiState())
     val uiState: StateFlow<RecentRecordsUiState> = _uiState.asStateFlow()
@@ -58,8 +61,10 @@ class RecentRecordsViewModel(application: Application) : AndroidViewModel(applic
         viewModelScope.launch {
             getMyWardsUseCase()
                 .onSuccess { wards ->
-                    val filters = listOf(WardFilter("전체", null)) +
-                            wards.map { WardFilter(it.name, it.wardId) }
+                    val myUserId = tokenManager.getUserId()
+                    val myProfileImageUrl = tokenManager.getMyProfileImageUrl()
+                    val filters = listOf(WardFilter("전체", null), WardFilter("나", myUserId, myProfileImageUrl)) +
+                            wards.map { WardFilter(it.name, it.wardId, it.profileImageUrl) }
                     _uiState.update { it.copy(wardFilters = filters) }
                     loadTimeline()
                 }
@@ -71,8 +76,10 @@ class RecentRecordsViewModel(application: Application) : AndroidViewModel(applic
             _uiState.update { it.copy(isRefreshing = true) }
             getMyWardsUseCase()
                 .onSuccess { wards ->
-                    val filters = listOf(WardFilter("전체", null)) +
-                            wards.map { WardFilter(it.name, it.wardId) }
+                    val myUserId = tokenManager.getUserId()
+                    val myProfileImageUrl = tokenManager.getMyProfileImageUrl()
+                    val filters = listOf(WardFilter("전체", null), WardFilter("나", myUserId, myProfileImageUrl)) +
+                            wards.map { WardFilter(it.name, it.wardId, it.profileImageUrl) }
                     _uiState.update { it.copy(wardFilters = filters) }
                 }
             loadTimeline()
@@ -99,10 +106,12 @@ class RecentRecordsViewModel(application: Application) : AndroidViewModel(applic
 
             val state = _uiState.value
             val wardsToFetch = if (state.selectedFilter == "전체") {
-                state.wardFilters.filter { it.wardId != null }
+                state.wardFilters.filter { it.wardId != null && it.wardId > 0 }
             } else {
-                state.wardFilters.filter { it.name == state.selectedFilter && it.wardId != null }
+                state.wardFilters.filter { it.name == state.selectedFilter && it.wardId != null && it.wardId > 0 }
             }
+
+            val wardProfileMap = wardsToFetch.associate { it.name to it.profileImageUrl }
 
             val allEntries = wardsToFetch
                 .map { ward ->
@@ -141,6 +150,7 @@ class RecentRecordsViewModel(application: Application) : AndroidViewModel(applic
                         sessionDate = dateLabel,
                         sessionTime = timeLabel,
                         entries = entries.sortedBy { it.item.timestamp },
+                        profileImageUrl = wardProfileMap[first.wardName],
                     )
                 }
 
