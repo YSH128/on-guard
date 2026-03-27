@@ -210,7 +210,7 @@ class DeepfakeDetectionRepositoryImpl(
                 val request = TelemetryRequest(
                     user_id = tokenManager.getUserId().toInt(),
                     model_type = "FACE",
-                    model_version = "v3",
+                    model_version = "v6",
                     inference_success = errorType == null,
                     failure_type = errorType,
                     inference_latency_ms = inferenceLatency,
