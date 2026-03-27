@@ -66,7 +66,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     private fun syncGpsSharingState() {
         viewModelScope.launch {
-            val savedSharing = tokenManager.getGpsSharing()
+            val savedSharing = tokenManager.getOrInitGpsSharing()
             gpsRepository.toggleGpsSharing(savedSharing)
                 .onSuccess { enabled -> tokenManager.saveGpsSharing(enabled) }
         }
