@@ -1,5 +1,6 @@
 package com.shutter.api.rtc.service;
 
+import com.shutter.api.global.exception.BusinessException;
 import com.shutter.api.global.exception.CallException;
 import com.shutter.api.global.exception.ErrorCode;
 import com.shutter.api.notification.service.AlertService;
@@ -63,12 +64,13 @@ public class CallService {
         Map<String, String> payloadMap = new HashMap<>();
         payloadMap.put("type", "INCOMING_CALL");
         payloadMap.put("caller_id", String.valueOf(callerId));
+        payloadMap.put("caller_kakao_id", String.valueOf(caller.getKakaoId()));
         payloadMap.put("caller_name", caller.getName());
         payloadMap.put("channel_name", channelName);
 
         try {
             alertService.sendDataAlertToUser(callee.getKakaoId(), payloadMap);
-            log.info("Sent INCOMING_CALL data push to callee: {}", calleeId);
+            log.info("Sent INCOMING_CALL data push to callee: {}, callerKakaoId: {}", calleeId, caller.getKakaoId());
         } catch (Exception e) {
             log.error("Failed to send incoming call push. Rolling back redis session & lock for channel: {}", channelName, e);
             callSessionService.deleteSession(channelName);
@@ -110,13 +112,17 @@ public class CallService {
         callSessionService.deleteCallerLock(caller.getId());
 
         // 6. Data 전용 카카오 푸시 전송 (안드로이드 백그라운드 수신용)
+        User callee = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
         Map<String, String> payloadMap = new HashMap<>();
         payloadMap.put("type", "CALL_ACCEPTED");
         payloadMap.put("channel_name", channelName);
+        payloadMap.put("callee_kakao_id", String.valueOf(callee.getKakaoId()));
 
         try {
             alertService.sendDataAlertToUser(caller.getKakaoId(), payloadMap);
-            log.info("Sent CALL_ACCEPTED data push to caller: {}", caller.getId());
+            log.info("Sent CALL_ACCEPTED data push to caller: {}, calleeKakaoId: {}", caller.getId(), callee.getKakaoId());
         } catch (Exception e) {
             log.warn("Failed to send CALL_ACCEPTED push to caller {}, but continuing flow.", caller.getId(), e);
         }
@@ -164,12 +170,16 @@ public class CallService {
                 .orElseThrow(() -> new CallException(ErrorCode.USER_NOT_FOUND));
 
         // 5. Data 전용 카카오 푸시 전송 (안드로이드 백그라운드 수신용)
+        User callee = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
         Map<String, String> payloadMap = new HashMap<>();
         payloadMap.put("type", "CALL_REJECTED");
         payloadMap.put("channel_name", channelName);
+        payloadMap.put("callee_kakao_id", String.valueOf(callee.getKakaoId()));
 
         alertService.sendDataAlertToUser(caller.getKakaoId(), payloadMap);
-        log.info("Sent CALL_REJECTED data push to caller: {}", caller.getId());
+        log.info("Sent CALL_REJECTED data push to caller: {}, calleeKakaoId: {}", caller.getId(), callee.getKakaoId());
 
         // WebSocket 이벤트 발송 (발신자에게 거절 알림)
         com.shutter.api.rtc.dto.response.CallEventResponse eventResponse = com.shutter.api.rtc.dto.response.CallEventResponse.builder()
@@ -204,12 +214,16 @@ public class CallService {
                 .orElseThrow(() -> new CallException(ErrorCode.USER_NOT_FOUND));
 
         // 5. Data 전용 카카오 푸시 전송 (안드로이드 백그라운드 수신용)
+        User caller = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
         Map<String, String> payloadMap = new HashMap<>();
         payloadMap.put("type", "CALL_CANCELED");
         payloadMap.put("channel_name", channelName);
+        payloadMap.put("caller_kakao_id", String.valueOf(caller.getKakaoId()));
 
         alertService.sendDataAlertToUser(callee.getKakaoId(), payloadMap);
-        log.info("Sent CALL_CANCELED data push to callee: {}", callee.getId());
+        log.info("Sent CALL_CANCELED data push to callee: {}, callerKakaoId: {}", callee.getId(), caller.getKakaoId());
 
         // WebSocket 이벤트 발송 (수신자에게 취소 알림)
         com.shutter.api.rtc.dto.response.CallEventResponse eventResponse = com.shutter.api.rtc.dto.response.CallEventResponse.builder()
