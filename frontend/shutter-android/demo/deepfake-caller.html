@@ -511,7 +511,14 @@ function startMasterLoop() {
       const h = sourceEl.videoHeight || 480;
       if (canvas.width !== w)  canvas.width  = w;
       if (canvas.height !== h) canvas.height = h;
-      ctx.drawImage(sourceEl, 0, 0, w, h);
+      if (webcamStream) {
+        ctx.save();
+        ctx.scale(-1, 1);
+        ctx.drawImage(sourceEl, -w, 0, w, h);
+        ctx.restore();
+      } else {
+        ctx.drawImage(sourceEl, 0, 0, w, h);
+      }
     }
     masterRafId = requestAnimationFrame(draw);
   }
