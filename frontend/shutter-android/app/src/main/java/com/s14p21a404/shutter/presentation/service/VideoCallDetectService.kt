@@ -91,6 +91,10 @@ class VideoCallDetectService : Service() {
     @Volatile
     private var wasOverlayShowing = false
 
+    /** 현재 영상통화 세션이 활성 중인지 — 통화 종료 후 도착하는 잔존 결과를 필터링한다. */
+    @Volatile
+    private var isVideoCallSessionActive = false
+
     // ── 생명주기 ──
 
     override fun onCreate() {
@@ -137,6 +141,17 @@ class VideoCallDetectService : Service() {
             }
             warningOverlayManager.dismissAll()
             alertSoundManager.stopAlert()
+
+            // ── 세션 플래그 리셋 (재통화 시 정상 동작 보장) ──
+            isVideoCallSessionActive = false
+            cooldownJob?.cancel()
+            cooldownJob = null
+            isDeepfakeDetected = false
+            alertSentForCurrentSession = false
+            wasOverlayShowing = false
+            financialBlockOverlayManager.setEnabled(false)
+            financialBlockOverlayManager.dismiss()
+            stopFinancialAppMonitoring()
         }
         warningOverlayManager.onRescan = {
             Log.d(TAG, "🔄 재탐지 요청 (오버레이)")
@@ -144,6 +159,7 @@ class VideoCallDetectService : Service() {
             cooldownJob = null
             warningOverlayManager.dismissAll()
             isDeepfakeDetected = false
+            alertSentForCurrentSession = false
             alertSoundManager.stopAlert()
             financialBlockOverlayManager.setEnabled(false)
             financialBlockOverlayManager.dismiss()
@@ -158,11 +174,22 @@ class VideoCallDetectService : Service() {
             monitorUseCase.observeAndControl().collect { isVideoCall ->
                 Log.d(TAG, "영상통화 상태: $isVideoCall")
                 if (isVideoCall) {
+                    // ── 새 영상통화 세션 시작 — 이전 세션 플래그 초기화 ──
+                    isVideoCallSessionActive = true
+                    cooldownJob?.cancel()
+                    cooldownJob = null
+                    isDeepfakeDetected = false
+                    alertSentForCurrentSession = false
+                    // 주의: wasOverlayShowing은 여기서 리셋하지 않는다.
+                    // 홈화면 이탈 후 복귀 시 오버레이 복원에 사용되기 때문.
+                    // 통화 종료(false) 또는 onEndCall에서만 리셋한다.
+
                     warningOverlayManager.setEnabled(true)
                     warningOverlayManager.showScanningPill() // 스캐닝 pill 표시
                     monitorUseCase.startDetection()
                     startForegroundAppMonitoring()
                 } else {
+                    isVideoCallSessionActive = false
                     stopForegroundAppMonitoring()
                     stopFinancialAppMonitoring()
                     alertSoundManager.stopAlert()
@@ -182,6 +209,12 @@ class VideoCallDetectService : Service() {
         serviceScope.launch {
             detectUseCase.observeResults().collect { result ->
                 Log.d(TAG, "📊 사이클 결과: $result")
+
+                // 통화 종료 후 캡처 스레드에서 늦게 도착한 잔존 결과는 무시한다.
+                if (!isVideoCallSessionActive) {
+                    Log.d(TAG, "⚠️ 영상통화 세션 비활성 — 잔존 사이클 결과 무시")
+                    return@collect
+                }
 
                 // 이미 딥페이크 확정된 세션 → RoI는 프레임 결과로 실시간 갱신하므로 여기서는 스킵
                 if (isDeepfakeDetected) return@collect
@@ -231,6 +264,8 @@ class VideoCallDetectService : Service() {
         // 프레임별 실시간 결과 관찰 → ROI + fakeProb 매 프레임 갱신
         serviceScope.launch {
             detectUseCase.observeFrameResults().collect { frameResult ->
+                // 통화 종료 후 캡처 스레드에서 늦게 도착한 잔존 프레임 결과 무시
+                if (!isVideoCallSessionActive) return@collect
                 // ROI 박스 위치 및 fakeProb — 박스가 존재할 때만 내부에서 동작하므로 항상 호출 가능
                 warningOverlayManager.updateRoiRealtime(frameResult)
                 if (isDeepfakeDetected) {
@@ -296,8 +331,8 @@ class VideoCallDetectService : Service() {
                     cooldownJob?.cancel()
                     cooldownJob = null
 
-                    // 오버레이 숨김
-                    warningOverlayManager.dismissWarning()
+                    // 오버레이 숨김 (세션 상태는 보존 — 복귀 시 복원용)
+                    warningOverlayManager.hideOverlaysKeepState()
                     warningOverlayManager.setEnabled(false)
                 }
             }
