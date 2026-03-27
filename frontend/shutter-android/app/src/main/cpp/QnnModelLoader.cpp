@@ -23,7 +23,7 @@ typedef struct {
 QnnModelLoader::QnnModelLoader() 
     : m_backendHandle(nullptr), m_systemHandle(nullptr), m_modelHandle(nullptr),
       m_backend(nullptr), m_context(nullptr), m_graph(nullptr), m_device(nullptr), m_logger(nullptr),
-      m_inputId(0), m_outputId(0),
+      m_inputId(0), m_logitsId(0), m_camId(0), m_camH(0), m_camW(0),
       m_fpBackendCreate(nullptr), m_fpDeviceCreate(nullptr),
       m_fpContextCreateFromBinary(nullptr), m_fpContextGetBinarySize(nullptr),
       m_fpContextGetBinary(nullptr), m_fpContextFree(nullptr),
@@ -323,10 +323,14 @@ bool QnnModelLoader::LoadFromCache(const std::string& cachePath) {
     std::string tensorCacheFile = cachePath + ".tensors";
     FILE* tf = fopen(tensorCacheFile.c_str(), "rb");
     if (tf) {
-        fread(&m_inputId, sizeof(uint32_t), 1, tf);
-        fread(&m_outputId, sizeof(uint32_t), 1, tf);
+        fread(&m_inputId,  sizeof(uint32_t), 1, tf);
+        fread(&m_logitsId, sizeof(uint32_t), 1, tf);
+        fread(&m_camId,    sizeof(uint32_t), 1, tf);
+        fread(&m_camH,     sizeof(uint32_t), 1, tf);
+        fread(&m_camW,     sizeof(uint32_t), 1, tf);
         fclose(tf);
-        LOGI("Loaded tensor IDs from cache: In=%u, Out=%u", m_inputId, m_outputId);
+        LOGI("Loaded tensor IDs: In=%u, Logits=%u, Cam=%u, CamH=%u, CamW=%u",
+             m_inputId, m_logitsId, m_camId, m_camH, m_camW);
     } else {
         LOGE("Tensor cache missing. Fallback to ComposeGraphs.");
         return false;
@@ -397,16 +401,25 @@ bool QnnModelLoader::BuildAndCacheGraph(const std::string& cachePath, const std:
     if (numGraphsInfo > 0 && graphsInfo) {
         GraphInfo_t* gInfo = ((GraphInfo_t**)graphsInfo)[0];
         m_graph = gInfo->graph; 
-        if (gInfo->numInputTensors > 0) m_inputId = gInfo->inputTensors[0].v2.id;
-        if (gInfo->numOutputTensors > 0) m_outputId = gInfo->outputTensors[0].v2.id;
-        
+        if (gInfo->numInputTensors > 0) m_inputId  = gInfo->inputTensors[0].v2.id;
+        if (gInfo->numOutputTensors > 0) m_logitsId = gInfo->outputTensors[0].v2.id;
+        if (gInfo->numOutputTensors > 1) {
+            m_camId = gInfo->outputTensors[1].v2.id;
+            m_camH  = gInfo->outputTensors[1].v2.dimensions[0]; // 동적으로 읽기
+            m_camW  = gInfo->outputTensors[1].v2.dimensions[1];
+        }
+
         std::string tensorCacheFile = cachePath + ".tensors";
         FILE* tf = fopen(tensorCacheFile.c_str(), "wb");
         if (tf) {
-            fwrite(&m_inputId, sizeof(uint32_t), 1, tf);
-            fwrite(&m_outputId, sizeof(uint32_t), 1, tf);
+            fwrite(&m_inputId,  sizeof(uint32_t), 1, tf);
+            fwrite(&m_logitsId, sizeof(uint32_t), 1, tf);
+            fwrite(&m_camId,    sizeof(uint32_t), 1, tf);
+            fwrite(&m_camH,     sizeof(uint32_t), 1, tf);
+            fwrite(&m_camW,     sizeof(uint32_t), 1, tf);
             fclose(tf);
-            LOGI("Saved tensor IDs to cache: In=%u, Out=%u", m_inputId, m_outputId);
+            LOGI("Saved tensor IDs: In=%u, Logits=%u, Cam=%u, CamH=%u, CamW=%u",
+                 m_inputId, m_logitsId, m_camId, m_camH, m_camW);
         }
     }
 
@@ -438,7 +451,9 @@ bool QnnModelLoader::BuildAndCacheGraph(const std::string& cachePath, const std:
     return true;
 }
 
-bool QnnModelLoader::ExecuteGraph(const float* inputData, size_t inputElements, float* outputData, size_t outputElements) {
+bool QnnModelLoader::ExecuteGraph(const float* inputData,  size_t inputElements,
+                                  float* logitsData, size_t logitsElements,
+                                  float* camData,    size_t camElements) {
     if (!m_graph || !m_fpGraphExecute) {
         LOGE("QNN Graph handle or Execute function is missing.");
         return false;
@@ -457,20 +472,35 @@ bool QnnModelLoader::ExecuteGraph(const float* inputData, size_t inputElements, 
     inTensor.v2.clientBuf.data = (void*)inputData;
     inTensor.v2.clientBuf.dataSize = inputElements * sizeof(float);
 
-    uint32_t dimensions_output[] = {1, 2};
-    Qnn_Tensor_t outTensor = {QNN_TENSOR_VERSION_2, {}};
-    outTensor.v2.id = m_outputId;
-    outTensor.v2.name = "output";
-    outTensor.v2.type = QNN_TENSOR_TYPE_APP_READ;
-    outTensor.v2.dataFormat = QNN_TENSOR_DATA_FORMAT_DENSE;
-    outTensor.v2.dataType = QNN_DATATYPE_FLOAT_32;
-    outTensor.v2.rank = 2;
-    outTensor.v2.dimensions = dimensions_output;
-    outTensor.v2.memType = QNN_TENSORMEMTYPE_RAW;
-    outTensor.v2.clientBuf.data = (void*)outputData;
-    outTensor.v2.clientBuf.dataSize = outputElements * sizeof(float);
+    uint32_t dimensions_logits[] = {1, 2};
+    Qnn_Tensor_t logitsTensor = {QNN_TENSOR_VERSION_2, {}};
+    logitsTensor.v2.id = m_logitsId;
+    logitsTensor.v2.name = "logits";
+    logitsTensor.v2.type = QNN_TENSOR_TYPE_APP_READ;
+    logitsTensor.v2.dataFormat = QNN_TENSOR_DATA_FORMAT_DENSE;
+    logitsTensor.v2.dataType = QNN_DATATYPE_FLOAT_32;
+    logitsTensor.v2.rank = 2;
+    logitsTensor.v2.dimensions = dimensions_logits;
+    logitsTensor.v2.memType = QNN_TENSORMEMTYPE_RAW;
+    logitsTensor.v2.clientBuf.data = (void*)logitsData;
+    logitsTensor.v2.clientBuf.dataSize = logitsElements * sizeof(float);
 
-    Qnn_ErrorHandle_t err = m_fpGraphExecute(m_graph, &inTensor, 1, &outTensor, 1, nullptr, nullptr);
+    uint32_t dimensions_cam[] = {m_camH, m_camW}; // 동적
+    Qnn_Tensor_t camTensor = {QNN_TENSOR_VERSION_2, {}};
+    camTensor.v2.id = m_camId;
+    camTensor.v2.name = "cam";
+    camTensor.v2.type = QNN_TENSOR_TYPE_APP_READ;
+    camTensor.v2.dataFormat = QNN_TENSOR_DATA_FORMAT_DENSE;
+    camTensor.v2.dataType = QNN_DATATYPE_FLOAT_32;
+    camTensor.v2.rank = 2;
+    camTensor.v2.dimensions = dimensions_cam;
+    camTensor.v2.memType = QNN_TENSORMEMTYPE_RAW;
+    camTensor.v2.clientBuf.data = (void*)camData;
+    camTensor.v2.clientBuf.dataSize = camElements * sizeof(float);
+
+    Qnn_Tensor_t outTensors[] = {logitsTensor, camTensor};
+
+    Qnn_ErrorHandle_t err = m_fpGraphExecute(m_graph, &inTensor, 1, outTensors, 2, nullptr, nullptr);
     if (err != QNN_SUCCESS) {
         LOGE("QnnGraph_execute failed with error: %llu", (unsigned long long)err);
         return false;

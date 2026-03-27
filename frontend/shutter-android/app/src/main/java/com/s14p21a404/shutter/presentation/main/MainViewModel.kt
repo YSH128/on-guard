@@ -163,6 +163,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 .onFailure { e ->
                     Log.e(TAG, "acceptIncomingCall 실패: $channelName", e)
+                    clearIncomingCall()
                     setDeepLinkScreen("call_accept_failed")
                 }
         }
