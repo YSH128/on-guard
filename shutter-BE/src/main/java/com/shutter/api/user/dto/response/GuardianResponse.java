@@ -6,6 +6,7 @@ public record GuardianResponse(
         Long relationshipId,
         Long guardianId,
         String guardianName,
+        String profileImageUrl,
         LocalDateTime createdAt
 ) {
 }
