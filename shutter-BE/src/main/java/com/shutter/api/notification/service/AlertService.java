@@ -60,10 +60,9 @@ public class AlertService {
             throw new AlertException(ErrorCode.NO_GUARDIANS_REGISTERED);
         }
 
-        // 3. 알림 메시지 생성 (Enum 활용)
-        String pushMessage = request.getEventType().getPushMessage(ward.getName());
+        // 3. 알림 메시지 생성 (앱에서 피싱 유형을 보냈다면 메시지 안에 포함)
+        String pushMessage = request.getEventType().getPushMessage(ward.getName(), request.getPhishingType());
 
-        boolean hasFailure = false;
         List<NotificationLog> savedLogs = new java.util.ArrayList<>();
 
         // 4. 각 보호자에게 푸시 발송 및 로그 저장
@@ -91,15 +90,10 @@ public class AlertService {
             }
 
             if (!pushSuccess) {
-                hasFailure = true;
+                log.warn("부분 알림 전송 실패: ward {} -> guardian {} (PushResult: {})", wardId, guardian.getId(), pushResult);
+            } else {
+                log.info("Alert sent from ward {} to guardian {}. Status: SUCCESS", wardId, guardian.getId());
             }
-            
-            log.info("Alert sent from ward {} to guardian {}. Status: {}", wardId, guardian.getId(), savedLog.getStatus());
-        }
-
-        // 5. 하나라도 실패했다면 최종적으로 에러 반환
-        if (hasFailure) {
-            throw new AlertException(ErrorCode.FCM_SEND_FAILED);
         }
 
         return savedLogs.stream().map(AlertLogResponse::from).collect(Collectors.toList());

@@ -53,12 +53,17 @@ class DeepfakeDetectionRepositoryImpl(
     private var mediaProjection: MediaProjection? = null
     private var screenCaptureManager: ScreenCaptureManager? = null
 
+    /** onReady 콜백이 이미 발화했는지 (= 모델이 준비된 상태) */
+    @Volatile
+    private var isModelReady = false
+
     override fun observeDetectionResults(): Flow<DeepfakeDetectionResult> = _results.asSharedFlow()
 
     override fun observeFrameResults(): Flow<DeepfakeDetectionResult> = _frameResults.asSharedFlow()
 
     override fun startDetection() {
         Log.d(TAG, "감지 및 모델 로드 시작")
+        isModelReady = false
         detector.startDetection(
             onResult = { result ->
                 Log.d(TAG, "📊 감지 결과: $result")
@@ -72,6 +77,7 @@ class DeepfakeDetectionRepositoryImpl(
             onReady = {
                 // 모델 로드가 완료되었을 때 화면 캡처(ImageReader) 시작
                 Log.d(TAG, "모델 로드 완료 및 ScreenCaptureManager 캡처 시작 지시")
+                isModelReady = true
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
                     startScreenCaptureInternal()
                 }
@@ -80,13 +86,19 @@ class DeepfakeDetectionRepositoryImpl(
     }
 
     private fun startScreenCaptureInternal() {
-        // ── 화면 캡처 시작/재개 ──
-        // 기존 ScreenCaptureManager가 살아있으면 일시정지만 해제하여 재개
         val existing = screenCaptureManager
         if (existing != null) {
-            Log.d(TAG, "기존 ScreenCaptureManager 재개 (pause 해제)")
-            existing.resumeCapture()
-            return
+            if (existing.isCapturing) {
+                // VirtualDisplay가 살아있음 → 일시정지만 해제
+                Log.d(TAG, "기존 ScreenCaptureManager 재개 (pause 해제)")
+                existing.resumeCapture()
+                return
+            } else {
+                // MediaProjection.onStop() 등으로 VirtualDisplay가 이미 해제됨 → 재생성
+                Log.w(TAG, "기존 ScreenCaptureManager 비활성 → 재생성")
+                existing.stopCapture()
+                screenCaptureManager = null
+            }
         }
 
         val ctx = captureContext
@@ -106,6 +118,7 @@ class DeepfakeDetectionRepositoryImpl(
 
     override fun stopDetection() {
         Log.d(TAG, "감지 중단")
+        isModelReady = false
 
         // ── 화면 캡처 일시정지 (VirtualDisplay·MediaProjection 유지) ──
         screenCaptureManager?.pauseCapture()
@@ -123,6 +136,15 @@ class DeepfakeDetectionRepositoryImpl(
         this.captureContext = context
         this.mediaProjection = mediaProjection
         Log.d(TAG, "MediaProjection 설정 완료")
+
+        // 모델이 이미 준비돼 있으면 즉시 캡처 시작
+        // (setInAppCallActive→startDetection→onReady 이후에 MediaProjection이 늦게 도착하는 수신통화 케이스 대응)
+        if (isModelReady) {
+            Log.d(TAG, "모델 이미 준비됨 — MediaProjection 설정 후 즉시 캡처 시작")
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                startScreenCaptureInternal()
+            }
+        }
     }
 
     override fun getLatestBitmap(): Bitmap? = screenCaptureManager?.latestBitmap
@@ -191,7 +213,7 @@ class DeepfakeDetectionRepositoryImpl(
                 val request = TelemetryRequest(
                     user_id = tokenManager.getUserId().toInt(),
                     model_type = "FACE",
-                    model_version = "v1",
+                    model_version = "v6",
                     inference_success = errorType == null,
                     failure_type = errorType,
                     inference_latency_ms = inferenceLatency,

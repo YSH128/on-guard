@@ -313,7 +313,8 @@ mydocs/
 # Andorid Studio
 .idea/
 
-
+# ----------Gemini CLI----------
+.geminiignore
 
 # -------Claude code CLI---------
 .claude
@@ -326,3 +327,4 @@ mydocs/
 *.ptl
 AI/
 *.aar
+*.onnx

@@ -23,6 +23,9 @@
     <!-- 알림 권한 (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- 전화 수신 알림 전체화면 표시 (잠금화면 포함) -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
     <!-- 다른 앱 위에 오버레이 표시 -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 

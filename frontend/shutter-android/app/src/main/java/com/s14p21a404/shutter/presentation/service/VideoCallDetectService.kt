@@ -95,6 +95,7 @@ class VideoCallDetectService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isRunning = true
         Log.d(TAG, "서비스 생성")
 
         val locator = ServiceLocator.getInstance(this)
@@ -126,9 +127,6 @@ class VideoCallDetectService : Service() {
                 videoCallRepository.setInAppCallActive(false)
             } else {
                 // ── 외부 앱(카카오톡/통신사) 영상통화 종료 ──
-                // AccessibilityService를 통해 실제 통화 종료
-                // - 통신사 전화: TelecomManager.endCall() (윈도우 포커스 무관)
-                // - VoIP 앱: windows API로 통화 앱 윈도우를 직접 탐색 (오버레이 유무 무관)
                 val service = ForegroundAppMonitorService.instance
                 if (service != null) {
                     val success = service.performEndCall()
@@ -230,9 +228,11 @@ class VideoCallDetectService : Service() {
             }
         }
 
-        // 프레임별 실시간 결과 관찰 → 딥페이크 확정 후 RoI 실시간 갱신
+        // 프레임별 실시간 결과 관찰 → ROI + fakeProb 매 프레임 갱신
         serviceScope.launch {
             detectUseCase.observeFrameResults().collect { frameResult ->
+                // ROI 박스 위치 및 fakeProb — 박스가 존재할 때만 내부에서 동작하므로 항상 호출 가능
+                warningOverlayManager.updateRoiRealtime(frameResult)
                 if (isDeepfakeDetected) {
                     warningOverlayManager.onDetectionResult(frameResult)
                 }
@@ -253,30 +253,52 @@ class VideoCallDetectService : Service() {
 
         if (!ForegroundAppMonitorService.isRunning()) {
             Log.w(TAG, "⚠️ AccessibilityService(ForegroundAppMonitor) 미활성 — 포그라운드 앱 추적 불가")
-            // 인앱 통화가 아닌 경우에만 리턴 (인앱 통화는 foregroundPackage로 자기 앱 패키지가 잡히므로 동작 가능)
             if (!videoCallRepository.isInAppCallActive()) return
         }
 
         Log.d(TAG, "포그라운드 앱 모니터링 시작 (인앱=${videoCallRepository.isInAppCallActive()})")
         foregroundMonitorJob = serviceScope.launch {
             videoCallRepository.observeForegroundIsVideoCallApp().collect { isOnVideoCallScreen ->
-                Log.d(TAG, "영상통화 화면 여부: $isOnVideoCallScreen, 오버레이 표시 중: ${warningOverlayManager.isShowing()}")
+                Log.d(TAG, "영상통화 화면 여부: $isOnVideoCallScreen, 오버레이 표시 중: ${warningOverlayManager.isShowing()}, 딥페이크감지=$isDeepfakeDetected")
 
                 if (isOnVideoCallScreen) {
-                    // 영상통화 화면으로 복귀 → 오버레이가 이전에 표시 중이었으면 복원
-                    if (wasOverlayShowing && !warningOverlayManager.isShowing()) {
-                        Log.d(TAG, "📱 영상통화 화면 복귀 → 오버레이 복원")
+                    // ── 영상통화 화면으로 복귀 ──
+                    if (wasOverlayShowing) {
+                        Log.d(TAG, "📱 영상통화 화면 복귀 → 오버레이 복원 → 추론 재시작")
+
+                        // 오버레이 활성화
                         warningOverlayManager.setEnabled(true)
-                        warningOverlayManager.showWarning()
+
+                        if (isDeepfakeDetected) {
+                            // 딥페이크 확정 상태에서 복귀 → 경고 오버레이 먼저 복원 후 추론 재시작
+                            warningOverlayManager.showWarning()
+                        } else {
+                            // 아직 딥페이크 미확정 → 스캐닝 pill 먼저 표시 후 추론 시작
+                            warningOverlayManager.showScanningPill()
+                        }
+
+                        // 오버레이가 완전히 렌더링된 후 추론 재시작 (500ms 딜레이)
+                        delay(500)
+                        monitorUseCase.startDetection()
+                        Log.d(TAG, "📱 추론 재시작 완료")
                     }
                 } else {
-                    // 영상통화 화면 이탈 → 오버레이 숨김
-                    if (warningOverlayManager.isShowing()) {
+                    // ── 영상통화 화면 이탈 ──
+                    Log.d(TAG, "📱 영상통화 화면 이탈 → 추론 중단 + 오버레이 숨김")
+
+                    // 현재 오버레이가 표시 중이었거나 딥페이크 감지 상태라면 복귀 시 복원할 수 있도록 플래그 세팅
+                    if (warningOverlayManager.isShowing() || isDeepfakeDetected) {
                         wasOverlayShowing = true
-                        Log.d(TAG, "📱 영상통화 화면 이탈 → 오버레이 숨김")
-                        warningOverlayManager.dismissWarning()
-                        warningOverlayManager.setEnabled(false)
                     }
+
+                    // 추론 중단 (화면 캡처 + 모델 추론 모두 멈춤)
+                    monitorUseCase.stopDetection()
+                    cooldownJob?.cancel()
+                    cooldownJob = null
+
+                    // 오버레이 숨김
+                    warningOverlayManager.dismissWarning()
+                    warningOverlayManager.setEnabled(false)
                 }
             }
         }
@@ -299,23 +321,22 @@ class VideoCallDetectService : Service() {
 
         if (!ForegroundAppMonitorService.isRunning()) {
             Log.w(TAG, "⚠️ AccessibilityService 미활성 — 금융 앱 추적 불가")
-            // 인앱 통화가 아닌 경우에만 리턴
             if (!videoCallRepository.isInAppCallActive()) return
         }
 
         Log.d(TAG, "금융 앱 모니터링 시작")
         financialAppMonitorJob = serviceScope.launch {
             videoCallRepository.observeForegroundIsFinancialApp().collect { isFinancialApp ->
-                Log.d(TAG, "금융 앱 여부: $isFinancialApp, 딥페이크 감지: $isDeepfakeDetected")
+                Log.d(TAG, "▶ [FinancialMonitor] isFinancialApp=$isFinancialApp, isDeepfake=$isDeepfakeDetected, isShowing=${financialBlockOverlayManager.isShowing()}")
 
                 if (isFinancialApp && isDeepfakeDetected) {
                     if (!financialBlockOverlayManager.isShowing()) {
-                        Log.d(TAG, "🏦 금융 앱 감지 → 접근 제한 오버레이 표시")
-                        financialBlockOverlayManager.show()
+                        Log.d(TAG, "🏦 [FinancialMonitor] 금융 앱 진입 감지 → 접근 제한 오버레이 표시")
+                        financialBlockOverlayManager.show(isInApp = videoCallRepository.isInAppCallActive())
                     }
                 } else {
                     if (financialBlockOverlayManager.isShowing()) {
-                        Log.d(TAG, "🏦 금융 앱 이탈 → 접근 제한 오버레이 해제")
+                        Log.d(TAG, "🏦 [FinancialMonitor] 금융 앱 이탈 감지 (또는 딥페이크 해제) → 접근 제한 오버레이 해제")
                         financialBlockOverlayManager.dismiss()
                     }
                 }
@@ -353,6 +374,7 @@ class VideoCallDetectService : Service() {
     }
 
     override fun onDestroy() {
+        isRunning = false
         super.onDestroy()
         Log.d(TAG, "서비스 종료")
 
@@ -558,6 +580,10 @@ class VideoCallDetectService : Service() {
 
     companion object {
         private const val TAG = "VideoCallDetectService"
+
+        /** 서비스 실제 실행 여부 — 프로세스 재시작 후에도 정확히 반영됨 */
+        @Volatile
+        var isRunning: Boolean = false
         private const val NOTIFICATION_ID = 1001
 
         /** 비딥페이크 사이클 후 재탐지까지 대기 시간: 20초 */

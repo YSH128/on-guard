@@ -17,8 +17,8 @@ import java.nio.FloatBuffer
  * JNI 브릿지 (Kotlin 쪽) — NDK 네이티브 함수 request_deepfake_detection 호출
  * 
  * ┌────────────────────────────────────────────────────────┐
- * │  담당 경계                                              │
- * │  • 이 파일 (NativeDeepfakeBridge.kt)  → 앱(Kotlin) 담당 │
+ * │  담당 경계                                               │
+ * │  • 이 파일 (NativeDeepfakeBridge.kt)  → 앱(Kotlin) 담당  │
  * │  • shutter-native SO + deepfake_jni.cpp → NDK 담당      │
  * └────────────────────────────────────────────────────────┘
  *
@@ -42,6 +42,7 @@ class NativeDeepfakeBridge(private val context: Context) {
 
     private var ortEnv: OrtEnvironment? = null
     private var ortSession: OrtSession? = null
+
     @Volatile
     var isOnnxInitialized = false
     private val onnxLock = Any()
@@ -56,7 +57,9 @@ class NativeDeepfakeBridge(private val context: Context) {
     private external fun loadModel(assetsPath: String): Boolean
     private external fun releaseQnn()
     private external fun detectDeepfakeVisual(buffer: ByteArray, width: Int, height: Int, stride: Int): FloatArray
-    private external fun preprocessFrameForOnnx(buffer: ByteArray, width: Int, height: Int, stride: Int): FloatArray?
+    private external fun initOnnx(modelPath: String): Boolean
+    private external fun releaseOnnx()
+    private external fun detectDeepfakeOnnx(buffer: ByteArray, width: Int, height: Int, stride: Int): FloatArray
 
     private fun initOnnxFallback() {
         synchronized(onnxLock) {
@@ -66,10 +69,11 @@ class NativeDeepfakeBridge(private val context: Context) {
                 Log.d("NativeDeepfakeBridge", "🔄 ONNX Runtime 폴백 초기화 시작...")
                 ortEnv = OrtEnvironment.getEnvironment()
                 val options = OrtSession.SessionOptions()
-                options.addNnapi() // Android NNAPI 가속 활성화
-                val modelPath = getAssetFilePath(context, "face_deepfake_v3.onnx")
+                // INT8 CPU
+                options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                val modelPath = getAssetFilePath(context, "face_deepfake_v6.onnx")
                 ortSession = ortEnv?.createSession(modelPath, options)
-                
+
                 // Warmup Inference (VRAM 사전 적재 및 셰이더 컴파일 강제실행)
                 try {
                     val warmupStartTime = System.currentTimeMillis()
@@ -90,6 +94,14 @@ class NativeDeepfakeBridge(private val context: Context) {
                     Log.e("NativeDeepfakeBridge", "❌ ONNX 웜업 실패: ${e.message}")
                 }
 
+                // C++ 네이티브 ONNX 세션도 초기화 (detectDeepfakeOnnx JNI에서 사용)
+                val nativeOk = initOnnx(modelPath)
+                if (nativeOk) {
+                    Log.d("NativeDeepfakeBridge", "C++ ONNX 네이티브 세션 초기화 성공")
+                } else {
+                    Log.e("NativeDeepfakeBridge", "C++ ONNX 네이티브 세션 초기화 실패")
+                }
+
                 isOnnxInitialized = true
                 val totalInitElapsed = System.currentTimeMillis() - initStartTime
                 Log.d("NativeDeepfakeBridge", "✅ ONNX Runtime 폴백 초기화 및 적재 전체 완료 (총 소요시간: ${totalInitElapsed}ms)")
@@ -102,10 +114,26 @@ class NativeDeepfakeBridge(private val context: Context) {
     fun compileQnnCache() {
         if (isQnnCompiled || isQnnInitialized || isOnnxInitialized) return
         if (initJobThread?.isAlive == true) return
+        // TODO: QNN 재컴파일 후 USE_QNN = true 로 변경
+        //  현재 libface_deepfake.so 는 구버전 ONNX(output 1개: "output")로 변환된 파일이므로
+        //  최신 모델(face_deepfake.onnx, logits+cam 2출력)과 tensor 불일치 발생.
+        //  재컴파일 절차: AI/face_deepfake_model_preprocessing/convert_model_to_qnn.py 참고
+        if (!USE_QNN) {
+            isQnnSupported = false
+            initJobThread = thread { initOnnxFallback() }
+            return
+        }
         initJobThread = thread {
             try {
                 val facePath = getAssetFilePath(context, "face_deepfake.bin")
                 val filesDir = context.filesDir.absolutePath
+                val binFile = File(filesDir, "face_deepfake.bin")
+                if (!binFile.exists()) {
+                    Log.e("NativeDeepfakeBridge", "QNN 캐시 파일 없음! C++ 빌드/로드 병목을 우회하고 즉시 ONNX 폴백 시도...")
+                    isQnnSupported = false
+                    initOnnxFallback()
+                    return@thread
+                }
                 val cacheDir = context.cacheDir.absolutePath
                 val nativeLibDir = context.applicationInfo.nativeLibraryDir
                 
@@ -169,6 +197,14 @@ class NativeDeepfakeBridge(private val context: Context) {
 
             // 대기 후 이미 적재가 끝났다면 즉시 리턴
             if (isQnnInitialized || isOnnxInitialized) {
+                onComplete()
+                return@thread
+            }
+
+            // TODO: QNN 재컴파일 후 USE_QNN = true 로 변경 (compileQnnCache 주석 참고)
+            if (!USE_QNN) {
+                isQnnSupported = false
+                initOnnxFallback()
                 onComplete()
                 return@thread
             }
@@ -248,65 +284,47 @@ class NativeDeepfakeBridge(private val context: Context) {
                     put("error", "ONNX 폴백 모델 로드 중...")
                 }.toString()
             }
-            
+
             try {
                 val startCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
-                val startTimeMs = System.currentTimeMillis()
-                
-                val floatArray = preprocessFrameForOnnx(buffer, width, height, stride)
-                if (floatArray == null || floatArray.isEmpty()) {
+
+                // C++ 에서 전처리 + 추론 + CAM ROI 추출까지 전부 수행
+                // 반환: [fakeProb, realProb, 0.0, inferTime, minx, miny, maxx, maxy, bboxScore]
+                val results = detectDeepfakeOnnx(buffer, width, height, stride)
+
+                if (results.isEmpty() || results[0] < 0f) {
                     return org.json.JSONObject().apply {
                         put("detected", 0)
                         put("error", "INFERENCE_ERROR")
                     }.toString()
                 }
 
-                // Create ONNX NCHW Tensor [1, 3, 256, 256]
-                val inputTensor = OnnxTensor.createTensor(
-                    ortEnv, 
-                    FloatBuffer.wrap(floatArray), 
-                    longArrayOf(1, 3, 256, 256)
-                )
+                val fakeProb      = results[0]  // softmax(logits)[1] = fake 확률
+                val realProb      = results[1]  // softmax(logits)[0] = real 확률
+                val inferenceTime = results[3]
+                val isFake        = fakeProb > 0.3f  // 원본 모델 threshold: 0.3
+                val status        = if (isFake) "FAKE" else "REAL"
 
-                val inputName = ortSession?.inputNames?.iterator()?.next() ?: "input"
-                val inputs = mapOf(inputName to inputTensor)
-                val results = ortSession?.run(inputs)
-                
-                val output = results?.get(0)?.value as? Array<FloatArray>
-                val fakeReal = output?.get(0) ?: floatArrayOf(0f, 0f)
-                
-                inputTensor.close()
-                results?.close()
+                var roi: FloatArray? = null
+                var bboxScore = -1f
+                if (results.size >= 9 && results[4] >= 0f) {
+                    roi       = floatArrayOf(results[4], results[5], results[6], results[7])
+                    bboxScore = results[8]
+                }
 
-                val out0 = fakeReal[0]
-                val out1 = fakeReal[1]
-                val maxVal = maxOf(out0, out1)
-                val exp0 = Math.exp((out0 - maxVal).toDouble()).toFloat()
-                val exp1 = Math.exp((out1 - maxVal).toDouble()).toFloat()
-                val sum = exp0 + exp1
-                
-                val realProb = exp0 / sum
-                val fakeProb = exp1 / sum
-
-                val isFake = fakeProb > realProb
-                val status = if (isFake) "FAKE" else "REAL"
-
-                val endCpuTimeMs = DeviceStatusProvider.getThreadCpuTimeMs()
+                val endCpuTimeMs          = DeviceStatusProvider.getThreadCpuTimeMs()
                 val inferenceThreadCpuTime = endCpuTimeMs - startCpuTimeMs
-                val inferenceTimeMs = System.currentTimeMillis() - startTimeMs
+                val currentTemp           = DeviceStatusProvider.getDeviceTemperature(context)
+                val pssMemoryKb           = DeviceStatusProvider.getAppPssMemory()
+                val thermalStatus         = DeviceStatusProvider.getThermalThrottlingStatus(context)
+                val batteryCurrentmA      = DeviceStatusProvider.getBatteryCurrentNow(context)
 
-                val currentTemp = DeviceStatusProvider.getDeviceTemperature(context)
-                val pssMemoryKb = DeviceStatusProvider.getAppPssMemory()
-                val thermalStatus = DeviceStatusProvider.getThermalThrottlingStatus(context)
-                val batteryCurrentmA = DeviceStatusProvider.getBatteryCurrentNow(context)
-
-                val header = "[NNAPI 플백 추론 성공 - $status]\nFake: ${String.format("%.2f%%", fakeProb * 100)}\nReal: ${String.format("%.2f%%", realProb * 100)}" 
-                
+                val header = "[ONNX 폴백 추론 성공 - $status]\nFake: ${String.format("%.2f%%", fakeProb * 100)}\nReal: ${String.format("%.2f%%", realProb * 100)}"
                 val resultText = """
                     $header
-                    ROI: [0.0, 0.0, 0.0, 0.0]
-                    Infer: ${String.format("%.2f", inferenceTimeMs.toFloat())} ms
-                    
+                    ROI: ${roi?.let { "[${it[0]}, ${it[1]}, ${it[2]}, ${it[3]}]" } ?: "[없음]"}
+                    Infer: ${String.format("%.2f", inferenceTime)} ms
+
                     [하드웨어 모니터링]
                     Temp: ${String.format("%.2f", currentTemp)}°C
                     RAM (PSS): $pssMemoryKb KB
@@ -314,10 +332,16 @@ class NativeDeepfakeBridge(private val context: Context) {
                     Current: ${String.format("%.2f", batteryCurrentmA)} mA
                     Thermal Status: $thermalStatus
                 """.trimIndent()
-                
+
                 return org.json.JSONObject().apply {
                     put("detected", if (isFake) 1 else 0)
                     put("fakeProb", fakeProb)
+                    roi?.let {
+                        put("roi", org.json.JSONArray().apply {
+                            put(it[0]); put(it[1]); put(it[2]); put(it[3])
+                        })
+                        put("bboxScore", bboxScore)
+                    }
                     put("debug_info", resultText)
                 }.toString()
             } catch (e: Exception) {
@@ -348,10 +372,11 @@ class NativeDeepfakeBridge(private val context: Context) {
             var loadTime = 0.0f
             var inferenceTime = 0.0f
             var isFake = false
-            var status = ""
+            var status = "" 
             var faceFakeProb = 0.0f
             var faceRealProb = 0.0f
-            var roi = floatArrayOf(0f, 0f, 0f, 0f)
+            var roi: FloatArray? = null
+            var bboxScore = -1f
 
             val avgFake = results[0]
             val avgReal = results[1]
@@ -359,12 +384,13 @@ class NativeDeepfakeBridge(private val context: Context) {
             inferenceTime = results[3]
             val isSuccess = avgFake > -1.0f
 
-            if (results.size >= 10) {
-                roi = floatArrayOf(results[6], results[7], results[8], results[9])
+            if (results.size >= 9 && results[4] >= 0f) {
+                roi = floatArrayOf(results[4], results[5], results[6], results[7])
+                bboxScore = results[8]
             }
 
             if (isSuccess) {
-                isFake = avgFake > avgReal
+                isFake = avgFake > 0.1f// 원래 isFake = avgFake > avgReal
                 status = if (isFake) "FAKE" else "REAL"
                 faceFakeProb = avgFake
                 faceRealProb = avgReal
@@ -389,7 +415,7 @@ class NativeDeepfakeBridge(private val context: Context) {
                 
                 val resultText = """
                     $header
-                    ROI: [${roi[0]}, ${roi[1]}, ${roi[2]}, ${roi[3]}]
+                    ROI: ${roi?.let { "[${it[0]}, ${it[1]}, ${it[2]}, ${it[3]}]" } ?: "[없음]"}
                     Load: ${String.format("%.2f", loadTime)} ms
                     Infer: ${String.format("%.2f", inferenceTime)} ms
 
@@ -404,13 +430,14 @@ class NativeDeepfakeBridge(private val context: Context) {
                 return org.json.JSONObject().apply {
                     put("detected", if (isFake) 1 else 0)
                     put("fakeProb", faceFakeProb)
-                    if (results.size >= 10) {
+                    roi?.let {
                         put("roi", org.json.JSONArray().apply {
-                            put(roi[0])
-                            put(roi[1])
-                            put(roi[2])
-                            put(roi[3])
+                            put(it[0])
+                            put(it[1])
+                            put(it[2])
+                            put(it[3])
                         })
+                        put("bboxScore", bboxScore)
                     }
                     put("debug_info", resultText)
                 }.toString()
@@ -430,6 +457,22 @@ class NativeDeepfakeBridge(private val context: Context) {
 
     companion object {
         private var loaded = false
+
+        // TODO: QNN 재컴파일 필요
+        //  현재 libface_deepfake.so 는 구버전 ONNX(output 1개: "output")로 변환된 파일입니다.
+        //  최신 모델(face_deepfake.onnx)은 출력이 2개(logits [1,2] + cam [7,7])로 변경되었으므로
+        //  아래 절차로 libface_deepfake.so 를 재컴파일한 후 USE_QNN = true 로 되돌려야 합니다.
+        //
+        //  [재컴파일 절차 - Linux/Mac 환경 필요]
+        //  1. Qualcomm AI Engine Direct SDK 설치 (qpm.qualcomm.com)
+        //  2. AI/face_deepfake_model_preprocessing/convert_model_to_qnn.py 실행
+        //     (best_model-v3.pt 필요, output_names=["logits","cam"] 으로 변환)
+        //  3. 생성된 libface_deepfake.so →
+        //     frontend/shutter-android/app/src/main/jniLibs/arm64-v8a/ 에 교체
+        //  4. USE_QNN = true 로 변경
+        //
+        //  QNN 재컴파일 전까지는 ONNX(NNAPI → GPU/CPU 폴백) 경로를 사용합니다.
+        private const val USE_QNN = false // TODO: QNN 재컴파일 완료 후 true로 변경
 
         /**
          * 네이티브 라이브러리 로드.

@@ -30,7 +30,7 @@ class ScreenCaptureManager(
     private val context: Context,
     private val mediaProjection: MediaProjection,
     private val detectors: List<DeepfakeDetector>,
-    private val sampleIntervalMs: Long = 2000L
+    private val sampleIntervalMs: Long = 1000L
 ) {
     // 기기 실제 화면 해상도·DPI
     private val displayMetrics = context.resources.displayMetrics
@@ -44,7 +44,8 @@ class ScreenCaptureManager(
     private var lastCaptureTime = 0L
 
     @Volatile
-    private var isCapturing = false
+    var isCapturing = false
+        private set
 
     /** 일시정지 상태: true이면 프레임 수신은 하되 Detector에 전달하지 않는다. */
     @Volatile

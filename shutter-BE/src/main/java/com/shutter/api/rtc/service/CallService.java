@@ -1,5 +1,6 @@
 package com.shutter.api.rtc.service;
 
+import com.shutter.api.global.exception.BusinessException;
 import com.shutter.api.global.exception.CallException;
 import com.shutter.api.global.exception.ErrorCode;
 import com.shutter.api.notification.service.AlertService;
@@ -63,11 +64,19 @@ public class CallService {
         Map<String, String> payloadMap = new HashMap<>();
         payloadMap.put("type", "INCOMING_CALL");
         payloadMap.put("caller_id", String.valueOf(callerId));
+        payloadMap.put("caller_kakao_id", String.valueOf(caller.getKakaoId()));
         payloadMap.put("caller_name", caller.getName());
         payloadMap.put("channel_name", channelName);
 
-        alertService.sendDataAlertToUser(callee.getKakaoId(), payloadMap);
-        log.info("Sent INCOMING_CALL data push to callee: {}", calleeId);
+        try {
+            alertService.sendDataAlertToUser(callee.getKakaoId(), payloadMap);
+            log.info("Sent INCOMING_CALL data push to callee: {}, callerKakaoId: {}", calleeId, caller.getKakaoId());
+        } catch (Exception e) {
+            log.error("Failed to send incoming call push. Rolling back redis session & lock for channel: {}", channelName, e);
+            callSessionService.deleteSession(channelName);
+            callSessionService.deleteCallerLock(callerId);
+            throw e;
+        }
 
         // 8. 응답 반환
         return CallResponse.builder()
@@ -98,25 +107,37 @@ public class CallService {
         User caller = userRepository.findById(session.getCallerId())
                 .orElseThrow(() -> new CallException(ErrorCode.USER_NOT_FOUND));
 
+        // 7. Redis 세션 삭제 및 발신자 락 해제 (푸시 로직 예외 발생과 무관하게 무조건 삭제되도록 선행 배치)
+        callSessionService.deleteSession(channelName);
+        callSessionService.deleteCallerLock(caller.getId());
+
         // 6. Data 전용 카카오 푸시 전송 (안드로이드 백그라운드 수신용)
+        User callee = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
         Map<String, String> payloadMap = new HashMap<>();
         payloadMap.put("type", "CALL_ACCEPTED");
         payloadMap.put("channel_name", channelName);
+        payloadMap.put("callee_kakao_id", String.valueOf(callee.getKakaoId()));
 
-        alertService.sendDataAlertToUser(caller.getKakaoId(), payloadMap);
-        log.info("Sent CALL_ACCEPTED data push to caller: {}", caller.getId());
+        try {
+            alertService.sendDataAlertToUser(caller.getKakaoId(), payloadMap);
+            log.info("Sent CALL_ACCEPTED data push to caller: {}, calleeKakaoId: {}", caller.getId(), callee.getKakaoId());
+        } catch (Exception e) {
+            log.warn("Failed to send CALL_ACCEPTED push to caller {}, but continuing flow.", caller.getId(), e);
+        }
 
         // WebSocket 이벤트 발송 (발신자에게 수락 알림)
-        com.shutter.api.rtc.dto.response.CallEventResponse eventResponse = com.shutter.api.rtc.dto.response.CallEventResponse.builder()
-                .type("CALL_ACCEPTED")
-                .channelName(channelName)
-                .build();
-        messagingTemplate.convertAndSend("/topic/call/" + caller.getId(), eventResponse);
-        log.info("Published CALL_ACCEPTED via WebSocket to caller: {}", caller.getId());
-
-        // 7. Redis 세션 삭제 및 발신자 락 해제 (푸시 성공 후 삭제)
-        callSessionService.deleteSession(channelName);
-        callSessionService.deleteCallerLock(caller.getId());
+        try {
+            com.shutter.api.rtc.dto.response.CallEventResponse eventResponse = com.shutter.api.rtc.dto.response.CallEventResponse.builder()
+                    .type("CALL_ACCEPTED")
+                    .channelName(channelName)
+                    .build();
+            messagingTemplate.convertAndSend("/topic/call/" + caller.getId(), eventResponse);
+            log.info("Published CALL_ACCEPTED via WebSocket to caller: {}", caller.getId());
+        } catch (Exception e) {
+            log.warn("Failed to send CALL_ACCEPTED websocket to caller {}", caller.getId(), e);
+        }
 
         // 8. 결과 반환
         return CallResponse.builder()
@@ -149,12 +170,16 @@ public class CallService {
                 .orElseThrow(() -> new CallException(ErrorCode.USER_NOT_FOUND));
 
         // 5. Data 전용 카카오 푸시 전송 (안드로이드 백그라운드 수신용)
+        User callee = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
         Map<String, String> payloadMap = new HashMap<>();
         payloadMap.put("type", "CALL_REJECTED");
         payloadMap.put("channel_name", channelName);
+        payloadMap.put("callee_kakao_id", String.valueOf(callee.getKakaoId()));
 
         alertService.sendDataAlertToUser(caller.getKakaoId(), payloadMap);
-        log.info("Sent CALL_REJECTED data push to caller: {}", caller.getId());
+        log.info("Sent CALL_REJECTED data push to caller: {}, calleeKakaoId: {}", caller.getId(), callee.getKakaoId());
 
         // WebSocket 이벤트 발송 (발신자에게 거절 알림)
         com.shutter.api.rtc.dto.response.CallEventResponse eventResponse = com.shutter.api.rtc.dto.response.CallEventResponse.builder()
@@ -189,12 +214,16 @@ public class CallService {
                 .orElseThrow(() -> new CallException(ErrorCode.USER_NOT_FOUND));
 
         // 5. Data 전용 카카오 푸시 전송 (안드로이드 백그라운드 수신용)
+        User caller = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
         Map<String, String> payloadMap = new HashMap<>();
         payloadMap.put("type", "CALL_CANCELED");
         payloadMap.put("channel_name", channelName);
+        payloadMap.put("caller_kakao_id", String.valueOf(caller.getKakaoId()));
 
         alertService.sendDataAlertToUser(callee.getKakaoId(), payloadMap);
-        log.info("Sent CALL_CANCELED data push to callee: {}", callee.getId());
+        log.info("Sent CALL_CANCELED data push to callee: {}, callerKakaoId: {}", callee.getId(), caller.getKakaoId());
 
         // WebSocket 이벤트 발송 (수신자에게 취소 알림)
         com.shutter.api.rtc.dto.response.CallEventResponse eventResponse = com.shutter.api.rtc.dto.response.CallEventResponse.builder()

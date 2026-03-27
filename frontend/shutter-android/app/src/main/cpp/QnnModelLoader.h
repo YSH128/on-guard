@@ -30,7 +30,9 @@ public:
     bool LoadModel(const std::string& assetsPath);
 
     // QNN 그래프 실행 함수
-    bool ExecuteGraph(const float* inputData, size_t inputElements, float* outputData, size_t outputElements);
+    bool ExecuteGraph(const float* inputData, size_t inputElements,
+                      float* logitsData, size_t logitsElements,
+                      float* camData, size_t camElements);
     
     // 리소스 정리 함수 (JNI Release 시 호출)
     void Cleanup();
@@ -98,9 +100,16 @@ private:
     QnnLog_FreeFn_t m_fpLogFree;
     QnnModel_ComposeGraphsFn_t m_fpModelComposeGraphs;
 
+public:
+    // cam 크기 (native-lib.cpp에서 동적 버퍼 할당에 사용)
+    uint32_t m_camH = 0;
+    uint32_t m_camW = 0;
+
+private:
     // Tensor IDs to dynamically cache and use
     uint32_t m_inputId;
-    uint32_t m_outputId;
+    uint32_t m_logitsId;
+    uint32_t m_camId;
 
     // 내부 유틸
     bool TryLoadBackend(const char* libName);

@@ -107,15 +107,23 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
             Log.d(TAG, "JNI 결과: $resultText")
 
             val result = parseResult(resultText)
+
             onFrameResultCallback?.invoke(result)
+
             resultBuffer.add(result)
             Log.d(TAG, "결과 누적 ${resultBuffer.size}/$BUFFER_SIZE")
 
             if (resultBuffer.size >= BUFFER_SIZE) {
                 val averaged = averageResults(resultBuffer.toList())
+                
+                val finalResult = averaged.copy(
+                    roi = result.roi,
+                    fakeProb = averaged.fakeProb
+                )
+                
                 resultBuffer.clear()
-                Log.d(TAG, "평균 결과: $averaged")
-                callback(averaged)
+                callback(finalResult)
+                Log.d(TAG, "평균 결과: $finalResult")
             }
 
         } catch (e: Exception) {
@@ -126,7 +134,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
     private fun averageResults(results: List<DeepfakeDetectionResult>): DeepfakeDetectionResult {
         // detected: 과반수(5개 이상)가 true면 true
         val avgFakeProb = results.map { it.fakeProb }.average().toFloat()
-        val detected = avgFakeProb > 0.5f
+        val detected = avgFakeProb > 0.1f // 테스트 중 좋은 threshold: 0.3
 
         // roi: null 아닌 것들의 평균
         val roiList = results.mapNotNull { it.roi }
@@ -189,7 +197,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
     companion object {
         private const val TAG = "RealDeepfakeDetector"
-        private const val BUFFER_SIZE = 7
+        private const val BUFFER_SIZE = 1 // 원래 10
     }
 }
 
