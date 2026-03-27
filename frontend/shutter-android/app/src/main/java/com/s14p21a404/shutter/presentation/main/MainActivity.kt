@@ -132,6 +132,8 @@ class MainActivity : ComponentActivity() {
                 val callerName = intent?.getStringExtra("caller_name") ?: "상대방"
                 val callerKakaoId = intent?.getLongExtra("caller_kakao_id", 0L) ?: 0L
                 Log.d(TAG, "accept_call 처리: $channelName / $callerName / kakaoId=$callerKakaoId")
+                getSystemService(android.app.NotificationManager::class.java)
+                    .cancel(ShutterFirebaseMessagingService.CALL_NOTIFICATION_ID)
                 isInCall = true
                 viewModel.acceptIncomingCall(channelName, callerName, callerKakaoId)
             }
@@ -139,7 +141,8 @@ class MainActivity : ComponentActivity() {
             "reject_call" -> {
                 val channelName = intent?.getStringExtra("channel_name") ?: return
                 Log.d(TAG, "reject_call 처리: $channelName")
-                viewModel.rejectCallByChannel(channelName)
+                getSystemService(android.app.NotificationManager::class.java)
+                    .cancel(ShutterFirebaseMessagingService.CALL_NOTIFICATION_ID)
                 viewModel.rejectCallByChannel(channelName)
             }
 
