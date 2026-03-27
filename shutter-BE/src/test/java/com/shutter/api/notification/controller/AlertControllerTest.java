@@ -103,7 +103,7 @@ class AlertControllerTest {
     @DisplayName("POST /api/v1/alerts/send - 성공: 모든 보호자에게 알림 전송 및 로그 목록 반환")
     void sendAlerts_success() throws Exception {
         // given
-        AlertRequest request = new AlertRequest("010-1234-5678", NotificationEventType.DEEPFAKE, LocalDateTime.now());
+        AlertRequest request = new AlertRequest("010-1234-5678", NotificationEventType.DEEPFAKE, null, LocalDateTime.now());
         AlertLogResponse logResponse = AlertLogResponse.builder()
                 .id(1L)
                 .status(NotificationStatus.SUCCESS)
@@ -126,7 +126,7 @@ class AlertControllerTest {
     @DisplayName("POST /api/v1/alerts/send - 실패: 존재하지 않는 보호자 관계")
     void sendAlerts_fail_relationshipNotFound() throws Exception {
         // given
-        AlertRequest request = new AlertRequest("caller", NotificationEventType.DEEPFAKE, null);
+        AlertRequest request = new AlertRequest("caller", NotificationEventType.DEEPFAKE, null, null);
         given(alertService.sendAlertsToGuardians(any(), any()))
                 .willThrow(new AlertException(ErrorCode.RELATIONSHIP_NOT_FOUND));
 
@@ -144,7 +144,7 @@ class AlertControllerTest {
     @DisplayName("POST /api/v1/alerts/send - 실패: FCM 발송 실패")
     void sendAlerts_fail_fcmSendFailed() throws Exception {
         // given
-        AlertRequest request = new AlertRequest("caller", NotificationEventType.DEEPFAKE, null);
+        AlertRequest request = new AlertRequest("caller", NotificationEventType.DEEPFAKE, null, null);
         given(alertService.sendAlertsToGuardians(any(), any()))
                 .willThrow(new AlertException(ErrorCode.FCM_SEND_FAILED));
 
