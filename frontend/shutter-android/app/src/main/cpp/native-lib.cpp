@@ -397,6 +397,9 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
             cv::Mat cam_upsampled;
             cv::resize(cam_norm, cam_upsampled, cv::Size(INPUT_W, INPUT_H), 0, 0, cv::INTER_LINEAR);
 
+            // 256×256 pixel-level CAM은 노이즈가 많으므로 Gaussian blur로 평활화
+            cv::GaussianBlur(cam_upsampled, cam_upsampled, cv::Size(11, 11), 0);
+
             cv::Mat binary;
             cv::threshold(cam_upsampled, binary, ROI_THRESHOLD, 1.0, cv::THRESH_BINARY);
             binary.convertTo(binary, CV_8U);
@@ -407,6 +410,7 @@ Java_com_s14p21a404_shutter_data_detector_bridge_NativeDeepfakeBridge_detectDeep
 
             float norm  = 1.0f / (float)INPUT_W;
             float best_score = -1.f;
+            int min_area = (int)(INPUT_W * INPUT_H * 0.05f); // 최소 5% 면적 필터
 
             for (int i = 1; i < num_labels; i++) {
                 int left = stats.at<int>(i, cv::CC_STAT_LEFT);
