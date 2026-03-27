@@ -58,6 +58,19 @@ class TokenManager(context: Context) {
 
     fun getGpsSharing(): Boolean = prefs.getBoolean(KEY_GPS_SHARING, true)
 
+    /**
+     * GPS 공유 상태를 읽되, SharedPreferences에 키가 존재하지 않으면
+     * 기본값 true를 명시적으로 저장한 뒤 반환한다.
+     * 앱 최초 실행 시 서버 동기화 전에 호출하여 타이밍 이슈를 방지한다.
+     */
+    fun getOrInitGpsSharing(): Boolean {
+        if (!prefs.contains(KEY_GPS_SHARING)) {
+            prefs.edit().putBoolean(KEY_GPS_SHARING, true).apply()
+            return true
+        }
+        return prefs.getBoolean(KEY_GPS_SHARING, true)
+    }
+
     fun clearTokens() {
         prefs.edit()
             .remove(KEY_ACCESS_TOKEN)

@@ -127,9 +127,6 @@ class VideoCallDetectService : Service() {
                 videoCallRepository.setInAppCallActive(false)
             } else {
                 // ── 외부 앱(카카오톡/통신사) 영상통화 종료 ──
-                // AccessibilityService를 통해 실제 통화 종료
-                // - 통신사 전화: TelecomManager.endCall() (윈도우 포커스 무관)
-                // - VoIP 앱: windows API로 통화 앱 윈도우를 직접 탐색 (오버레이 유무 무관)
                 val service = ForegroundAppMonitorService.instance
                 if (service != null) {
                     val success = service.performEndCall()
@@ -231,9 +228,11 @@ class VideoCallDetectService : Service() {
             }
         }
 
-        // 프레임별 실시간 결과 관찰 → 딥페이크 확정 후 RoI 실시간 갱신
+        // 프레임별 실시간 결과 관찰 → ROI + fakeProb 매 프레임 갱신
         serviceScope.launch {
             detectUseCase.observeFrameResults().collect { frameResult ->
+                // ROI 박스 위치 및 fakeProb — 박스가 존재할 때만 내부에서 동작하므로 항상 호출 가능
+                warningOverlayManager.updateRoiRealtime(frameResult)
                 if (isDeepfakeDetected) {
                     warningOverlayManager.onDetectionResult(frameResult)
                 }
@@ -254,7 +253,6 @@ class VideoCallDetectService : Service() {
 
         if (!ForegroundAppMonitorService.isRunning()) {
             Log.w(TAG, "⚠️ AccessibilityService(ForegroundAppMonitor) 미활성 — 포그라운드 앱 추적 불가")
-            // 인앱 통화가 아닌 경우에만 리턴 (인앱 통화는 foregroundPackage로 자기 앱 패키지가 잡히므로 동작 가능)
             if (!videoCallRepository.isInAppCallActive()) return
         }
 
@@ -323,7 +321,6 @@ class VideoCallDetectService : Service() {
 
         if (!ForegroundAppMonitorService.isRunning()) {
             Log.w(TAG, "⚠️ AccessibilityService 미활성 — 금융 앱 추적 불가")
-            // 인앱 통화가 아닌 경우에만 리턴
             if (!videoCallRepository.isInAppCallActive()) return
         }
 

@@ -48,6 +48,7 @@ public class GuardianService {
                 relationship.getId(),
                 guardian.getId(),
                 guardian.getName(),
+                guardian.getProfileImageUrl(),
                 relationship.getCreatedAt()
         );
     }
@@ -93,6 +94,7 @@ public class GuardianService {
                         rel.getId(),
                         rel.getGuardian().getId(),
                         rel.getGuardian().getName(),
+                        rel.getGuardian().getProfileImageUrl(),
                         rel.getCreatedAt()
                 ))
                 .toList();

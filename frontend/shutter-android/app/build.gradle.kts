@@ -14,6 +14,11 @@ val nativeAarDeps by configurations.creating {
     isCanBeConsumed = false
 }
 
+val onnxAarDeps by configurations.creating {
+    isCanBeResolved = true
+    isCanBeConsumed = false
+}
+
 val localProperties = Properties().apply {
     val file = rootProject.file("local.properties")
     if (file.exists()) load(file.inputStream())
@@ -137,6 +142,7 @@ dependencies {
     
     // ONNX Runtime for non-Qualcomm fallback
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.16.1")
+    onnxAarDeps("com.microsoft.onnxruntime:onnxruntime-android:1.16.1")
 
     // 이미지 로딩 (카카오 프로필 사진, GIF)
     implementation("io.coil-kt:coil-compose:2.6.0")
@@ -196,6 +202,18 @@ val extractOpenCV by tasks.registering(Copy::class) {
     }
 }
 
+val extractOnnxRuntime by tasks.registering(Copy::class) {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    val onnxAar = onnxAarDeps.files.find { it.name.contains("onnxruntime") }
+    onnxAar?.let {
+        from(zipTree(it)) {
+            include("jni/arm64-v8a/libonnxruntime.so")
+            include("headers/**")
+        }
+        into(layout.buildDirectory.dir("native_libs/onnxruntime"))
+    }
+}
+
 tasks.named("preBuild") {
-    dependsOn(extractPyTorch, extractOpenCV, extractOpenCVHeaders)
+    dependsOn(extractPyTorch, extractOpenCV, extractOpenCVHeaders, extractOnnxRuntime)
 }
