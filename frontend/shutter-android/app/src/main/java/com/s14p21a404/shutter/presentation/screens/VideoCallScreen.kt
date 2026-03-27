@@ -114,6 +114,12 @@ fun VideoCallScreen(
             android.util.Log.d("CriminalLocation", "위치 수신됨 — country: $country lat=$lat lng=$lng")
             isRequestingLocation = false
             warningOverlayManager.updateLocation(country, lat, lng)
+            // 금융앱 차단 오버레이에도 위치 데이터 전달 (캐싱 → show 시 반영)
+            val fbManager = ServiceLocator.getInstance(context).financialBlockOverlayManager
+            fbManager.updateCountry(country)
+            if (lat != null && lng != null) {
+                fbManager.updatePinPosition(lat, lng)
+            }
         }
         onDispose {
             CriminalLocationBridge.onLocationReceived = null
@@ -151,9 +157,18 @@ fun VideoCallScreen(
     val localView = remember { mutableStateOf<SurfaceView?>(null) }
     val remoteView = remember { mutableStateOf<SurfaceView?>(null) }
 
+
+    /** 권한 승인 완료 여부 — 이미 허용된 경우 true, 팝업 후 허용 시 true로 전환 */
+    var permissionsGranted by remember { mutableStateOf(false) }
+
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { }
+    ) { results ->
+        // 카메라 + 마이크 모두 허용되면 엔진 초기화 트리거
+        if (results.values.all { it }) {
+            permissionsGranted = true
+        }
+    }
 
     // ── 딥페이크 감지 연동: 상대방 연결 시 인앱 통화 활성화 ──
     LaunchedEffect(remoteUid, callEnded) {
@@ -257,12 +272,23 @@ fun VideoCallScreen(
         engine.setupRemoteVideo(VideoCanvas(view, VideoCanvas.RENDER_MODE_HIDDEN, uid))
     }
 
+    // ── 권한 확인/요청 ──
     LaunchedEffect(Unit) {
         val permissions = arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA)
         val needRequest = permissions.any {
             ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
         }
-        if (needRequest) launcher.launch(permissions)
+        if (needRequest) {
+            launcher.launch(permissions)
+        } else {
+            // 이미 모든 권한이 허용된 상태
+            permissionsGranted = true
+        }
+    }
+
+    // ── Agora 엔진 초기화 (권한 승인 후 실행) ──
+    LaunchedEffect(permissionsGranted) {
+        if (!permissionsGranted) return@LaunchedEffect
 
         val config = RtcEngineConfig().apply {
             mContext = context

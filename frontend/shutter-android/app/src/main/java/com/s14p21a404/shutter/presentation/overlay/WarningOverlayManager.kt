@@ -96,9 +96,9 @@ class WarningOverlayManager(
                 // 이미 바텀시트가 표시된 적 있음 → ROI box 위치만 갱신
                 updateRoiBoxOnly(result)
             } else {
-                // 최초 감지 → ROI box + dim + 바텀시트 모두 표시
-                showDetectionOverlays(result)
+                // 최초 감지 → 플래그를 먼저 세팅하여 중복 호출 방지
                 bottomSheetShownForSession = true
+                showDetectionOverlays(result)
             }
         } else {
             // detected=false → ROI box만 업데이트 (없으면 제거)
@@ -121,6 +121,33 @@ class WarningOverlayManager(
     fun dismissWarning() {
         dismissAll()
     }
+
+    /**
+     * 오버레이 뷰만 숨기고 세션 상태(lastResult, bottomSheetShownForSession 등)는 보존한다.
+     * 영상통화 화면 이탈 시 호출하여, 복귀 시 오버레이를 즉시 복원할 수 있게 한다.
+     */
+    fun hideOverlaysKeepState() {
+        dismissScanningPill()
+        // ROI box
+        roiBoundingBoxView?.let {
+            it.stopAnimations()
+            removeOverlayView(it)
+        }
+        roiBoundingBoxView = null
+        // Bottom sheet
+        bottomSheetView?.let {
+            it.stopAnimations()
+            removeOverlayView(it)
+        }
+        bottomSheetView = null
+        // Notification pills
+        notificationPillViews.forEach { removeOverlayView(it) }
+        notificationPillViews.clear()
+        handler.removeCallbacksAndMessages(null)
+        // lastResult, bottomSheetShownForSession, receivedCountryName 등은 유지
+        Log.d(TAG, "오버레이 뷰 숨김 (세션 상태 보존)")
+    }
+
 
     /**
      * 오버레이 표시 허용 여부를 설정한다.
@@ -227,6 +254,11 @@ class WarningOverlayManager(
         // ── Warning Bottom Sheet (500ms 지연 후 표시) ──
         handler.postDelayed({
             if (!enabled) return@postDelayed
+            // 이미 바텀시트가 존재하면 중복 생성 방지 (복귀 복원과 재탐지 결과가 겹칠 때)
+            if (bottomSheetView != null) {
+                Log.d(TAG, "바텀시트 이미 존재 → 중복 생성 스킵")
+                return@postDelayed
+            }
             val isInApp = videoCallRepository?.isInAppCallActive() ?: false
             val sheet = WarningBottomSheetView(
                 context = context,
@@ -262,7 +294,7 @@ class WarningOverlayManager(
 
             // ── 푸쉬 알림 pills (바텀시트 등장 후 표시) ──
             showNotificationPills()
-        }, 500)
+        }, 50)
     }
 
     // ─────────────────────────────────────────────
@@ -335,8 +367,8 @@ class WarningOverlayManager(
                     result.roiMaxX, result.roiMaxY,
                     result.fakeProb * 100f
                 )
-            } else if (Settings.canDrawOverlays(context)) {
-                // ROI box가 없으면 새로 생성 (바텀시트 닫힌 후 재표시)
+            } else if (result.detected && Settings.canDrawOverlays(context)) {
+                // 딥페이크 확정 후에만 새 ROI box 생성 (바텀시트 닫힌 후 재표시)
                 val roiView = RoiBoundingBoxView(context)
                 addOverlayView(
                     view = roiView,
@@ -361,6 +393,23 @@ class WarningOverlayManager(
                 removeOverlayView(it)
             }
             roiBoundingBoxView = null
+        }
+    }
+
+    /**
+     * 매 프레임 들어오는 원시 결과를 바탕으로 ROI 박스 위치만 즉시 갱신한다.
+     * 판정(detected) 여부와 상관없이 박스를 부드럽게 움직이기 위함.
+     */
+    fun updateRoiRealtime(result: DeepfakeDetectionResult) {
+        if (!enabled || !result.hasRoi) return
+
+        // 이미 ROI 박스가 떠 있는 상태라면 위치만 즉시 업데이트
+        roiBoundingBoxView?.let { view ->
+            view.setRoi(
+                result.roiMinX, result.roiMinY,
+                result.roiMaxX, result.roiMaxY,
+                result.fakeProb * 100f
+            )
         }
     }
 

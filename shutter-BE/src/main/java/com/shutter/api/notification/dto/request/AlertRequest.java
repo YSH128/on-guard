@@ -21,12 +21,16 @@ public class AlertRequest {
     @NotNull(message = "이벤트 타입은 필수입니다.")
     private NotificationEventType eventType;
 
+    @com.fasterxml.jackson.annotation.JsonProperty("phishing_type")
+    private String phishingType;
+
     @com.fasterxml.jackson.annotation.JsonProperty("call_started_at")
     private LocalDateTime callStartedAt;
 
-    public AlertRequest(String caller, NotificationEventType eventType, LocalDateTime callStartedAt) {
+    public AlertRequest(String caller, NotificationEventType eventType, String phishingType, LocalDateTime callStartedAt) {
         this.caller = caller;
         this.eventType = eventType;
+        this.phishingType = phishingType;
         this.callStartedAt = callStartedAt;
     }
 }

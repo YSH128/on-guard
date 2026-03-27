@@ -72,6 +72,7 @@ data class GuardianItem(
     @SerializedName("guardian_id") val guardianId: Long,
     @SerializedName("guardian_name") val guardianName: String,
     @SerializedName("created_at") val createdAt: String,
+    @SerializedName("profile_image_url") val profileImageUrl: String? = null,
 )
 
 data class GuardianListData(val guardians: List<GuardianItem>)

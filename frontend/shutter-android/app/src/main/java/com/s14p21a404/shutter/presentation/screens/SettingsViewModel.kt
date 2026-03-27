@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class SettingsUiState(
-    val gpsSharing: Boolean = false,
+    val gpsSharing: Boolean = true,
     val guardians: List<Guardian> = emptyList(),
     val guardianToDelete: Guardian? = null,
     val isLoading: Boolean = false,
@@ -32,8 +32,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
     init {
-        // SharedPreferences에 저장된 마지막 토글 상태 복원
-        _uiState.update { it.copy(gpsSharing = tokenManager.getGpsSharing()) }
+        // SharedPreferences에 저장된 마지막 토글 상태 복원 (키 미존재 시 true 저장)
+        _uiState.update { it.copy(gpsSharing = tokenManager.getOrInitGpsSharing()) }
     }
 
     fun loadGuardians() {
@@ -43,7 +43,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 .onSuccess { guardians ->
                     val displayGuardians = guardians.map { guardian ->
                         val kakaoName = guardianUuidStore.getKakaoName(guardian.guardianId)
-                        val profileImageUrl = guardianUuidStore.getProfileImageUrl(guardian.guardianId)
+                        val profileImageUrl = guardian.profileImageUrl
+                            ?: guardianUuidStore.getProfileImageUrl(guardian.guardianId)
                         guardian.copy(
                             name = kakaoName ?: guardian.name,
                             profileImageUrl = profileImageUrl,
