@@ -46,6 +46,7 @@ class RecentRecordsViewModel(application: Application) : AndroidViewModel(applic
     private val locator = ServiceLocator.getInstance(application)
     private val getMyWardsUseCase = locator.getMyWardsUseCase
     private val alertRepository = locator.alertRepository
+    private val tokenManager = locator.tokenManager
 
     private val _uiState = MutableStateFlow(RecentRecordsUiState())
     val uiState: StateFlow<RecentRecordsUiState> = _uiState.asStateFlow()
@@ -58,7 +59,8 @@ class RecentRecordsViewModel(application: Application) : AndroidViewModel(applic
         viewModelScope.launch {
             getMyWardsUseCase()
                 .onSuccess { wards ->
-                    val filters = listOf(WardFilter("전체", null)) +
+                    val myUserId = tokenManager.getUserId()
+                    val filters = listOf(WardFilter("전체", null), WardFilter("나", myUserId)) +
                             wards.map { WardFilter(it.name, it.wardId) }
                     _uiState.update { it.copy(wardFilters = filters) }
                     loadTimeline()
@@ -71,7 +73,8 @@ class RecentRecordsViewModel(application: Application) : AndroidViewModel(applic
             _uiState.update { it.copy(isRefreshing = true) }
             getMyWardsUseCase()
                 .onSuccess { wards ->
-                    val filters = listOf(WardFilter("전체", null)) +
+                    val myUserId = tokenManager.getUserId()
+                    val filters = listOf(WardFilter("전체", null), WardFilter("나", myUserId)) +
                             wards.map { WardFilter(it.name, it.wardId) }
                     _uiState.update { it.copy(wardFilters = filters) }
                 }
@@ -99,9 +102,9 @@ class RecentRecordsViewModel(application: Application) : AndroidViewModel(applic
 
             val state = _uiState.value
             val wardsToFetch = if (state.selectedFilter == "전체") {
-                state.wardFilters.filter { it.wardId != null }
+                state.wardFilters.filter { it.wardId != null && it.wardId > 0 }
             } else {
-                state.wardFilters.filter { it.name == state.selectedFilter && it.wardId != null }
+                state.wardFilters.filter { it.name == state.selectedFilter && it.wardId != null && it.wardId > 0 }
             }
 
             val allEntries = wardsToFetch
