@@ -43,7 +43,6 @@ class GuardianUuidStore(context: Context) {
     fun getKakaoName(guardianId: Long): String? =
         prefs.getString("kakao_name_$guardianId", null)
 
-    
     fun saveProfileImageUrl(guardianId: Long, url: String) {
         prefs.edit().putString("profile_image_$guardianId", url).apply()
     }
