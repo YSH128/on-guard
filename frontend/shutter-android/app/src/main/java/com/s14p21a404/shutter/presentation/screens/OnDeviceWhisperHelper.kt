@@ -29,18 +29,23 @@ class OnDeviceWhisperHelper(private val context: Context) {
     private var firstTranscribeTime = 0L
     private var isGmsCalled = false
     private var latestCleanText = ""
+    private var totalAudioBytesFed = 0L
 
-    suspend fun initModel() = withContext(Dispatchers.IO) {
+    /**
+     * 모델 가중치만 사전 로딩 (마이크 접근 없음, 백그라운드 안전)
+     * ONNX 초기화 완료 후 자동 호출됨
+     */
+    suspend fun preloadModel() = withContext(Dispatchers.IO) {
         try {
-            firstTranscribeTime = 0L
-            isGmsCalled = false
-            latestCleanText = ""
-            
-            Log.d("WhisperSTT", "Initializing WhisperKit...")
-            
+            if (whisperKit != null) {
+                Log.d("WhisperSTT", "모델이 이미 로드됨 — preload 스킵")
+                return@withContext
+            }
+            Log.d("WhisperSTT", "🔄 WhisperKit 모델 사전 로딩 시작 (마이크 접근 없음)...")
+
             whisperKit = WhisperKit.Builder()
                 .setModel(WhisperKit.Builder.OPENAI_BASE)
-                .setEncoderBackend(WhisperKit.Builder.CPU_ONLY)
+                .setEncoderBackend(WhisperKit.Builder.CPU_AND_GPU)
                 .setDecoderBackend(WhisperKit.Builder.CPU_ONLY)
                 .setApplicationContext(context.applicationContext)
                 .setCallback { what, result ->
@@ -52,16 +57,12 @@ class OnDeviceWhisperHelper(private val context: Context) {
                         WhisperKit.TextOutputCallback.MSG_TEXT_OUT -> {
                             val textOutTime = System.currentTimeMillis()
                             val sttElapsed = textOutTime - lastTranscribeStartTime
-                            Log.d("WhisperSTT", "⚡ 콜백 MSG_TEXT_OUT 수신! STT 시작부터 걸린 시간: ${sttElapsed}ms")
-                            // val rawText = result.text
-                            // if (rawText.contains("<|translate|>")) {
-                            //     Log.d("WhisperSTT", "⚠️ 번역 모드 감지 → 영어 결과 폐기: $rawText")
-                            //     return@setCallback
-                            // }
+                            // 16kHz, mono, 16bit(2bytes) → 1초 = 32000 bytes
+                            val totalAudioSeconds = totalAudioBytesFed / 32000.0
+                            Log.d("WhisperSTT_END", "⚡ 콜백 MSG_TEXT_OUT 수신! STT 시작부터 걸린 시간: ${sttElapsed}ms, 누적 음성: ${String.format("%.1f", totalAudioSeconds)}초 (${totalAudioBytesFed} bytes)")
                             val rawText = result.segments
                                 .joinToString(" ") { it.text }
                             
-                            // [Music], (음악), ♪음악♪ 형태 등 Whisper의 대표적인 비음성 환각(Hallucination) 태그를 모두 제거
                             val cleanText = rawText
                                 .replace(Regex("\\[.*?\\]|\\(.*?\\)|♪.*?♪|\\*.*?\\*"), "")
                                 .trim()
@@ -69,30 +70,55 @@ class OnDeviceWhisperHelper(private val context: Context) {
                             latestCleanText = cleanText
                             if (cleanText.isNotBlank()) {
                                 onResult?.invoke(cleanText)
-                                Log.d("WhisperSTT", "🗣️ [누적 STT 결과 갱신]: $cleanText")
-                                Log.d("WhisperSTT", "🚀 STT 텍스트 갱신 감지됨. GMS API로 누적 텍스트 전체를 실시간 전송합니다.")
+                                Log.d("WhisperSTT_END", "🗣️ [누적 STT 결과 갱신]: $cleanText")
+                                Log.d("WhisperSTT_END", "🚀 STT 텍스트 갱신 감지됨. GMS API로 누적 텍스트 전체를 실시간 전송합니다.")
                                 sttScope.launch {
                                     analyzeTextWithGMS(cleanText)
                                 }
                             } else {
-                                Log.d("WhisperSTT", "⚠️ 텍스트 필터링됨")
+                                Log.d("WhisperSTT_END", "⚠️ 텍스트 필터링됨")
                             }
                         }
                         WhisperKit.TextOutputCallback.MSG_CLOSE -> {
-                            Log.d("WhisperSTT", "WhisperKit cleanup complete.")
+                            Log.d("WhisperSTT_END", "WhisperKit cleanup complete.")
                         }
                     }
                 }
                 .build()
 
             whisperKit?.loadModel()?.collect { progress ->
-                Log.d("WhisperSTT", "Model loading progress: ${progress.fractionCompleted}%")
+                Log.d("WhisperSTT_Init", "Model loading progress: ${progress.fractionCompleted}%")
             }
-            
+            Log.d("WhisperSTT_Init", "✅ WhisperKit 모델 사전 로딩 완료 (init은 통화 시작 시 호출)")
+
+        } catch (e: Exception) {
+            Log.e("WhisperSTT_Init", "❌ Error preloading WhisperKit: ${e.message}")
+        }
+    }
+
+    /**
+     * 오디오 파이프라인 초기화 (마이크 접근 필요 — 통화 시작 시에만 호출)
+     * preloadModel()이 선행되어야 함
+     */
+    suspend fun initModel() = withContext(Dispatchers.IO) {
+        try {
+            firstTranscribeTime = 0L
+            isGmsCalled = false
+            latestCleanText = ""
+            totalAudioBytesFed = 0L
+
+            // 모델이 아직 로드되지 않았으면 먼저 로드
+            if (whisperKit == null) {
+                Log.d("WhisperSTT", "모델 미로드 상태 — preloadModel() 먼저 실행")
+                preloadModel()
+            }
+
+            Log.d("WhisperSTT", "🎙️ WhisperKit 오디오 초기화 시작...")
             whisperKit?.init(frequency = 16000, channels = 1, duration = 0)
+            Log.d("WhisperSTT", "✅ WhisperKit 오디오 초기화 완료")
             
         } catch (e: Exception) {
-            Log.e("WhisperSTT", "❌ Error initializing WhisperKit: ${e.message}")
+            Log.e("WhisperSTT", "❌ Error initializing WhisperKit audio: ${e.message}")
         }
     }
 
@@ -118,7 +144,8 @@ class OnDeviceWhisperHelper(private val context: Context) {
                 }
 
                 lastTranscribeStartTime = System.currentTimeMillis()
-                Log.d("WhisperSTT", "🔄 JNI Native STT 추론 시작... 크기: ${audioChunk.size} bytes")
+                totalAudioBytesFed += audioChunk.size
+                Log.d("WhisperSTT", "🔄 JNI Native STT 추론 시작... 크기: ${audioChunk.size} bytes (누적: ${totalAudioBytesFed} bytes)")
                 
                 val seconds = whisperKit?.transcribe(audioChunk) ?: 0
                 
@@ -195,8 +222,6 @@ class OnDeviceWhisperHelper(private val context: Context) {
             } else {
                 urlConnection.errorStream.bufferedReader().use { it.readText() }
             }
-
-            Log.d("GMSAPI", "Response Body: $responseBody")
 
             if (responseCode == HttpsURLConnection.HTTP_OK) {
                 val analysisResult = parseGMSResponse(responseBody)

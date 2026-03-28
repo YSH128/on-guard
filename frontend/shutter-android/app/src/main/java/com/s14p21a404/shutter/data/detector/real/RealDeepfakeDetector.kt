@@ -52,7 +52,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
                         val whisperHelper = com.s14p21a404.shutter.di.ServiceLocator
                             .getInstance(context).whisperHelper
                         kotlinx.coroutines.runBlocking {
-                            whisperHelper.initModel()
+                            whisperHelper.preloadModel()
                         }
                         Log.d(TAG, "🎙️ STT(Whisper) 모델 사전 로딩 완료")
                     }
