@@ -12,6 +12,8 @@ import com.shutter.api.gps.dto.response.GpsSharingToggleResponse;
 import com.shutter.api.gps.dto.response.LocationExpiredDto;
 import com.shutter.api.gps.dto.response.LocationSharingOnDto;
 import com.shutter.api.gps.dto.response.LocationUpdateDto;
+import com.shutter.api.notification.client.KakaoPushClient;
+import com.shutter.api.notification.domain.NotificationEventType;
 import com.shutter.api.user.domain.User;
 import com.shutter.api.user.domain.UserRelationship;
 import com.shutter.api.user.repository.UserRelationshipRepository;
@@ -39,6 +41,7 @@ public class GpsService {
     private final RedisTemplate<String, String> redisTemplate;
     private final ObjectMapper objectMapper;
     private final SimpMessagingTemplate messagingTemplate;
+    private final KakaoPushClient kakaoPushClient;
 
     private static final String GPS_KEY_PREFIX = "location:";
     private static final long GPS_TTL_SECONDS = 60; // 1분
@@ -52,6 +55,9 @@ public class GpsService {
 
         LocalDateTime now = LocalDateTime.now();
         String redisKey = GPS_KEY_PREFIX + userId;
+
+        // 최초 GPS 전송 여부 확인 (Redis 키가 없으면 첫 전송)
+        boolean isFirstGps = !Boolean.TRUE.equals(redisTemplate.hasKey(redisKey));
 
         try {
             // Redis Value 구성
@@ -67,9 +73,19 @@ public class GpsService {
 
             log.debug("Saved GPS location for user {}: {}", userId, value);
 
-            // WebSocket 푸시 전송 (구독 중인 채널로)
             List<UserRelationship> relationships = userRelationshipRepository.findByWardIdWithGuardian(userId);
             if (!relationships.isEmpty()) {
+                // 최초 GPS 전송 시 보호자들에게 FCM 발송
+                if (isFirstGps) {
+                    String pushMessage = NotificationEventType.LOCATION.getPushMessage(user.getName());
+                    for (UserRelationship rel : relationships) {
+                        kakaoPushClient.sendPush(rel.getGuardian().getKakaoId(), user.getName(),
+                                NotificationEventType.LOCATION, pushMessage);
+                    }
+                    log.info("Sent LOCATION FCM to {} guardians for ward {}", relationships.size(), userId);
+                }
+
+                // WebSocket 푸시 전송 (구독 중인 채널로)
                 LocationUpdateDto updateDto = LocationUpdateDto.builder()
                         .wardId(userId)
                         .name(user.getName())
