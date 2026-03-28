@@ -24,10 +24,13 @@ import com.s14p21a404.shutter.domain.repository.VideoCallRepository
  *    - 인앱: 지도 + 국기 + 감지유형 + 전화종료 버튼
  *    - 외부앱: AI 위조 감지 타이틀 + 전화종료 버튼만
  */
+import com.s14p21a404.shutter.domain.repository.DeepfakeDetectionRepository
+
 class WarningOverlayManager(
     private val context: Context,
-    private val videoCallRepository: VideoCallRepository? = null
+    private val videoCallRepository: VideoCallRepository? = null,
 ) {
+    var deepfakeDetectionRepository: DeepfakeDetectionRepository? = null
 
     private val windowManager =
         context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -233,43 +236,43 @@ class WarningOverlayManager(
         if (!enabled) return
         if (!Settings.canDrawOverlays(context)) return
 
-        // 이미 표시 중이면 ROI만 업데이트
-        if (roiBoundingBoxView != null && bottomSheetView != null) {
-            if (result.hasRoi) {
+        // ── 0. 바텀시트가 뜨는 타이밍: OpenCV 빠른 얼굴 탐지 활성화 ──
+        deepfakeDetectionRepository?.setFaceTrackingEnabled(true)
+
+        // ── 1. ROI Bounding Box ──
+        if (result.hasRoi) {
+            if (roiBoundingBoxView != null) {
+                // 이미 뷰가 존재한다면 좌표만 업데이트
                 roiBoundingBoxView?.setRoi(
                     result.roiMinX, result.roiMinY,
                     result.roiMaxX, result.roiMaxY,
                     result.fakeProb * 100f
                 )
+            } else {
+                // 새로 생성 및 표시
+                val roiView = RoiBoundingBoxView(context)
+                addOverlayView(
+                    view = roiView,
+                    width = WindowManager.LayoutParams.MATCH_PARENT,
+                    height = WindowManager.LayoutParams.MATCH_PARENT,
+                    gravity = Gravity.TOP or Gravity.START,
+                    touchable = false // 터치 통과
+                )
+                roiView.setRoi(
+                    result.roiMinX, result.roiMinY,
+                    result.roiMaxX, result.roiMaxY,
+                    result.fakeProb * 100f
+                )
+                roiView.startAnimations()
+                roiBoundingBoxView = roiView
+                Log.d(TAG, "ROI 바운딩 박스 표시: roi=${result.roi?.contentToString()}")
             }
-            return
         }
 
-        // ── ROI Bounding Box ──
-        if (result.hasRoi) {
-            val roiView = RoiBoundingBoxView(context)
-            addOverlayView(
-                view = roiView,
-                width = WindowManager.LayoutParams.MATCH_PARENT,
-                height = WindowManager.LayoutParams.MATCH_PARENT,
-                gravity = Gravity.TOP or Gravity.START,
-                touchable = false // 터치 통과
-            )
-            roiView.setRoi(
-                result.roiMinX, result.roiMinY,
-                result.roiMaxX, result.roiMaxY,
-                result.fakeProb * 100f
-            )
-            roiView.startAnimations()
-            roiBoundingBoxView = roiView
-            Log.d(TAG, "ROI 바운딩 박스 표시: roi=${result.roi?.contentToString()}")
-        }
-
-
-        // ── Warning Bottom Sheet (500ms 지연 후 표시) ──
+        // ── 2. Warning Bottom Sheet (500ms 지연 후 표시) ──
         handler.postDelayed({
             if (!enabled) return@postDelayed
-            // 이미 바텀시트가 존재하면 중복 생성 방지 (복귀 복원과 재탐지 결과가 겹칠 때)
+            // 이미 바텀시트가 존재하면 중복 생성 방지
             if (bottomSheetView != null) {
                 Log.d(TAG, "바텀시트 이미 존재 → 중복 생성 스킵")
                 return@postDelayed
@@ -439,9 +442,12 @@ class WarningOverlayManager(
             removeOverlayView(it)
         }
         bottomSheetView = null
+        // 바텀시트만 닫혀도 ROI box는 유지하므로 FaceTracking은 계속 유지
     }
 
     private fun dismissDetectionOverlays() {
+        // 모든 오버레이가 닫힐 때 얼굴 탐지도 중단
+        deepfakeDetectionRepository?.setFaceTrackingEnabled(false)
         roiBoundingBoxView?.let {
             it.stopAnimations()
             removeOverlayView(it)

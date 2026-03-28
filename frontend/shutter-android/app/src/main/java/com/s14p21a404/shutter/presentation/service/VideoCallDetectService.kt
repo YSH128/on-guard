@@ -115,6 +115,9 @@ class VideoCallDetectService : Service() {
         gpsRepository = locator.gpsRepository
         tokenManager = locator.tokenManager
 
+        // 오버레이 매니저에 레포지토리 주입 (OpenCV 강제 활성 제어용)
+        warningOverlayManager.deepfakeDetectionRepository = detectionRepository
+
         startAsForeground()
 
         // 영상통화 모니터링 시작
