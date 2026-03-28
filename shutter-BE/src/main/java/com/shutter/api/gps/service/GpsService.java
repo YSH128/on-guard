@@ -56,9 +56,6 @@ public class GpsService {
         LocalDateTime now = LocalDateTime.now();
         String redisKey = GPS_KEY_PREFIX + userId;
 
-        // 최초 GPS 전송 여부 확인 (Redis 키가 없으면 첫 전송)
-        boolean isFirstGps = !Boolean.TRUE.equals(redisTemplate.hasKey(redisKey));
-
         try {
             // Redis Value 구성
             Map<String, Object> locationData = new HashMap<>();
@@ -68,15 +65,19 @@ public class GpsService {
 
             String value = objectMapper.writeValueAsString(locationData);
 
-            // Redis 저장 (TTL 적용)
-            redisTemplate.opsForValue().set(redisKey, value, GPS_TTL_SECONDS, TimeUnit.SECONDS);
+            // setIfAbsent(SETNX): 원자적으로 저장 + 최초 여부 판별
+            Boolean isFirstGps = redisTemplate.opsForValue().setIfAbsent(redisKey, value, GPS_TTL_SECONDS, TimeUnit.SECONDS);
+            if (!Boolean.TRUE.equals(isFirstGps)) {
+                // 이미 키 있음 → TTL 갱신
+                redisTemplate.opsForValue().set(redisKey, value, GPS_TTL_SECONDS, TimeUnit.SECONDS);
+            }
 
             log.debug("Saved GPS location for user {}: {}", userId, value);
 
             List<UserRelationship> relationships = userRelationshipRepository.findByWardIdWithGuardian(userId);
             if (!relationships.isEmpty()) {
                 // 최초 GPS 전송 시 보호자들에게 FCM 발송
-                if (isFirstGps) {
+                if (Boolean.TRUE.equals(isFirstGps)) {
                     String pushMessage = NotificationEventType.LOCATION.getPushMessage(user.getName());
                     for (UserRelationship rel : relationships) {
                         kakaoPushClient.sendPush(rel.getGuardian().getKakaoId(), user.getName(),

@@ -82,7 +82,7 @@ class GpsServiceTest {
     void saveLocation_firstGps_sendsFcmToGuardians() {
         given(relationship.getGuardian()).willReturn(guardian);
         given(userRepository.findById(1L)).willReturn(Optional.of(ward));
-        given(redisTemplate.hasKey("location:1")).willReturn(false); // 최초
+        given(valueOperations.setIfAbsent(eq("location:1"), anyString(), anyLong(), any())).willReturn(true); // 최초
         given(userRelationshipRepository.findByWardIdWithGuardian(1L)).willReturn(List.of(relationship));
         given(kakaoPushClient.sendPush(anyLong(), anyString(), eq(NotificationEventType.LOCATION), anyString()))
                 .willReturn(PushResult.SUCCESS);
@@ -99,7 +99,7 @@ class GpsServiceTest {
     @DisplayName("이후 GPS 전송 - FCM 재발송 안함")
     void saveLocation_subsequentGps_doesNotSendFcm() {
         given(userRepository.findById(1L)).willReturn(Optional.of(ward));
-        given(redisTemplate.hasKey("location:1")).willReturn(true); // 이미 키 있음
+        given(valueOperations.setIfAbsent(eq("location:1"), anyString(), anyLong(), any())).willReturn(false); // 이미 키 있음
         given(userRelationshipRepository.findByWardIdWithGuardian(1L)).willReturn(List.of(relationship));
 
         gpsService.saveLocation(1L, gpsRequest);
@@ -112,7 +112,7 @@ class GpsServiceTest {
     @DisplayName("보호자 없는 경우 - FCM 및 WebSocket 미발송")
     void saveLocation_noGuardians_doesNotSendAnything() {
         given(userRepository.findById(1L)).willReturn(Optional.of(ward));
-        given(redisTemplate.hasKey("location:1")).willReturn(false);
+        given(valueOperations.setIfAbsent(eq("location:1"), anyString(), anyLong(), any())).willReturn(true);
         given(userRelationshipRepository.findByWardIdWithGuardian(1L)).willReturn(List.of());
 
         gpsService.saveLocation(1L, gpsRequest);
