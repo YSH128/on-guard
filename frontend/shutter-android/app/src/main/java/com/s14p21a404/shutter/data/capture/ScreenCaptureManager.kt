@@ -30,7 +30,7 @@ class ScreenCaptureManager(
     private val context: Context,
     private val mediaProjection: MediaProjection,
     private val detectors: List<DeepfakeDetector>,
-    private val sampleIntervalMs: Long = 4000L
+    private val sampleIntervalMs: Long = 6000L
 ) {
     // 기기 실제 화면 해상도·DPI
     private val displayMetrics = context.resources.displayMetrics

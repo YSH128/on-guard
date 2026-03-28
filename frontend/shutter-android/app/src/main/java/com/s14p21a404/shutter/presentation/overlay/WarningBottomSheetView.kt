@@ -39,7 +39,8 @@ class WarningBottomSheetView(
     private val isInApp: Boolean = false,
     private val onEndCall: (() -> Unit)? = null,
     private val onRescan: (() -> Unit)? = null,
-    private val onClose: (() -> Unit)? = null
+    private val onClose: (() -> Unit)? = null,
+    private val analysisResult: String? = null
 ) : FrameLayout(context) {
 
     private val handler = Handler(Looper.getMainLooper())
@@ -55,7 +56,11 @@ class WarningBottomSheetView(
     private var countryNameTv: TextView? = null
     private var flagImageView: ImageView? = null
     private var labelContainer: LinearLayout? = null
+    private var typeLabelTv: TextView? = null
     private val buttonsContainer: LinearLayout
+
+    /** 중복된 GMS 결과를 합치거나 필터링하기 위한 내부 Set */
+    private val gmsResultSet = mutableSetOf<String>()
 
     /** 현재 표시 중인 국가명 */
     private var currentCountryName: String = "위치 확인 중..."
@@ -64,6 +69,19 @@ class WarningBottomSheetView(
         setBackgroundColor(Color.TRANSPARENT)
         clipChildren = false
         clipToPadding = false
+
+        if (!analysisResult.isNullOrBlank()) {
+            val tags = analysisResult.split(" ").map { it.trim() }.filter { it.isNotBlank() }
+            for (tag in tags) {
+                if (tag != "#일상대화" && tag != "#일상 대화") {
+                    gmsResultSet.remove("#일상대화")
+                    gmsResultSet.remove("#일상 대화")
+                    gmsResultSet.add(tag)
+                } else if (gmsResultSet.isEmpty()) {
+                    gmsResultSet.add(tag)
+                }
+            }
+        }
 
         // ── 바텀시트 컨테이너 ──
         sheetContainer = LinearLayout(context).apply {
@@ -261,6 +279,8 @@ class WarningBottomSheetView(
             buildMapSection()
             buildDetectionTypeSection()
         }
+
+
 
         // ── 버튼 ──
         buttonsContainer = LinearLayout(context).apply {
@@ -466,8 +486,12 @@ class WarningBottomSheetView(
             translationY = dpToPx(16).toFloat()
         }
 
-        val typeLabelTv = TextView(context).apply {
-            text = "계좌 이체 요구"
+        typeLabelTv = TextView(context).apply {
+            text = if (gmsResultSet.isNotEmpty()) {
+                gmsResultSet.joinToString(" ")
+            } else {
+                "#AI위조영상통화"
+            }
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setTextColor(Color.parseColor("#374151"))
         }
@@ -692,6 +716,27 @@ class WarningBottomSheetView(
     fun stopAnimations() {
         handler.removeCallbacksAndMessages(null)
         pulseAnimators.forEach { it.cancel() }
+    }
+
+    fun setAnalysisResult(result: String) {
+        if (result.isNotBlank()) {
+            // 여러 해시태그가 띄어쓰기로 분리되어 옴
+            val tags = result.split(" ").map { it.trim() }.filter { it.isNotBlank() }
+            
+            for (tag in tags) {
+                if (tag != "#일상대화" && tag != "#일상 대화") {
+                    // 위험 태그가 들어왔으므로 기존의 "일상대화"는 즉시 삭제
+                    gmsResultSet.remove("#일상 대화")
+                    gmsResultSet.remove("#일상대화")
+                    gmsResultSet.add(tag)
+                } else if (gmsResultSet.isEmpty()) {
+                    // 들어온 태그가 "일상대화"뿐이고, 아직 위험 태그가 하나도 없을 때만 추가
+                    gmsResultSet.add(tag)
+                }
+            }
+
+            typeLabelTv?.text = gmsResultSet.joinToString(" ")
+        }
     }
 
     override fun onDetachedFromWindow() {

@@ -113,7 +113,13 @@ class DeepfakeDetectionRepositoryImpl(
             mediaProjection = projection,
             detectors = listOf(detector)
         )
-        screenCaptureManager?.startCapture()
+        try {
+            screenCaptureManager?.startCapture()
+        } catch (e: SecurityException) {
+            Log.e(TAG, "MediaProjection 토큰 만료/재사용 불가 — 캡처 시작 실패", e)
+            screenCaptureManager = null
+            mediaProjection = null
+        }
     }
 
     override fun stopDetection() {
@@ -128,9 +134,12 @@ class DeepfakeDetectionRepositoryImpl(
     }
 
     override fun setMediaProjection(context: Context, mediaProjection: MediaProjection) {
-        // 구형 ScreenCaptureManager는 항상 해제 (구 MediaProjection 참조 제거)
-        screenCaptureManager?.stopCapture()
-        screenCaptureManager = null
+        // 이미 동작 중인 구형 MediaProjection/ScreenCaptureManager가 있다면 완전히 파기 (화면 멈춤 버그 방지)
+        if (this.mediaProjection != null || this.screenCaptureManager != null) {
+            Log.d(TAG, "새로운 MediaProjection 수신: 기존 캡처 매니저 및 프로젝션 강제 종료")
+            releaseMediaProjection()
+        }
+        
         this.captureContext = context
         this.mediaProjection = mediaProjection
         Log.d(TAG, "MediaProjection 설정 완료")

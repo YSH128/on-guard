@@ -36,6 +36,7 @@ import com.s14p21a404.shutter.presentation.overlay.FinancialBlockOverlayManager
 import com.s14p21a404.shutter.presentation.overlay.WarningOverlayManager
 import com.s14p21a404.shutter.presentation.service.AlertSoundManager
 import com.s14p21a404.shutter.presentation.service.DeepfakeAlertSender
+import com.s14p21a404.shutter.presentation.screens.OnDeviceWhisperHelper
 
 /**
  * 수동 DI 컨테이너
@@ -111,6 +112,11 @@ class ServiceLocator private constructor(context: Context) {
     val alertSoundManager = AlertSoundManager(context)
     val guardianUuidStore = GuardianUuidStore(context)
     val deepfakeAlertSender = DeepfakeAlertSender(guardianRepository, guardianUuidStore, alertRepository)
+
+    // ── On-Device STT (WhisperKit) ──
+    // lazy 초기화: 딥페이크 브릿지(libpytorch_jni.so)와 동시에 네이티브 라이브러리가 로딩되면
+    // libc++_shared.so 충돌(std::bad_cast)이 발생하므로, 최초 접근 시점까지 로딩을 지연
+    val whisperHelper by lazy { OnDeviceWhisperHelper(context) }
 
 
     companion object {
