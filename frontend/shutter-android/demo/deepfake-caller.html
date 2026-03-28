@@ -219,7 +219,7 @@ file:///C:/S14P21A404/frontend/shutter-android/demo/deepfake-caller.html 근데 
     ⚠️ Chrome 실행 옵션 필요<br>
     <code>--disable-web-security</code><br><br>
     🖥️ Face Swap 서버<br>
-    <code>70.12.130.110:8765</code>
+    <code>192.168.219.165:8765</code>
   </p>
 
   <hr class="guide-divider">
@@ -397,7 +397,8 @@ let durationId   = null;
 let durationSec  = 0;
 
 // ── Face Swap 상태 ────────────────────────────────────────────
-const WS_URL       = 'ws://70.12.130.110:8765';  // ~/criminal/server.py
+// 70.12.130.110
+const WS_URL       = 'ws://localhost:8765';  // ~/criminal/server.py
 let faceSwapOn     = false;   // UI 토글 상태
 let faceSwapWs     = null;    // WebSocket
 let faceSwapReady  = false;   // 소스 얼굴 등록 완료
