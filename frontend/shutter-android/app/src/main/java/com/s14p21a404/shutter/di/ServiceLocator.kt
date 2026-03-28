@@ -69,8 +69,8 @@ class ServiceLocator private constructor(context: Context) {
 
     val gpsWebSocketClient = GpsWebSocketClient(tokenManager, authRepository)
 
-    val detector: DeepfakeDetector = BroadcastTriggerDetector(context)       // ADB 테스트용
-//    val detector: DeepfakeDetector = RealDeepfakeDetector(context)       // JNI 파이프라인 (NDK SO 필요)
+//    val detector: DeepfakeDetector = BroadcastTriggerDetector(context)       // ADB 테스트용
+    val detector: DeepfakeDetector = RealDeepfakeDetector(context)       // JNI 파이프라인 (NDK SO 필요)
     val faceTracker = com.s14p21a404.shutter.data.detector.real.OpenCvFaceTracker(context)
 
     val detectionRepository: DeepfakeDetectionRepository =
