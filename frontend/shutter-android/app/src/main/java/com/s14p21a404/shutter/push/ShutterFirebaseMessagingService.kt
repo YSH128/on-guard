@@ -21,6 +21,7 @@ import com.s14p21a404.shutter.data.token.TokenManager
 import com.s14p21a404.shutter.di.ServiceLocator
 import com.s14p21a404.shutter.presentation.main.MainActivity
 import com.s14p21a404.shutter.presentation.service.CriminalLocationBridge
+import com.s14p21a404.shutter.presentation.service.LocationReloadBridge
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -83,6 +84,13 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
                 val channelName = data["channel_name"] ?: return
                 Log.d(FCM_TAG, "CALL_CANCELED 수신 — channel: $channelName")
                 IncomingCallEventBus.notifyCallCanceled()
+            }
+
+            "LOCATION" -> {
+                Log.d(FCM_TAG, "LOCATION 이벤트 수신 — 보호자 위치화면 갱신")
+                Handler(Looper.getMainLooper()).post {
+                    LocationReloadBridge.onLocationAlertReceived?.invoke()
+                }
             }
 
             "location_request" -> {
@@ -216,7 +224,11 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
     }
 
     /**
-     * 범죄자 위치 FCM 수신: UI 콜백 호출 + 푸시 알림 표시.
+     * 범죄자 위치 FCM 수신: 오버레이 직접 업데이트 + VideoCallScreen 콜백 + 푸시 알림 표시.
+     *
+     * 오버레이는 VideoCallScreen 생명주기와 무관하게 ServiceLocator를 통해 직접 업데이트한다.
+     * CriminalLocationBridge 콜백은 VideoCallScreen이 활성 상태일 때만 실행되므로
+     * 오버레이 업데이트를 여기서 처리해야 콜백이 null이어도 위치가 표시된다.
      */
     private fun handleCriminalLocation(data: Map<String, String>) {
         val country = data["country"] ?: run {
@@ -228,12 +240,21 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
 
         Log.d(FCM_TAG, "criminal_location 국가: $country lat=$lat lng=$lng")
 
-        // 1. VideoCallScreen UI에 콜백 (메인 스레드에서 실행)
         Handler(Looper.getMainLooper()).post {
+            // 1. 오버레이 직접 업데이트 (VideoCallScreen 생명주기와 무관)
+            val sl = ServiceLocator.getInstance(applicationContext)
+            sl.warningOverlayManager.updateLocation(country, lat, lng)
+            val fbManager = sl.financialBlockOverlayManager
+            fbManager.updateCountry(country)
+            if (lat != null && lng != null) {
+                fbManager.updatePinPosition(lat, lng)
+            }
+
+            // 2. VideoCallScreen이 활성 상태이면 isRequestingLocation 초기화
             CriminalLocationBridge.onLocationReceived?.invoke(country, lat, lng)
         }
 
-        // 2. 푸시 알림 표시
+        // 3. 푸시 알림 표시
         showCriminalLocationNotification(country)
     }
 

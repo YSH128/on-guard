@@ -110,18 +110,11 @@ fun VideoCallScreen(
         ServiceLocator.getInstance(context).warningOverlayManager
     }
 
-    // criminal_location FCM 수신 콜백 등록 (위치 데이터는 오버레이 바텀시트에 표시)
+    // criminal_location FCM 수신 콜백 등록
+    // 오버레이 업데이트는 FCM 서비스에서 직접 처리하므로 여기서는 isRequestingLocation만 초기화
     DisposableEffect(Unit) {
-        CriminalLocationBridge.onLocationReceived = { country, lat, lng ->
-            android.util.Log.d("CriminalLocation", "위치 수신됨 — country: $country lat=$lat lng=$lng")
+        CriminalLocationBridge.onLocationReceived = { _, _, _ ->
             isRequestingLocation = false
-            warningOverlayManager.updateLocation(country, lat, lng)
-            // 금융앱 차단 오버레이에도 위치 데이터 전달 (캐싱 → show 시 반영)
-            val fbManager = ServiceLocator.getInstance(context).financialBlockOverlayManager
-            fbManager.updateCountry(country)
-            if (lat != null && lng != null) {
-                fbManager.updatePinPosition(lat, lng)
-            }
         }
         onDispose {
             CriminalLocationBridge.onLocationReceived = null
