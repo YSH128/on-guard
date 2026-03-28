@@ -213,7 +213,7 @@ fun VideoCallScreen(
     
     LaunchedEffect(Unit) {
         whisperHelper.onResult = { resultText ->
-            android.util.Log.d("WhisperSTT_Result", "🗣️ [진행중인 통화 중 실시간 STT]: $resultText")
+            android.util.Log.d("WhisperSTT_END", "🗣️ [진행중인 통화 중 실시간 STT]: $resultText")
         }
         
         whisperHelper.onAnalysisResult = { gmsResult ->
