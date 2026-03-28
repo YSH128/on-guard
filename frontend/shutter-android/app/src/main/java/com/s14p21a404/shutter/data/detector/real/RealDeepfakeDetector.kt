@@ -39,6 +39,18 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
             nativeAvailable = NativeDeepfakeBridge.loadLibrary()
             if (nativeAvailable) {
                 bridge = NativeDeepfakeBridge(context)
+                // ONNX 초기화 완료 후 STT 모델 사전 로딩
+                bridge!!.onInitComplete = {
+                    Log.d(TAG, "🎙️ ONNX 초기화 완료 → STT(Whisper) 모델 사전 로딩 시작")
+                    kotlin.concurrent.thread(name = "stt-preload") {
+                        val whisperHelper = com.s14p21a404.shutter.di.ServiceLocator
+                            .getInstance(context).whisperHelper
+                        kotlinx.coroutines.runBlocking {
+                            whisperHelper.initModel()
+                        }
+                        Log.d(TAG, "🎙️ STT(Whisper) 모델 사전 로딩 완료")
+                    }
+                }
                 bridge!!.compileQnnCache()
                 Log.d(TAG, "RealDeepfakeDetector 사전 컴파일 시작 (백그라운드 캐시화)")
             }
@@ -197,7 +209,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
     companion object {
         private const val TAG = "RealDeepfakeDetector"
-        private const val BUFFER_SIZE = 1 // 원래 10
+        private const val BUFFER_SIZE = 5 // 원래 10
     }
 }
 

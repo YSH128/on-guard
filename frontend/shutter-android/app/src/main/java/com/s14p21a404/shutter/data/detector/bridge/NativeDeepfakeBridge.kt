@@ -52,6 +52,9 @@ class NativeDeepfakeBridge(private val context: Context) {
 
     private var initJobThread: Thread? = null
 
+    /** ONNX/QNN 초기화 완료 후 호출되는 콜백 (STT 모델 사전 로딩 등에 활용) */
+    var onInitComplete: (() -> Unit)? = null
+
     private external fun initQnn(cacheDir: String, nativeLibDir: String): Boolean
     private external fun buildModelCache(assetsPath: String): Boolean
     private external fun loadModel(assetsPath: String): Boolean
@@ -105,6 +108,7 @@ class NativeDeepfakeBridge(private val context: Context) {
                 isOnnxInitialized = true
                 val totalInitElapsed = System.currentTimeMillis() - initStartTime
                 Log.d("NativeDeepfakeBridge", "✅ ONNX Runtime 폴백 초기화 및 적재 전체 완료 (총 소요시간: ${totalInitElapsed}ms)")
+                onInitComplete?.invoke()
             } catch (e: Exception) {
                 Log.e("NativeDeepfakeBridge", "❌ ONNX 초기화 실패: ${e.message}")
             }
