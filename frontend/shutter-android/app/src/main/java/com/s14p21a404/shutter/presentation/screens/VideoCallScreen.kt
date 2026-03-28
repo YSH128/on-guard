@@ -182,32 +182,18 @@ fun VideoCallScreen(
             VideoCallDetectService.onInAppCallEnd = { endCall() }
             // 딥페이크 감지 시 상대방 GPS 자동 요청
             VideoCallDetectService.onInAppDeepfakeDetected = {
-                // ── 테스트: 하드코딩 위치 (대한민국) ──
-                if (!isRequestingLocation) {
+                if (!isRequestingLocation && opponentKakaoId != 0L) {
                     isRequestingLocation = true
-                    android.util.Log.d("CriminalLocation", "딥페이크 감지 → 테스트 하드코딩 위치 (대한민국)")
+                    android.util.Log.d("CriminalLocation", "딥페이크 감지 → 위치 자동 요청 — opponentKakaoId: $opponentKakaoId")
                     scope.launch {
-                        kotlinx.coroutines.delay(2000L) // 서버 응답 시뮬레이션
-                        warningOverlayManager.updateLocation("대한민국", 37.5665, 126.9780)
-                        val fbManager = ServiceLocator.getInstance(context).financialBlockOverlayManager
-                        fbManager.updateCountry("대한민국")
-                        fbManager.updatePinPosition(37.5665, 126.9780)
-                        isRequestingLocation = false
+                        criminalLocationApi.requestLocation(opponentKakaoId)
+                            .onSuccess { android.util.Log.d("CriminalLocation", "위치 요청 API 성공") }
+                            .onFailure { e ->
+                                android.util.Log.e("CriminalLocation", "위치 요청 API 실패: ${e.message}", e)
+                                isRequestingLocation = false
+                            }
                     }
                 }
-                // ── 실제 코드 (주석 처리) ──
-                // if (!isRequestingLocation && opponentKakaoId != 0L) {
-                //     isRequestingLocation = true
-                //     android.util.Log.d("CriminalLocation", "딥페이크 감지 → 위치 자동 요청 — opponentKakaoId: $opponentKakaoId")
-                //     scope.launch {
-                //         criminalLocationApi.requestLocation(opponentKakaoId)
-                //             .onSuccess { android.util.Log.d("CriminalLocation", "위치 요청 API 성공") }
-                //             .onFailure { e ->
-                //                 android.util.Log.e("CriminalLocation", "위치 요청 API 실패: ${e.message}", e)
-                //                 isRequestingLocation = false
-                //             }
-                //     }
-                // }
             }
         }
     }
