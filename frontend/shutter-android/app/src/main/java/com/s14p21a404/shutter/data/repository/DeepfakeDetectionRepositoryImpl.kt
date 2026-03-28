@@ -15,6 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import com.s14p21a404.shutter.data.detector.real.OpenCvFaceTracker
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -34,6 +35,7 @@ import java.util.UUID
  */
 class DeepfakeDetectionRepositoryImpl(
     private val detector: DeepfakeDetector,
+    private val faceTracker: OpenCvFaceTracker,
     private val telemetryApi: com.s14p21a404.shutter.network.TelemetryApi,
     private val tokenManager: com.s14p21a404.shutter.data.token.TokenManager,
 ) : DeepfakeDetectionRepository {
@@ -57,6 +59,11 @@ class DeepfakeDetectionRepositoryImpl(
     @Volatile
     private var isModelReady = false
 
+    override fun setFaceTrackingEnabled(enabled: Boolean) {
+        faceTracker.isTrackingEnabled = enabled
+        Log.d(TAG, "OpenCV Face Tracking: $enabled")
+    }
+
     override fun observeDetectionResults(): Flow<DeepfakeDetectionResult> = _results.asSharedFlow()
 
     override fun observeFrameResults(): Flow<DeepfakeDetectionResult> = _frameResults.asSharedFlow()
@@ -64,13 +71,17 @@ class DeepfakeDetectionRepositoryImpl(
     override fun startDetection() {
         Log.d(TAG, "감지 및 모델 로드 시작")
         isModelReady = false
+        
+        detector.prepare()
+        faceTracker.prepare()
+        
         detector.startDetection(
             onResult = { result ->
                 Log.d(TAG, "📊 감지 결과: $result")
                 _results.tryEmit(result)
             },
             onFrameResult = { result ->
-                Log.d(TAG, "📊 Frame 별 감지 결과: $result")
+                Log.d(TAG, "📊 Frame 별 AI감지 결과: $result")
                 _frameResults.tryEmit(result)
                 sendTelemetry(result)
             },
@@ -82,6 +93,15 @@ class DeepfakeDetectionRepositoryImpl(
                     startScreenCaptureInternal()
                 }
             }
+        )
+        
+        faceTracker.startDetection(
+            onResult = {},
+            onFrameResult = { result ->
+                Log.d("FaceDetection", "🎯 OpenCV 얼굴 박스 갱신: $result")
+                _frameResults.tryEmit(result)
+            },
+            onReady = {}
         )
     }
 
@@ -111,7 +131,7 @@ class DeepfakeDetectionRepositoryImpl(
         screenCaptureManager = ScreenCaptureManager(
             context = ctx,
             mediaProjection = projection,
-            detectors = listOf(detector)
+            detectors = listOf(detector, faceTracker)
         )
         try {
             screenCaptureManager?.startCapture()
@@ -128,6 +148,7 @@ class DeepfakeDetectionRepositoryImpl(
 
         // ── 1) Detector 먼저 중단: 캡처 스레드의 processFrame이 결과를 emit하지 않도록 차단 ──
         detector.stopDetection()
+        faceTracker.stopDetection()
 
         // ── 2) 화면 캡처 일시정지 (VirtualDisplay·MediaProjection 유지) ──
         screenCaptureManager?.pauseCapture()
@@ -183,34 +204,37 @@ class DeepfakeDetectionRepositoryImpl(
                 var thermal = 0
                 var riskScore = 0f
                 
-                val rawJson = result.rawResultJson
+                val rawJson = result.rawResultJson ?: return@launch
+                
+                // 실제 NDK 추론이 완료되어 JSON 결과를 반환한 경우에만 텔레메트리 진행
+                if (!rawJson.startsWith("{")) {
+                    return@launch
+                }
+
                 val validFailureTypes = setOf("MODEL_LOAD_FAIL", "TIMEOUT", "INFERENCE_ERROR", "UNKNOWN")
 
-                if (rawJson != null && rawJson.startsWith("{")) {
-                    try {
-                        val obj = JSONObject(rawJson)
-                        if (obj.has("error")) {
-                            val raw = obj.getString("error")
-                            errorType = if (raw in validFailureTypes) raw else "UNKNOWN"
-                        } else if (obj.has("debug_info")) {
-                            val debugInfo = obj.getString("debug_info")
-                            // Fake: 85.00% 구문 찾기
-                            val fakeMatch = Regex("Fake: ([0-9.]+)%").find(debugInfo)
-                            if (fakeMatch != null) {
-                                riskScore = fakeMatch.groupValues[1].toFloat() / 100f
-                            }
-                            
-                            val loadMatch = Regex("Load: ([0-9.]+) ms").find(debugInfo)
-                            if (loadMatch != null) loadLatency = loadMatch.groupValues[1].toFloat().toLong()
-                            
-                            val inferMatch = Regex("Infer: ([0-9.]+) ms").find(debugInfo)
-                            if (inferMatch != null) inferenceLatency = inferMatch.groupValues[1].toFloat().toLong()
+                try {
+                    val obj = JSONObject(rawJson)
+                    if (obj.has("error")) {
+                        val raw = obj.getString("error")
+                        errorType = if (raw in validFailureTypes) raw else "UNKNOWN"
+                    } else if (obj.has("debug_info")) {
+                        val debugInfo = obj.getString("debug_info")
+                        // Fake: 85.00% 구문 찾기
+                        val fakeMatch = Regex("Fake: ([0-9.]+)%").find(debugInfo)
+                        if (fakeMatch != null) {
+                            riskScore = fakeMatch.groupValues[1].toFloat() / 100f
                         }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "텔레메트리 파싱 에러", e)
+                        
+                        val loadMatch = Regex("Load: ([0-9.]+) ms").find(debugInfo)
+                        if (loadMatch != null) loadLatency = loadMatch.groupValues[1].toFloat().toLong()
+                        
+                        val inferMatch = Regex("Infer: ([0-9.]+) ms").find(debugInfo)
+                        if (inferMatch != null) inferenceLatency = inferMatch.groupValues[1].toFloat().toLong()
                     }
+                } catch (e: Exception) {
+                    Log.w(TAG, "텔레메트리 파싱 에러", e)
                 }
-                
                 // 직접 조회 가능한 하드웨어 상태
                 if (temp == 0f) temp = DeviceStatusProvider.getDeviceTemperature(ctx)
                 if (ram == 0) ram = DeviceStatusProvider.getAppPssMemory()
