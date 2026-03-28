@@ -29,8 +29,19 @@ public enum NotificationEventType {
     }
 
     public String getPushMessage(String wardName, String phishingType) {
-        if (this == VOICE_PHISHING && phishingType != null && !phishingType.isBlank()) {
-            return String.format("%s님이 보이스피싱(%s) 의심 통화 중입니다.", wardName, phishingType);
+        if (phishingType != null && !phishingType.isBlank()) {
+            return switch (phishingType) {
+                case "금융거래" -> "금융거래 위험 감지";
+                case "특정장소유인" -> "납치·유인 위험 감지";
+                case "개인정보요구" -> "개인정보 유출 감지";
+                case "일상대화" -> "위험은 없으나 주의 필요";
+                default -> {
+                    if (this == VOICE_PHISHING) {
+                        yield String.format("%s님이 보이스피싱(%s) 의심 통화 중입니다.", wardName, phishingType);
+                    }
+                    yield getPushMessage(wardName);
+                }
+            };
         }
         return getPushMessage(wardName);
     }

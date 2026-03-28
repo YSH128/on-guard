@@ -44,10 +44,11 @@ public class KakaoPushClient {
      * @param message 알림 본문 메시지
      * @return 성공 여부 (HTTP 200 시 true)
      */
-    public PushResult sendPush(Long kakaoId, NotificationEventType eventType, String message) {
+    public PushResult sendPush(Long kakaoId, String title, NotificationEventType eventType, String message) {
         try {
             KakaoPushRequest request = KakaoPushRequest.builder()
                     .kakaoId(String.valueOf(kakaoId))
+                    .title(title)
                     .eventType(eventType.name())
                     .message(message)
                     .build();
