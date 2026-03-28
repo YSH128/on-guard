@@ -31,7 +31,7 @@ class DeepfakeAlertSender(
     private val alertRepository: AlertRepository,
 ) {
 
-    suspend fun sendAlert(detectedAt: LocalDateTime) {
+    suspend fun sendAlert(detectedAt: LocalDateTime, analysisTags: String) {
         val wardName = getWardName() ?: "알 수 없음"
         val timeStr = detectedAt.format(DateTimeFormatter.ofPattern("HH시 mm분 ss초"))
         val callStartedAt = detectedAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"))
@@ -68,7 +68,7 @@ class DeepfakeAlertSender(
             return
         }
 
-        val message = buildAlertMessage(wardName, timeStr)
+        val message = buildAlertMessage(wardName, analysisTags)
         sendKakaoMessage(targetUuids, message)
 
         alertRepository.sendDeepfakeAlert(callStartedAt)
@@ -76,13 +76,11 @@ class DeepfakeAlertSender(
             .onFailure { Log.e(TAG, "서버 알림 전송 실패", it) }
     }
 
-    private fun buildAlertMessage(wardName: String, timeStr: String): String =
-        "[긴급 안전 알림: 통화 진행 중]\n" +
-        "현재 ${wardName}님에게 AI로 조작된 위조 영상 통화가 연결되어 있습니다. " +
-        "피해 예방을 위해 즉각적인 확인이 필요합니다.\n\n" +
-        "- 통화 시작 시간: ${timeStr}\n\n" +
-        "⚠️ 사기 피해가 발생할 수 있으니, 즉시 ${wardName}님에게 연락하여 통화를 종료하도록 안내해 주세요.\n" +
-        "⚠️ Shutter 앱에서 피보호자의 위치가 공유됩니다."
+    private fun buildAlertMessage(wardName: String, analysisTags: String): String =
+        "[🚨OnGuard: ${wardName}님이 피싱 통화 중]\n" +
+        "대화 내용 : ${analysisTags}\n" +
+        "⚠️ 즉시 ${wardName}님에게 연락하여 통화를 종료하도록 안내해 주세요.\n" +
+        "⚠️ ${wardName}님의 위치가 공유됩니다.⤵️"
 
     private suspend fun getWardName(): String? = suspendCancellableCoroutine { cont ->
         UserApiClient.instance.me { user, error ->
