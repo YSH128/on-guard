@@ -62,6 +62,8 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
         onFrameResultCallback = onFrameResult
         resultBuffer.clear()  // 시작 시 초기화
         detectionStartTime = System.currentTimeMillis()
+        isFakeDetected = false
+        lastFakeProb = 0f
         
         if (bridge == null) {
             nativeAvailable = NativeDeepfakeBridge.loadLibrary()
@@ -93,6 +95,15 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
      * @param height    프레임 높이 (px)
      * @param rowStride Image.Plane의 rowStride
      */
+    @Volatile
+    private var isInferencing = false
+    @Volatile
+    private var lastFakeProb = 0f
+    @Volatile
+    private var isFakeDetected = false
+    @Volatile
+    private var lastAiInferenceStartTime = 0L
+
     override fun processFrame(buffer: ByteArray, width: Int, height: Int, rowStride: Int) {
         // 감지 중단 후 캡처 스레드에서 늦게 도착하는 프레임을 즉시 버린다.
         if (stopped) return
@@ -110,43 +121,58 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
             return
         }
 
-        try {
-            // ── 1) JNI 브릿지 호출 (String 리턴) ──
-            val resultText = bridge!!.request_deepfake_detection("FACE", buffer, width, height, rowStride)
-            
-            // ── 2) 결과 읽기 ──
-            Log.d(TAG, "JNI 결과: $resultText")
-
-            val result = parseResult(resultText)
-
-            // JNI 추론 중 stopDetection이 호출되었으면 결과를 버린다.
-            if (stopped) {
-                Log.d(TAG, "추론 완료 후 stopped 상태 → 결과 폐기")
-                return
-            }
-
-            onFrameResultCallback?.invoke(result)
-
-            resultBuffer.add(result)
-            Log.d(TAG, "결과 누적 ${resultBuffer.size}/$BUFFER_SIZE")
-
-            if (resultBuffer.size >= BUFFER_SIZE) {
-                val averaged = averageResults(resultBuffer.toList())
-                
-                val finalResult = averaged.copy(
-                    roi = result.roi,
-                    fakeProb = averaged.fakeProb
-                )
-                
-                resultBuffer.clear()
-                callback(finalResult)
-                val elapsedFromStart = System.currentTimeMillis() - detectionStartTime
-                Log.d(TAG, "평균 결과(통화 시작 후 ${elapsedFromStart}ms): $finalResult")
-            }
-
-        } catch (e: Exception) {
-            Log.e(TAG, "JNI 호출 또는 파싱 실패", e)
+        // ── 1. 무거운 AI 추론(6초 간격 제한 적용) — 주기적으로 JNI 스레드 위임 ──
+        val now = System.currentTimeMillis()
+        if (isInferencing || (now - lastAiInferenceStartTime < 6000L)) {
+            // 이 프레임은 JNI 추론을 건너뜀 (6초가 지나지 않았으므로 무시)
+            return
         }
+
+        // ── 3. 무거운 AI 추론(6초 간격 제한 적용)은 별도 백그라운드 스레드로 위임 (블로킹 방지) ──
+        isInferencing = true
+        lastAiInferenceStartTime = now
+        Thread {
+            try {
+                if (stopped) return@Thread
+
+                val resultText = bridge!!.request_deepfake_detection("FACE", buffer, width, height, rowStride)
+                Log.d(TAG, "JNI 결과: $resultText")
+
+                var result = parseResult(resultText)
+
+                if (stopped) return@Thread
+
+                lastFakeProb = result.fakeProb
+
+                onFrameResultCallback?.invoke(result)
+
+                // 버퍼 집계는 Thread-Safe하게 변경
+                synchronized(resultBuffer) {
+                    resultBuffer.add(result)
+                    Log.d(TAG, "결과 누적 ${resultBuffer.size}/$BUFFER_SIZE")
+
+                    if (resultBuffer.size >= BUFFER_SIZE) {
+                        val averaged = averageResults(resultBuffer.toList())
+                        
+                        isFakeDetected = averaged.detected
+                        
+                        // finalResult에는 CAM ROI를 절대 넣지 않음 (OpenCV 전용)
+                        val finalResult = averaged.copy(
+                            roi = null,
+                            fakeProb = averaged.fakeProb
+                        )
+                        resultBuffer.clear()
+                        callback(finalResult)
+                        val elapsedFromStart = System.currentTimeMillis() - detectionStartTime
+                        Log.d(TAG, "평균 결과(통화 시작 후 ${elapsedFromStart}ms): $finalResult")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "JNI 호출 실패", e)
+            } finally {
+                isInferencing = false
+            }
+        }.start()
     }
 
     private fun averageResults(results: List<DeepfakeDetectionResult>): DeepfakeDetectionResult {
@@ -154,16 +180,11 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
         val avgFakeProb = results.map { it.fakeProb }.average().toFloat()
         val detected = avgFakeProb > 0.1f // 테스트 중 좋은 threshold: 0.3
 
-        // roi: null 아닌 것들의 평균
-        val roiList = results.mapNotNull { it.roi }
-        val avgRoi = if (roiList.isNotEmpty()) {
-            FloatArray(4) { i -> roiList.map { it[i] }.average().toFloat() }
-        } else null
-
+        // ROI는 averageResults에서 계산하지 않음 — 얼굴 박스는 OpenCV 전용
         return DeepfakeDetectionResult(
             detected = detected,
             fakeProb = avgFakeProb,
-            roi = avgRoi,
+            roi = null,
             rawResultJson = "averaged $BUFFER_SIZE frames (fakeProb: $avgFakeProb)"
         )
     }
@@ -200,11 +221,8 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
                 val fakeProb = obj.optDouble("fakeProb", 0.0).toFloat()
                 Log.w(TAG, "fakeProb : ${fakeProb}")
 
-                val roiArray = obj.optJSONArray("roi")
-                val roi = if (roiArray != null && roiArray.length() == 4) {
-                    FloatArray(4) { roiArray.getDouble(it).toFloat() }
-                } else null
-                return DeepfakeDetectionResult(detected = detected, fakeProb = fakeProb, roi = roi, rawResultJson = text)
+                // CAM ROI는 무시 — 얼굴 박스는 OpenCV detectMultiScale 전용
+                return DeepfakeDetectionResult(detected = detected, fakeProb = fakeProb, roi = null, rawResultJson = text)
             } catch (e: Exception) {
                 Log.w(TAG, "JSON 파싱 실패, 단순 텍스트로 시도: $text", e)
             }
@@ -217,7 +235,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
     companion object {
         private const val TAG = "RealDeepfakeDetector"
-        private const val BUFFER_SIZE = 7 // 원래 10
+        private const val BUFFER_SIZE = 1 // 원래 10
     }
 }
 

@@ -43,4 +43,10 @@ interface DeepfakeDetectionRepository {
      * ROI 크롭 오버레이에 사용.
      */
     fun getLatestBitmap(): Bitmap?
+
+    /**
+     * OpenCV 실시간 얼굴 추적 기능을 UI 상에서 강제 활성/비활성 처리한다.
+     * 바텀시트가 뜰 때 활성화, 닫힐 때 비활성화.
+     */
+    fun setFaceTrackingEnabled(enabled: Boolean)
 }

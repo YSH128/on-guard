@@ -19,6 +19,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <!-- 알림 권한 (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -104,7 +105,7 @@
         <service
             android:name=".presentation.service.VideoCallDetectService"
             android:exported="false"
-            android:foregroundServiceType="specialUse|mediaProjection|location">
+            android:foregroundServiceType="specialUse|mediaProjection|location|microphone">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="영상통화 감지를 위한 통화 상태 및 카메라 모니터링" />

@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.s14p21a404.shutter.di.ServiceLocator
 import com.s14p21a404.shutter.network.GpsWebSocketEvent
+import com.s14p21a404.shutter.presentation.service.LocationReloadBridge
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,6 +42,7 @@ class LocationViewModel(application: Application) : AndroidViewModel(application
     init {
         loadWards()
         observeWebSocket()
+        LocationReloadBridge.onLocationAlertReceived = { loadWards() }
     }
 
     fun loadWards() {
@@ -155,6 +157,7 @@ class LocationViewModel(application: Application) : AndroidViewModel(application
     override fun onCleared() {
         super.onCleared()
         gpsWebSocketClient.disconnect()
+        LocationReloadBridge.onLocationAlertReceived = null
     }
 
     companion object {
