@@ -39,24 +39,13 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
     // 추론 결과 누적용
     private val resultBuffer = mutableListOf<DeepfakeDetectionResult>()
+    private var detectionStartTime = 0L
 
     override fun prepare() {
         if (bridge == null) {
             nativeAvailable = NativeDeepfakeBridge.loadLibrary()
             if (nativeAvailable) {
                 bridge = NativeDeepfakeBridge(context)
-                // ONNX 초기화 완료 후 STT 모델 사전 로딩
-                bridge!!.onInitComplete = {
-                    Log.d(TAG, "🎙️ ONNX 초기화 완료 → STT(Whisper) 모델 사전 로딩 시작")
-                    kotlin.concurrent.thread(name = "stt-preload") {
-                        val whisperHelper = com.s14p21a404.shutter.di.ServiceLocator
-                            .getInstance(context).whisperHelper
-                        kotlinx.coroutines.runBlocking {
-                            whisperHelper.preloadModel()
-                        }
-                        Log.d(TAG, "🎙️ STT(Whisper) 모델 사전 로딩 완료")
-                    }
-                }
                 bridge!!.compileQnnCache()
                 Log.d(TAG, "RealDeepfakeDetector 사전 컴파일 시작 (백그라운드 캐시화)")
             }
@@ -72,6 +61,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
         onResultCallback = onResult
         onFrameResultCallback = onFrameResult
         resultBuffer.clear()  // 시작 시 초기화
+        detectionStartTime = System.currentTimeMillis()
         
         if (bridge == null) {
             nativeAvailable = NativeDeepfakeBridge.loadLibrary()
@@ -150,7 +140,8 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
                 
                 resultBuffer.clear()
                 callback(finalResult)
-                Log.d(TAG, "평균 결과: $finalResult")
+                val elapsedFromStart = System.currentTimeMillis() - detectionStartTime
+                Log.d(TAG, "평균 결과(통화 시작 후 ${elapsedFromStart}ms): $finalResult")
             }
 
         } catch (e: Exception) {
@@ -226,7 +217,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
     companion object {
         private const val TAG = "RealDeepfakeDetector"
-        private const val BUFFER_SIZE = 5 // 원래 10
+        private const val BUFFER_SIZE = 7 // 원래 10
     }
 }
 
