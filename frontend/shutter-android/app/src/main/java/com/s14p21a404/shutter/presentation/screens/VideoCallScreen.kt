@@ -103,6 +103,7 @@ fun VideoCallScreen(
     var callDuration by remember { mutableIntStateOf(0) }
 
     val isEndingCall = remember { mutableStateOf(false) }
+    var callAccepted by remember { mutableStateOf(false) }
 
     // ── 범죄자 위치 추적 상태 ──
     var isRequestingLocation by remember { mutableStateOf(false) }
@@ -125,8 +126,9 @@ fun VideoCallScreen(
     fun endCall() {
         if (isEndingCall.value) return
         isEndingCall.value = true
-        // 상대방이 아직 수락 전이면 취소 API 호출
-        if (remoteUid == null) {
+        // 상대방이 수락하지 않은 경우에만 취소 API 호출
+        // callAccepted=true면 이미 accept된 통화 → cancelCall 생략 (404 방지)
+        if (remoteUid == null && !callAccepted) {
             scope.launch {
                 videoCallRepository.cancelCall(channelId)
                     .onFailure { android.util.Log.w("VideoCall", "cancelCall 실패 (무시): ${it.message}") }
@@ -137,6 +139,13 @@ fun VideoCallScreen(
         videoCallRepository.setInAppCallActive(false)
         VideoCallDetectService.onInAppCallEnd = null
         VideoCallDetectService.onInAppDeepfakeDetected = null
+    }
+
+    // CALL_ACCEPTED FCM 수신 시 callAccepted 플래그 설정 (cancelCall 중복 방지)
+    LaunchedEffect(Unit) {
+        IncomingCallEventBus.callAccepted.collect {
+            callAccepted = true
+        }
     }
 
     // CALL_REJECTED FCM 수신 시 통화 종료

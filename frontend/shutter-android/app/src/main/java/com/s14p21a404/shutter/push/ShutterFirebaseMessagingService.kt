@@ -72,6 +72,8 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
             "CALL_ACCEPTED" -> {
                 // 발신자는 이미 채널에 joinChannel 되어 있으므로
                 // 수신자가 join하면 Agora onUserJoined 이벤트로 자동 연결됨
+                // cancelCall 중복 호출 방지를 위해 수락 이벤트 전파
+                IncomingCallEventBus.notifyCallAccepted()
             }
 
             "CALL_REJECTED" -> {
