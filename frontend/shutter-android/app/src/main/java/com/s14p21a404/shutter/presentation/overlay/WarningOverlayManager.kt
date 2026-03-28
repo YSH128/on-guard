@@ -193,6 +193,28 @@ class WarningOverlayManager(
         Log.d(TAG, "GMS 결과 오버레이 라우팅 완료: $result")
     }
 
+    /**
+     * 외부(서비스 등)에서 현재 통화의 분석 해시태그 목록을 문자열로 가져오기 위해 사용.
+     * 값이 없거나 유효한 태그가 없으면 기본값 "#AI위조영상통화"를 반환.
+     */
+    fun getFormattedGmsTags(): String {
+        val result = latestGmsResult ?: return "#AI위조영상통화"
+        if (result.isBlank()) return "#AI위조영상통화"
+
+        val tags = result.split(" ").map { it.trim() }.filter { it.isNotBlank() }
+        val gmsResultSet = mutableSetOf<String>()
+        for (tag in tags) {
+            if (tag != "#일상대화" && tag != "#일상 대화") {
+                gmsResultSet.remove("#일상대화")
+                gmsResultSet.remove("#일상 대화")
+                gmsResultSet.add(tag)
+            } else if (gmsResultSet.isEmpty()) {
+                gmsResultSet.add(tag)
+            }
+        }
+        return if (gmsResultSet.isNotEmpty()) gmsResultSet.joinToString(" ") else "#AI위조영상통화"
+    }
+
     // ─────────────────────────────────────────────
     // 1) Scanning Pill
     // ─────────────────────────────────────────────
