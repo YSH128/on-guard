@@ -42,8 +42,7 @@ class WarningOverlayManager(
     private var bottomSheetView: WarningBottomSheetView? = null
 
 
-    // 푸쉬 알림 pill 뷰 참조
-    private val notificationPillViews = mutableListOf<NotificationPillView>()
+    // NotificationPillView 제거됨 — 모든 보호 조치 상태는 WarningBottomSheetView 내부에서 처리
 
     /** 오버레이 활성화 여부 — false이면 show 호출을 무시한다. */
     @Volatile
@@ -120,7 +119,7 @@ class WarningOverlayManager(
             Log.w(TAG, "오버레이 권한 없음 — 경고 표시 불가")
             return
         }
-        lastResult?.let { showDetectionOverlays(it) }
+        lastResult?.let { showDetectionOverlays(it, restoredFromCache = true) }
     }
 
     fun dismissWarning() {
@@ -145,9 +144,6 @@ class WarningOverlayManager(
             removeOverlayView(it)
         }
         bottomSheetView = null
-        // Notification pills
-        notificationPillViews.forEach { removeOverlayView(it) }
-        notificationPillViews.clear()
         handler.removeCallbacksAndMessages(null)
         // lastResult, bottomSheetShownForSession, receivedCountryName 등은 유지
         Log.d(TAG, "오버레이 뷰 숨김 (세션 상태 보존)")
@@ -165,7 +161,7 @@ class WarningOverlayManager(
 
     /** 하위 호환용 show() — 기존 코드가 호출하는 경우 대비 */
     fun show() {
-        lastResult?.let { showDetectionOverlays(it) } ?: showScanningPill()
+        lastResult?.let { showDetectionOverlays(it, restoredFromCache = false) } ?: showScanningPill()
     }
 
     fun dismiss() {
@@ -173,7 +169,7 @@ class WarningOverlayManager(
     }
 
     fun isShowing(): Boolean =
-        scanningPillView != null || roiBoundingBoxView != null || bottomSheetView != null || notificationPillViews.isNotEmpty()
+        scanningPillView != null || roiBoundingBoxView != null || bottomSheetView != null
 
     /** 기존 API 호환용. 새 UI에서는 face preview를 바텀시트 내에 포함하지 않으므로 no-op. */
     fun updateFacePreview(bitmap: Bitmap?) {
@@ -232,7 +228,7 @@ class WarningOverlayManager(
     // 2) ROI Bounding Box + 3) Bottom Sheet
     // ─────────────────────────────────────────────
 
-    private fun showDetectionOverlays(result: DeepfakeDetectionResult) {
+    private fun showDetectionOverlays(result: DeepfakeDetectionResult, restoredFromCache: Boolean = false) {
         if (!enabled) return
         if (!Settings.canDrawOverlays(context)) return
 
@@ -293,7 +289,8 @@ class WarningOverlayManager(
                     Log.d(TAG, "닫기 버튼 클릭 → 바텀시트+dim만 닫기, ROI box는 유지")
                     dismissBottomSheetAndDim()
                 },
-                analysisResult = latestGmsResult
+                analysisResult = latestGmsResult,
+                isRestoredFromCache = restoredFromCache
             )
             addOverlayView(
                 view = sheet,
@@ -310,65 +307,9 @@ class WarningOverlayManager(
             if (lat != null && lng != null) sheet.updatePinPosition(lat, lng)
             bottomSheetView = sheet
             Log.d(TAG, "바텀시트 표시")
-
-            // ── 푸쉬 알림 pills (바텀시트 등장 후 표시) ──
-            showNotificationPills()
         }, 50)
     }
 
-    // ─────────────────────────────────────────────
-    // 4) Push Notification Pills
-    // ─────────────────────────────────────────────
-
-    /**
-     * 레퍼런스 기반 푸쉬 알림 pill 순차 표시:
-     * 1) "보호자 카톡 알림 완료" (0ms 딜레이)
-     * 2) "GPS 위치 공유 완료" (500ms 딜레이)
-     * 3) "금융앱 접근 차단 활성화" (1000ms 딜레이)
-     *
-     * 각 pill은 우측 상단에서 슬라이드 인 → 3.5초 유지 → 페이드 아웃 후 자동 제거.
-     */
-    private fun showNotificationPills() {
-        if (!enabled) return
-        if (!Settings.canDrawOverlays(context)) return
-
-        val types = listOf(
-            NotificationPillView.Type.KAKAO,
-            NotificationPillView.Type.GPS,
-            NotificationPillView.Type.FINANCE
-        )
-
-        types.forEachIndexed { index, type ->
-            handler.postDelayed({
-                if (!enabled) return@postDelayed
-                val pillView = NotificationPillView(context, type)
-
-                // 각 pill은 이전 pill 아래에 배치 (겹치지 않도록 yOffset 조절)
-                addOverlayView(
-                    view = pillView,
-                    width = WindowManager.LayoutParams.WRAP_CONTENT,
-                    height = WindowManager.LayoutParams.WRAP_CONTENT,
-                    gravity = Gravity.TOP or Gravity.END,
-                    touchable = false,
-                    xOffset = dpToPx(12),
-                    yOffset = dpToPx(80) + dpToPx(index * 44) // 각 pill 사이 간격
-                )
-                notificationPillViews.add(pillView)
-
-                pillView.startSlideInFadeOut {
-                    // 애니메이션 종료 후 자동 제거
-                    removeOverlayView(pillView)
-                    notificationPillViews.remove(pillView)
-                }
-                Log.d(TAG, "알림 pill 표시: $type")
-            }, (index * 500).toLong())
-        }
-    }
-
-    private fun dismissNotificationPills() {
-        notificationPillViews.forEach { removeOverlayView(it) }
-        notificationPillViews.clear()
-    }
 
     /**
      * ROI bounding box만 업데이트한다.
@@ -465,7 +406,6 @@ class WarningOverlayManager(
     fun dismissAll() {
         dismissScanningPill()
         dismissDetectionOverlays()
-        dismissNotificationPills()
         handler.removeCallbacksAndMessages(null)
         lastResult = null
         bottomSheetShownForSession = false
