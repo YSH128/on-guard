@@ -45,7 +45,7 @@ class OnDeviceWhisperHelper(private val context: Context) {
 
             whisperKit = WhisperKit.Builder()
                 .setModel(WhisperKit.Builder.OPENAI_BASE)
-                .setEncoderBackend(WhisperKit.Builder.CPU_AND_GPU)
+                .setEncoderBackend(WhisperKit.Builder.CPU_ONLY)
                 .setDecoderBackend(WhisperKit.Builder.CPU_ONLY)
                 .setApplicationContext(context.applicationContext)
                 .setCallback { what, result ->
@@ -72,7 +72,7 @@ class OnDeviceWhisperHelper(private val context: Context) {
                                 onResult?.invoke(cleanText)
                                 Log.d("WhisperSTT_END", "🗣️ [누적 STT 결과 갱신]: $cleanText")
                                 Log.d("WhisperSTT_END", "🚀 STT 텍스트 갱신 감지됨. GMS API로 누적 텍스트 전체를 실시간 전송합니다.")
-                                sttScope.launch {
+                                CoroutineScope(Dispatchers.IO).launch {
                                     analyzeTextWithGMS(cleanText)
                                 }
                             } else {
@@ -122,15 +122,13 @@ class OnDeviceWhisperHelper(private val context: Context) {
         }
     }
 
-    private val sttScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private val sttDispatcher = Dispatchers.Default.limitedParallelism(1)
+    private val sttScope = CoroutineScope(sttDispatcher + SupervisorJob())
 
     fun transcribe(audioChunk: ByteArray) {
         if (whisperKit == null || !isInitialized) {
             Log.w("WhisperSTT", "WhisperKit not initialized yet.")
-            return
-        }
-        if (isProcessingChunk) {
-            Log.w("WhisperSTT", "Already processing an audio chunk. Skipping.")
             return
         }
         
@@ -147,7 +145,15 @@ class OnDeviceWhisperHelper(private val context: Context) {
                 totalAudioBytesFed += audioChunk.size
                 Log.d("WhisperSTT", "🔄 JNI Native STT 추론 시작... 크기: ${audioChunk.size} bytes (누적: ${totalAudioBytesFed} bytes)")
                 
-                val seconds = whisperKit?.transcribe(audioChunk) ?: 0
+                // WhisperKit C++ 내부의 30초 버퍼 대기(segment_length=30) 우회를 위해
+                // 무조건 30초(16kHz, mono, 16bit = 960,000 bytes) 단위 패딩
+                val paddedChunk = if (audioChunk.size < 960000) {
+                    ByteArray(960000).apply {
+                        System.arraycopy(audioChunk, 0, this, 0, audioChunk.size)
+                    }
+                } else audioChunk
+
+                val seconds = whisperKit?.transcribe(paddedChunk) ?: 0
                 
                 val elapsed = System.currentTimeMillis() - lastTranscribeStartTime
                 Log.d("WhisperSTT", "✅ Inference completed. Processed $seconds seconds of audio. 추론 소요시간: ${elapsed}ms")
