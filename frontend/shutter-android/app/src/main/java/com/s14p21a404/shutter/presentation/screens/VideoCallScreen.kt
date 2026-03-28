@@ -103,6 +103,7 @@ fun VideoCallScreen(
     var callDuration by remember { mutableIntStateOf(0) }
 
     val isEndingCall = remember { mutableStateOf(false) }
+    var callAccepted by remember { mutableStateOf(false) }
 
     // ── 범죄자 위치 추적 상태 ──
     var isRequestingLocation by remember { mutableStateOf(false) }
@@ -110,18 +111,11 @@ fun VideoCallScreen(
         ServiceLocator.getInstance(context).warningOverlayManager
     }
 
-    // criminal_location FCM 수신 콜백 등록 (위치 데이터는 오버레이 바텀시트에 표시)
+    // criminal_location FCM 수신 콜백 등록
+    // 오버레이 업데이트는 FCM 서비스에서 직접 처리하므로 여기서는 isRequestingLocation만 초기화
     DisposableEffect(Unit) {
-        CriminalLocationBridge.onLocationReceived = { country, lat, lng ->
-            android.util.Log.d("CriminalLocation", "위치 수신됨 — country: $country lat=$lat lng=$lng")
+        CriminalLocationBridge.onLocationReceived = { _, _, _ ->
             isRequestingLocation = false
-            warningOverlayManager.updateLocation(country, lat, lng)
-            // 금융앱 차단 오버레이에도 위치 데이터 전달 (캐싱 → show 시 반영)
-            val fbManager = ServiceLocator.getInstance(context).financialBlockOverlayManager
-            fbManager.updateCountry(country)
-            if (lat != null && lng != null) {
-                fbManager.updatePinPosition(lat, lng)
-            }
         }
         onDispose {
             CriminalLocationBridge.onLocationReceived = null
@@ -132,8 +126,9 @@ fun VideoCallScreen(
     fun endCall() {
         if (isEndingCall.value) return
         isEndingCall.value = true
-        // 상대방이 아직 수락 전이면 취소 API 호출
-        if (remoteUid == null) {
+        // 상대방이 수락하지 않은 경우에만 취소 API 호출
+        // callAccepted=true면 이미 accept된 통화 → cancelCall 생략 (404 방지)
+        if (remoteUid == null && !callAccepted) {
             scope.launch {
                 videoCallRepository.cancelCall(channelId)
                     .onFailure { android.util.Log.w("VideoCall", "cancelCall 실패 (무시): ${it.message}") }
@@ -144,6 +139,13 @@ fun VideoCallScreen(
         videoCallRepository.setInAppCallActive(false)
         VideoCallDetectService.onInAppCallEnd = null
         VideoCallDetectService.onInAppDeepfakeDetected = null
+    }
+
+    // CALL_ACCEPTED FCM 수신 시 callAccepted 플래그 설정 (cancelCall 중복 방지)
+    LaunchedEffect(Unit) {
+        IncomingCallEventBus.callAccepted.collect {
+            callAccepted = true
+        }
     }
 
     // CALL_REJECTED FCM 수신 시 통화 종료
