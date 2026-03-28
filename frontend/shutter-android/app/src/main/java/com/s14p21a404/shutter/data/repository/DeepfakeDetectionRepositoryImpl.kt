@@ -113,7 +113,13 @@ class DeepfakeDetectionRepositoryImpl(
             mediaProjection = projection,
             detectors = listOf(detector)
         )
-        screenCaptureManager?.startCapture()
+        try {
+            screenCaptureManager?.startCapture()
+        } catch (e: SecurityException) {
+            Log.e(TAG, "MediaProjection 토큰 만료/재사용 불가 — 캡처 시작 실패", e)
+            screenCaptureManager = null
+            mediaProjection = null
+        }
     }
 
     override fun stopDetection() {
