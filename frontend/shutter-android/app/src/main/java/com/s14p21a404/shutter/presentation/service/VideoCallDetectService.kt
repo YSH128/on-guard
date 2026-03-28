@@ -231,14 +231,15 @@ class VideoCallDetectService : Service() {
                     // ── 딥페이크 최초 감지 ──
                     isDeepfakeDetected = true
                     //
-                    // rmsep sork alertSoundManager.startAlert()
+                    // alertSoundManager.startAlert()
                     financialBlockOverlayManager.setEnabled(true)
                     startFinancialAppMonitoring()
                     if (!alertSentForCurrentSession) {
                         alertSentForCurrentSession = true
                         serviceScope.launch(Dispatchers.Main) {
                             Log.d(TAG, "딥페이크 최초 감지 — 보호자 카카오톡 알림 발송 시작")
-                            deepfakeAlertSender.sendAlert(LocalDateTime.now())
+                            val analysisTags = warningOverlayManager.getFormattedGmsTags()
+                            deepfakeAlertSender.sendAlert(LocalDateTime.now(), analysisTags)
                         }
                         // 인앱 영상통화 중이면 상대방 GPS 요청 콜백 호출
                         onInAppDeepfakeDetected?.let {
@@ -602,10 +603,12 @@ class VideoCallDetectService : Service() {
         val serviceType = if (includeMediaProjection) {
             android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
                     android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
         } else {
             android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
         }
 
         ServiceCompat.startForeground(

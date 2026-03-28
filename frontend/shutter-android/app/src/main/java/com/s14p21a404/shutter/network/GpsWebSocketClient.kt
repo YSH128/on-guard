@@ -5,9 +5,14 @@ import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import com.s14p21a404.shutter.BuildConfig
 import com.s14p21a404.shutter.data.token.TokenManager
+import com.s14p21a404.shutter.domain.repository.AuthRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -76,13 +81,18 @@ private fun parseStompFrame(text: String): Triple<String, Map<String, String>, S
 
 // ── 클라이언트 ────────────────────────────────────────────────────────────────
 
-class GpsWebSocketClient(private val tokenManager: TokenManager) {
+class GpsWebSocketClient(
+    private val tokenManager: TokenManager,
+    private val authRepository: AuthRepository,
+) {
 
     private val gson = Gson()
     private val okHttpClient = OkHttpClient()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var webSocket: WebSocket? = null
     private var pendingWardIds: List<Long> = emptyList()
     private var isConnected = false
+    private var isConnecting = false
     private val subscribedWardIds = mutableSetOf<Long>()
 
     private val _events = MutableSharedFlow<GpsWebSocketEvent>(extraBufferCapacity = 64)
@@ -113,11 +123,18 @@ class GpsWebSocketClient(private val tokenManager: TokenManager) {
             return
         }
 
+        // 연결 중(handshake 진행 중)이면 새 연결 시도 생략
+        if (isConnecting) {
+            Log.d(TAG, "이미 연결 중 — connect() 무시")
+            return
+        }
+
         val token = tokenManager.getAccessToken() ?: run {
             Log.w(TAG, "액세스 토큰 없음 — WebSocket 연결 취소")
             return
         }
 
+        isConnecting = true
         pendingWardIds = wardIds
 
         val url = BuildConfig.SERVER_BASE_URL.trimEnd('/') + "/api/v1/ws/gps"
@@ -148,6 +165,7 @@ class GpsWebSocketClient(private val tokenManager: TokenManager) {
                     "CONNECTED" -> {
                         Log.d(TAG, "STOMP CONNECTED — 구독 시작")
                         isConnected = true
+                        isConnecting = false
                         _events.tryEmit(GpsWebSocketEvent.Connected)
                         // 각 피보호자 위치 토픽 구독
                         pendingWardIds.forEachIndexed { index, wardId ->
@@ -195,23 +213,48 @@ class GpsWebSocketClient(private val tokenManager: TokenManager) {
                         }
                     }
 
-                    "ERROR" -> Log.e(TAG, "STOMP ERROR: $body")
+                    "ERROR" -> {
+                        Log.e(TAG, "STOMP ERROR: $body — 토큰 갱신 후 재연결 시도")
+                        val currentWs = this@GpsWebSocketClient.webSocket
+                        this@GpsWebSocketClient.webSocket = null
+                        isConnected = false
+                        isConnecting = false
+                        subscribedWardIds.clear()
+                        currentWs?.close(1000, "STOMP ERROR — reconnecting")
+                        scope.launch {
+                            authRepository.refreshToken()
+                                .onSuccess {
+                                    Log.d(TAG, "토큰 갱신 성공 — WebSocket 재연결")
+                                    connect(pendingWardIds)
+                                }
+                                .onFailure { e ->
+                                    Log.e(TAG, "토큰 갱신 실패 — 재연결 포기", e)
+                                    _events.tryEmit(GpsWebSocketEvent.Disconnected)
+                                }
+                        }
+                    }
                     else -> Log.d(TAG, "STOMP 프레임 수신: $command")
                 }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.e(TAG, "WebSocket 오류", t)
-                isConnected = false
-                subscribedWardIds.clear()
-                _events.tryEmit(GpsWebSocketEvent.Disconnected)
+                if (this@GpsWebSocketClient.webSocket == webSocket) {
+                    isConnected = false
+                    isConnecting = false
+                    subscribedWardIds.clear()
+                    _events.tryEmit(GpsWebSocketEvent.Disconnected)
+                }
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d(TAG, "WebSocket 닫힘: $code $reason")
-                isConnected = false
-                subscribedWardIds.clear()
-                _events.tryEmit(GpsWebSocketEvent.Disconnected)
+                if (this@GpsWebSocketClient.webSocket == webSocket) {
+                    isConnected = false
+                    isConnecting = false
+                    subscribedWardIds.clear()
+                    _events.tryEmit(GpsWebSocketEvent.Disconnected)
+                }
             }
         })
     }
@@ -220,6 +263,7 @@ class GpsWebSocketClient(private val tokenManager: TokenManager) {
         webSocket?.close(1000, "정상 종료")
         webSocket = null
         isConnected = false
+        isConnecting = false
         subscribedWardIds.clear()
     }
 
