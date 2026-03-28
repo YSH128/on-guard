@@ -459,7 +459,7 @@ bool QnnModelLoader::ExecuteGraph(const float* inputData,  size_t inputElements,
         return false;
     }
 
-    uint32_t dimensions_input[] = {1, 224, 224, 3};
+    uint32_t dimensions_input[] = {1, 256, 256, 3};
     Qnn_Tensor_t inTensor = {QNN_TENSOR_VERSION_2, {}};
     inTensor.v2.id = m_inputId;
     inTensor.v2.name = "input";

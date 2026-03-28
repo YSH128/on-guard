@@ -15,7 +15,7 @@ const __attribute__((visibility("default"))) char* QNN_SDK_VERSION = "qaisw-v2.4
 extern "C" {
 static ModelError_t addTensor_input(QnnModel& model){
   ModelError_t err = MODEL_NO_ERROR;
-  uint32_t dimensions_input[] = {1, 224, 224, 3};
+  uint32_t dimensions_input[] = {1, 256, 256, 3};
   VALIDATE(model.addTensor("input", // Tensor Name
                            (Qnn_Tensor_t) {
                                .version= QNN_TENSOR_VERSION_2,

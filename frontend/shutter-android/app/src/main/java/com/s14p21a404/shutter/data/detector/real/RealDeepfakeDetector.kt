@@ -39,6 +39,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
     // 추론 결과 누적용
     private val resultBuffer = mutableListOf<DeepfakeDetectionResult>()
+    private var detectionStartTime = 0L
 
     override fun prepare() {
         if (bridge == null) {
@@ -60,6 +61,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
         onResultCallback = onResult
         onFrameResultCallback = onFrameResult
         resultBuffer.clear()  // 시작 시 초기화
+        detectionStartTime = System.currentTimeMillis()
         
         if (bridge == null) {
             nativeAvailable = NativeDeepfakeBridge.loadLibrary()
@@ -103,8 +105,8 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
         if (!bridge!!.isModelReady) {
             Log.d(TAG, "⏳ 메모리에 AI 모델 적재 중입니다... 프레임 추론 건너뜀")
-            // 화면 쪽으로 로딩 상태를 전달하기 위해 가짜 결과 발행
-            callback(DeepfakeDetectionResult(detected = false, rawResultJson = "AI 모델 빌드 및 적재 중입니다..."))
+            // 화면 쪽으로 로딩 상태를 전달하기 위해 가짜 결과 발행 (단, 최종 callback이 아닌 프레임별 callback으로 넘겨야 전체 사이클이 중단되지 않음)
+            onFrameResultCallback?.invoke(DeepfakeDetectionResult(detected = false, rawResultJson = "AI 모델 빌드 및 적재 중입니다..."))
             return
         }
 
@@ -138,7 +140,8 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
                 
                 resultBuffer.clear()
                 callback(finalResult)
-                Log.d(TAG, "평균 결과: $finalResult")
+                val elapsedFromStart = System.currentTimeMillis() - detectionStartTime
+                Log.d(TAG, "평균 결과(통화 시작 후 ${elapsedFromStart}ms): $finalResult")
             }
 
         } catch (e: Exception) {
@@ -214,7 +217,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
     companion object {
         private const val TAG = "RealDeepfakeDetector"
-        private const val BUFFER_SIZE = 1 // 원래 10
+        private const val BUFFER_SIZE = 7 // 원래 10
     }
 }
 

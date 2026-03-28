@@ -48,6 +48,8 @@ import kotlinx.coroutines.launch
 import io.agora.rtc2.*
 import io.agora.rtc2.audio.AudioParams
 import io.agora.rtc2.video.VideoCanvas
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.delay
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -204,6 +206,54 @@ fun VideoCallScreen(
         }
     }
 
+    val whisperHelper = remember {
+        ServiceLocator.getInstance(context).whisperHelper
+    }
+    val sttBuffer = remember { java.io.ByteArrayOutputStream() }
+    
+    LaunchedEffect(Unit) {
+        whisperHelper.onResult = { resultText ->
+            android.util.Log.d("WhisperSTT_END", "🗣️ [진행중인 통화 중 실시간 STT]: $resultText")
+        }
+        
+        whisperHelper.onAnalysisResult = { gmsResult ->
+            warningOverlayManager.updateAnalysisResult(gmsResult)
+        }
+        
+        whisperHelper.initModel()
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            whisperHelper.onResult = null
+            whisperHelper.onAnalysisResult = null
+        }
+    }
+
+    // ── 실시간 온디바이스 STT 로직 (5초 주기) ──
+    LaunchedEffect(isConnecting, callEnded, isRecording) {
+        if (!isConnecting && !callEnded && isRecording) {
+            while (isActive) {
+                delay(4000)
+                try {
+                    val chunkBytes: ByteArray
+                    synchronized(sttBuffer) {
+                        chunkBytes = sttBuffer.toByteArray()
+                        sttBuffer.reset()
+                    }
+                    
+                    if (chunkBytes.isNotEmpty()) {
+                        android.util.Log.d("WhisperSTT_Result", "🎙️ [STT 추출 시작] 새로 수집된 ${chunkBytes.size} bytes 크기의 음성을 인메모리 추론합니다!")
+                        whisperHelper.transcribe(chunkBytes)
+                    } else {
+                        android.util.Log.w("WhisperSTT_Result", "⚠️ [경고] 추가된 음성이 없습니다!")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("WhisperSTT_Result", "주기적 STT 에러: ${e.message}")
+                }
+            }
+        }
+    }
+
     val audioFrameObserver = remember {
         object : IAudioFrameObserver {
             override fun onPlaybackAudioFrame(
@@ -219,14 +269,23 @@ fun VideoCallScreen(
                 return true
             }
             override fun onRecordAudioFrame(channelId: String, type: Int, samplesPerChannel: Int, bytesPerSample: Int, channels: Int, samplesPerSec: Int, buffer: ByteBuffer, renderTimeMs: Long, avsync_type: Int): Boolean = true
-            override fun onMixedAudioFrame(channelId: String, type: Int, samplesPerChannel: Int, bytesPerSample: Int, channels: Int, samplesPerSec: Int, buffer: ByteBuffer, renderTimeMs: Long, avsync_type: Int): Boolean = true
+            override fun onMixedAudioFrame(channelId: String, type: Int, samplesPerChannel: Int, bytesPerSample: Int, channels: Int, samplesPerSec: Int, buffer: ByteBuffer, renderTimeMs: Long, avsync_type: Int): Boolean {
+                if (isRecording) {
+                    val data = ByteArray(buffer.remaining())
+                    buffer.get(data)
+                    synchronized(sttBuffer) {
+                        sttBuffer.write(data)
+                    }
+                }
+                return true
+            }
             override fun onEarMonitoringAudioFrame(type: Int, samplesPerChannel: Int, bytesPerSample: Int, channels: Int, samplesPerSec: Int, buffer: ByteBuffer, renderTimeMs: Long, avsync_type: Int): Boolean = true
             override fun onPlaybackAudioFrameBeforeMixing(channelId: String, userId: Int, type: Int, samplesPerChannel: Int, bytesPerSample: Int, channels: Int, samplesPerSec: Int, buffer: ByteBuffer, renderTimeMs: Long, avsync_type: Int): Boolean = true
             override fun getObservedAudioFramePosition(): Int = 0x000F
-            override fun getRecordAudioParams(): AudioParams = AudioParams(44100, 1, 0, 1024)
-            override fun getPlaybackAudioParams(): AudioParams = AudioParams(44100, 1, 0, 1024)
-            override fun getMixedAudioParams(): AudioParams = AudioParams(44100, 1, 0, 1024)
-            override fun getEarMonitoringAudioParams(): AudioParams = AudioParams(44100, 1, 0, 1024)
+            override fun getRecordAudioParams(): AudioParams = AudioParams(16000, 1, 0, 1024)
+            override fun getPlaybackAudioParams(): AudioParams = AudioParams(16000, 1, 0, 1024)
+            override fun getMixedAudioParams(): AudioParams = AudioParams(16000, 1, 0, 1024)
+            override fun getEarMonitoringAudioParams(): AudioParams = AudioParams(16000, 1, 0, 1024)
         }
     }
 
@@ -368,11 +427,11 @@ fun VideoCallScreen(
             VideoCallDetectService.onInAppCallEnd = null
 
             recordingFile?.let { pcmFile ->
-                if (pcmFile.exists() && pcmFile.length() > 0) {
-                    val wavFile = File(context.getExternalFilesDir(null), "remote_only.wav")
-                    convertPcmToWav(pcmFile, wavFile, 44100, 1, 16)
+                if (pcmFile.exists()) {
+                    // val wavFile = File(context.getExternalFilesDir(null), "remote_only.wav")
+                    // convertPcmToWav(pcmFile, wavFile, 44100, 1, 16)
                     pcmFile.delete()
-                    sendWavToJetson(wavFile)
+                    // sendWavToJetson(wavFile) // [Modified] 온디바이스 추론 전환으로 서버 전송 중단
                 }
             }
 
@@ -813,6 +872,7 @@ private fun formatDuration(seconds: Int): String {
     return "%02d:%02d".format(mins, secs)
 }
 
+/*
 private fun sendWavToJetson(wavFile: File) {
     Thread {
         try {
@@ -884,3 +944,4 @@ private fun shortToBytes(value: Short): ByteArray =
         (value.toInt() and 0xFF).toByte(),
         (value.toInt() shr 8 and 0xFF).toByte()
     )
+*/

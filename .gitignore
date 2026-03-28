@@ -325,4 +325,6 @@ mydocs/
 *.mp4
 *.pt
 *.ptl
+AI/
+*.aar
 *.onnx
