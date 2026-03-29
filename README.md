@@ -10,7 +10,7 @@
 
 ---
 
-## Background
+## 1. Background
 
 스마트폰 영상통화가 일상화되면서 **생성형 AI 기반 딥페이크** 기술을 악용한 보이스피싱 범죄가 급증하고 있습니다. 공격자는 지인의 얼굴을 실시간으로 합성하여 영상통화를 시도하며, 피해자 입장에서는 영상을 보고도 가짜임을 인지하기가 사실상 불가능합니다.
 
@@ -36,7 +36,7 @@
 
 ---
 
-## 1. Key Features & System Architecture
+## 2. Key Features & System Architecture
 
 ### System Architecture
 
