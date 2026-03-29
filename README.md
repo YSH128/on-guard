@@ -135,7 +135,7 @@ S14P21A404/
 
 ---
 
-## 2. Setup
+## 3. Setup
 
 ### Android 앱
 
@@ -191,7 +191,7 @@ JWT_SECRET=your_jwt_secret_key_at_least_32_chars
 
 ---
 
-## 3. Usage
+## 4. Usage
 
 ### Android 앱 빌드 및 실행
 
@@ -220,7 +220,7 @@ API 명세: `http://localhost:8080/swagger-ui.html`
 
 ---
 
-## 4. App Test
+## 5. App Test
 
 OnGuard의 딥페이크 감지 기능을 실제로 검증하려면 **딥페이크 영상을 송출하는 공격자 환경**이 필요합니다. `demo/` 폴더에는 웹캠 영상에 실시간 페이스스왑을 적용하여 Agora 채널로 송출하는 시뮬레이터가 포함되어 있습니다. 이를 통해 OnGuard 앱이 실제 딥페이크 통화를 수신했을 때 감지 및 경고 오버레이가 정상 동작하는지 end-to-end로 시연할 수 있습니다.
 
@@ -278,7 +278,7 @@ python -m http.server 8080
 
 ---
 
-## 5. Contributors
+## 6. Contributors
 
 | 이름 | 역할 | 담당 |
 |------|------|------|
