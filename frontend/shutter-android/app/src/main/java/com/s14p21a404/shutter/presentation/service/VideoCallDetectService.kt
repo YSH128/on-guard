@@ -98,6 +98,13 @@ class VideoCallDetectService : Service() {
     @Volatile
     private var isVideoCallSessionActive = false
 
+    /**
+     * 현재 서비스가 MediaProjection 토큰을 보유하고 있는지 여부.
+     * 영상통화 시작 시 startForeground를 다시 호출하여 마이크/카메라 권한을 복구할 때 사용.
+     */
+    @Volatile
+    private var isMediaProjectionEnabled = false
+
     // ── 생명주기 ──
 
     override fun onCreate() {
@@ -180,6 +187,12 @@ class VideoCallDetectService : Service() {
             monitorUseCase.observeAndControl().collect { isVideoCall ->
                 Log.d(TAG, "영상통화 상태: $isVideoCall")
                 if (isVideoCall) {
+                    // [Fix] 안드로이드 14 FGS 정책 대응: 백그라운드에서 실행된 서비스는 마이크/카메라 권한이 박탈됩니다.
+                    // 사용자가 영상통화 화면으로 진입하여 '포그라운드' 상태가 된 정확한 이 시점에
+                    // startForeground를 다시 호출하여 마이크 사용 권한(Capability)을 OS로부터 제대로 승격받습니다.
+                    // 이를 통해 홈 화면으로 나가도 통화 마이크가 먹통이 되는(AppOps 에러) 현상을 완벽히 방지합니다.
+                    startAsForeground(includeMediaProjection = isMediaProjectionEnabled)
+                    
                     // ── 새 영상통화 세션 시작 — 이전 세션 플래그 초기화 ──
                     isVideoCallSessionActive = true
                     cooldownJob?.cancel()
@@ -398,6 +411,7 @@ class VideoCallDetectService : Service() {
             val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0)
             val projectionData = intent.getParcelableExtra(EXTRA_PROJECTION_DATA, Intent::class.java)
             if (projectionData != null) {
+                isMediaProjectionEnabled = true
                 startAsForeground(includeMediaProjection = true)
 
                 val projectionManager = getSystemService(MediaProjectionManager::class.java)
