@@ -1,10 +1,12 @@
 package com.s14p21a404.shutter.presentation.service
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.location.Location
 import android.location.LocationListener
@@ -14,6 +16,7 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 import com.s14p21a404.shutter.data.token.TokenManager
 import com.s14p21a404.shutter.di.ServiceLocator
 import com.s14p21a404.shutter.domain.repository.DeepfakeDetectionRepository
@@ -600,22 +603,21 @@ class VideoCallDetectService : Service() {
             .setOngoing(true)
             .build()
 
-        val hasMicPermission = androidx.core.content.ContextCompat.checkSelfPermission(
-            this, android.Manifest.permission.RECORD_AUDIO
-        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val hasMicPermission = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
 
-        var serviceType = if (includeMediaProjection) {
-            android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-        } else {
-            android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+        val baseType = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+        val mpType = if (includeMediaProjection) android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION else 0
+        val micType = if (hasMicPermission) android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0
+
+        if (!hasMicPermission) {
+            Log.w(TAG, "RECORD_AUDIO 미허용 상태 — microphone FGS 타입 제외 후 시작")
         }
 
-        if (hasMicPermission) {
-            serviceType = serviceType or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-        }
+        val serviceType = baseType or mpType or micType
 
         ServiceCompat.startForeground(
             this,
