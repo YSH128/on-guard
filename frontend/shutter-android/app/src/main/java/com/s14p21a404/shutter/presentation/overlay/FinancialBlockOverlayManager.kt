@@ -605,6 +605,10 @@ class FinancialBlockOverlayManager(private val context: Context) {
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
+            // 그림자가 칩 밖으로 나오므로 클리핑 해제
+            clipChildren = false
+            clipToPadding = false
+            setPadding(0, dpToPx(4), 0, dpToPx(8))
         }
 
         listOf("# 금융 거래", "# 개인정보 요구").forEach { label ->
@@ -618,7 +622,7 @@ class FinancialBlockOverlayManager(private val context: Context) {
                     setColor(Color.parseColor("#EF4444"))
                     cornerRadius = dpToPx(10).toFloat()
                 }
-                elevation = dpToPx(4).toFloat()
+                elevation = dpToPx(5).toFloat()
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
                     outlineAmbientShadowColor = Color.parseColor("#EF4444")
                     outlineSpotShadowColor = Color.parseColor("#EF4444")
@@ -629,6 +633,10 @@ class FinancialBlockOverlayManager(private val context: Context) {
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { marginEnd = dpToPx(8) })
         }
+
+        // 부모도 클리핑 해제해야 그림자가 보임
+        parent.clipChildren = false
+        parent.clipToPadding = false
 
         parent.addView(row, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT,
