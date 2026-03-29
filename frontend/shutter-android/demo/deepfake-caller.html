@@ -369,6 +369,7 @@ file:///C:/S14P21A404/frontend/shutter-android/demo/deepfake-caller.html 근데 
           <div class="video-tag">나 (딥페이크)</div>
         </div>
       </div>
+      <button class="btn btn-secondary" onclick="sendSeoulLocation()" id="btn-location">📍 위치 전송 (서울)</button>
       <button class="btn btn-danger" onclick="endCall()">📵 통화 종료</button>
     </div>
   </div>
@@ -381,24 +382,40 @@ const SERVER  = 'https://j14a404.p.ssafy.io';
 const APP_ID  = '6c6109e0b9644b599072a68b514d77a8';
 const KAK_KEY = 'da0a9b620f9bce1e3b6c841ddebd72c0';
 
+// ── 렌더 FPS 제한 (송출 부하 절감) ──────────────────────────────
+const TARGET_FPS  = 10;          // 미리보기·마스터 루프 목표 fps
+const FRAME_MS    = 1000 / TARGET_FPS;
+const STREAM_FPS  = 10;          // Agora captureStream fps
+const MAX_W       = 480;         // 스트림 최대 너비 (px) — 앱 디코딩 부하 절감
+const MAX_H       = 360;         // 스트림 최대 높이 (px)
+
 // ── 상태 ──────────────────────────────────────────────────────
-let jwt          = null;
-let channelName  = null;
-let agoraToken   = null;
-let client       = null;
-let localVideo   = null;
-let localAudio   = null;
-let sourceEl     = null;   // HTMLVideoElement (파일 or 웹캠)
-let sourceType   = 'file';
-let webcamStream = null;   // 웹캠 MediaStream (명시적 정지용)
-let rafId        = null;   // requestAnimationFrame id (미리보기용)
-let masterRafId  = null;   // master canvas 렌더링 loop
-let durationId   = null;
-let durationSec  = 0;
+let jwt               = null;
+let channelName       = null;
+let agoraToken        = null;
+let client            = null;
+let localVideo        = null;
+let localAudio        = null;
+let sourceEl          = null;   // HTMLVideoElement (파일 or 웹캠)
+let sourceType        = 'file';
+let webcamStream      = null;   // 웹캠 MediaStream (명시적 정지용)
+let rafId             = null;   // requestAnimationFrame id (미리보기용)
+let masterRafId       = null;   // master canvas 렌더링 loop
+let mirrorCallingRafId = null;  // calling-canvas 미러 루프
+let mirrorLocalRafId   = null;  // local-canvas 미러 루프
+let durationId        = null;
+let durationSec       = 0;
+let locationIntervalId = null;  // 서울 위치 자동 전송 인터벌
+
+// ── 서울 고정 좌표 ────────────────────────────────────────────
+const SEOUL_LAT = 37.5665;
+const SEOUL_LNG = 126.9780;
 
 // ── Face Swap 상태 ────────────────────────────────────────────
 // 70.12.130.110
-const WS_URL       = 'ws://localhost:8765';  // ~/criminal/server.py
+<!--const WS_URL       = 'ws://localhost:8765';  // ~/criminal/server.py-->
+const WS_URL       = 'ws://70.12.130.110:8765';  // ~/criminal/server.py
+
 let faceSwapOn     = false;   // UI 토글 상태
 let faceSwapWs     = null;    // WebSocket
 let faceSwapReady  = false;   // 소스 얼굴 등록 완료
@@ -484,32 +501,41 @@ function setSource(el) {
 function startRenderLoop(videoEl, targetCanvasId, isPreview) {
   const canvas = document.getElementById(targetCanvasId);
   const ctx = canvas.getContext('2d');
+  let last = 0;
 
-  function draw() {
+  function draw(ts) {
+    const id = requestAnimationFrame(draw);
+    if (isPreview) rafId = id; else masterRafId = id;
+    if (ts - last < FRAME_MS) return;   // fps 제한
+    last = ts;
     if (videoEl.readyState >= 2) {
-      const w = videoEl.videoWidth  || 640;
-      const h = videoEl.videoHeight || 480;
+      const w = Math.min(videoEl.videoWidth  || MAX_W, MAX_W);
+      const h = Math.min(videoEl.videoHeight || MAX_H, MAX_H);
       if (canvas.width !== w)  canvas.width  = w;
       if (canvas.height !== h) canvas.height = h;
       ctx.drawImage(videoEl, 0, 0, w, h);
     }
-    const id = requestAnimationFrame(draw);
-    if (isPreview) rafId = id; else masterRafId = id;
   }
   if (isPreview && rafId) cancelAnimationFrame(rafId);
-  draw();
+  requestAnimationFrame(draw);
 }
 
 // master-canvas 전용 렌더 루프 (Agora 스트림 소스)
 function startMasterLoop() {
   if (masterRafId) cancelAnimationFrame(masterRafId);
+  // preview 루프는 더 이상 필요 없으므로 중단
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
   const canvas = document.getElementById('master-canvas');
   const ctx = canvas.getContext('2d');
+  let last = 0;
 
-  function draw() {
+  function draw(ts) {
+    masterRafId = requestAnimationFrame(draw);
+    if (ts - last < FRAME_MS) return;   // fps 제한
+    last = ts;
     if (sourceEl && sourceEl.readyState >= 2) {
-      const w = sourceEl.videoWidth  || 640;
-      const h = sourceEl.videoHeight || 480;
+      const w = Math.min(sourceEl.videoWidth  || MAX_W, MAX_W);
+      const h = Math.min(sourceEl.videoHeight || MAX_H, MAX_H);
       if (canvas.width !== w)  canvas.width  = w;
       if (canvas.height !== h) canvas.height = h;
       if (webcamStream) {
@@ -521,26 +547,30 @@ function startMasterLoop() {
         ctx.drawImage(sourceEl, 0, 0, w, h);
       }
     }
-    masterRafId = requestAnimationFrame(draw);
   }
-  draw();
+  requestAnimationFrame(draw);
 }
 
-// section-canvas 에도 master-canvas 내용을 미러링
+// section-canvas 에도 master-canvas 내용을 미러링 (ID 추적으로 누수 방지)
 function mirrorTo(targetCanvasId) {
   const master = document.getElementById('master-canvas');
   const target = document.getElementById(targetCanvasId);
   const ctx = target.getContext('2d');
+  let last = 0;
 
-  function draw() {
+  function draw(ts) {
+    const id = requestAnimationFrame(draw);
+    if (targetCanvasId === 'calling-canvas') mirrorCallingRafId = id;
+    else if (targetCanvasId === 'local-canvas') mirrorLocalRafId = id;
+    if (ts - last < FRAME_MS) return;   // fps 제한
+    last = ts;
     if (master.width > 0) {
       if (target.width !== master.width)   target.width  = master.width;
       if (target.height !== master.height) target.height = master.height;
       ctx.drawImage(master, 0, 0);
     }
-    requestAnimationFrame(draw);
   }
-  draw();
+  requestAnimationFrame(draw);
 }
 
 // ── 전화 걸기 ─────────────────────────────────────────────────
@@ -596,22 +626,28 @@ async function joinChannel() {
     faceSwapCanvas = document.createElement('canvas');
     faceSwapCanvas.width = 640; faceSwapCanvas.height = 480;
     startFaceSwapLoop();
-    mediaStream = faceSwapCanvas.captureStream(30);
+    mediaStream = faceSwapCanvas.captureStream(STREAM_FPS);
   } else {
-    // 일반 모드: video element captureStream
+    // 일반 모드: master-canvas에서 captureStream (해상도 제한 적용)
     if (sourceEl.readyState < 2) {
       await new Promise(resolve => {
         sourceEl.oncanplay = resolve;
         setTimeout(resolve, 3000);
       });
     }
-    mediaStream = sourceEl.captureStream
-      ? sourceEl.captureStream(30)
-      : sourceEl.mozCaptureStream(30);
+    const masterCanvas = document.getElementById('master-canvas');
+    mediaStream = masterCanvas.captureStream
+      ? masterCanvas.captureStream(STREAM_FPS)
+      : masterCanvas.mozCaptureStream(STREAM_FPS);
   }
 
   const videoTrack = mediaStream.getVideoTracks()[0];
-  localVideo = await AgoraRTC.createCustomVideoTrack({ mediaStreamTrack: videoTrack });
+  localVideo = await AgoraRTC.createCustomVideoTrack({
+    mediaStreamTrack: videoTrack,
+    bitrateMin: 80,
+    bitrateMax: 350,          // 앱 수신 비트레이트 상한 (kbps) — 기본값 ~1000kbps 대비 절감
+    optimizationMode: 'motion'
+  });
 
   // 오디오: 파일은 영상 오디오 트랙, 웹캠/faceswap은 마이크 (권한 없으면 영상만 송출)
   const audioTrack = mediaStream.getAudioTracks()[0];
@@ -652,6 +688,12 @@ function cleanup() {
   localAudio?.close(); localAudio = null;
   client?.leave(); client = null;
   channelName = null; agoraToken = null;
+  // 모든 루프 정지 (누수 방지)
+  if (masterRafId)        { cancelAnimationFrame(masterRafId);  masterRafId        = null; }
+  if (mirrorCallingRafId) { clearInterval(mirrorCallingRafId);  mirrorCallingRafId = null; }
+  if (mirrorLocalRafId)   { clearInterval(mirrorLocalRafId);    mirrorLocalRafId   = null; }
+  // 서울 위치 자동 전송 정지
+  if (locationIntervalId) { clearInterval(locationIntervalId); locationIntervalId = null; }
   // face swap 루프 정지
   if (faceSwapRafId) { cancelAnimationFrame(faceSwapRafId); faceSwapRafId = null; }
   faceSwapPending = false;
@@ -762,6 +804,32 @@ function startDuration() {
     const s = String(durationSec % 60).padStart(2, '0');
     document.getElementById('ui-duration').textContent = `${m}:${s}`;
   }, 1000);
+
+}
+
+// ── 서울 위치 자동 전송 ───────────────────────────────────────
+// 피해자의 위치 요청에 자동 응답 (FCM 대신 브라우저에서 직접 호출)
+async function sendSeoulLocation() {
+  const calleeId = document.getElementById('callee-id')?.value?.trim();
+  if (!jwt || !calleeId) return;
+  const btn = document.getElementById('btn-location');
+  if (btn) { btn.disabled = true; btn.textContent = '📍 전송 중...'; }
+  try {
+    await apiFetch('/api/v1/location/criminal-report', 'POST', jwt, {
+      requester_kakao_id: parseInt(calleeId),
+      lat: SEOUL_LAT,
+      lng: SEOUL_LNG,
+    });
+    if (btn) { btn.textContent = '✅ 전송 완료'; }
+    console.log('[위치] 서울 좌표 전송 완료');
+  } catch (e) {
+    if (btn) { btn.textContent = '❌ 전송 실패'; }
+    console.warn('[위치] 서울 좌표 전송 실패:', e.message);
+  } finally {
+    setTimeout(() => {
+      if (btn) { btn.disabled = false; btn.textContent = '📍 위치 전송 (서울)'; }
+    }, 2000);
+  }
 }
 
 // ── 공통 fetch ────────────────────────────────────────────────
