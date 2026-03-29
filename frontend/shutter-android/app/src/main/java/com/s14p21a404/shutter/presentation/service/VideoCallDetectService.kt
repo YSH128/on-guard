@@ -1,10 +1,12 @@
 package com.s14p21a404.shutter.presentation.service
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.location.Location
 import android.location.LocationListener
@@ -14,6 +16,7 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 import com.s14p21a404.shutter.data.token.TokenManager
 import com.s14p21a404.shutter.di.ServiceLocator
 import com.s14p21a404.shutter.domain.repository.DeepfakeDetectionRepository
@@ -94,6 +97,13 @@ class VideoCallDetectService : Service() {
     /** 현재 영상통화 세션이 활성 중인지 — 통화 종료 후 도착하는 잔존 결과를 필터링한다. */
     @Volatile
     private var isVideoCallSessionActive = false
+
+    /**
+     * 현재 서비스가 MediaProjection 토큰을 보유하고 있는지 여부.
+     * 영상통화 시작 시 startForeground를 다시 호출하여 마이크/카메라 권한을 복구할 때 사용.
+     */
+    @Volatile
+    private var isMediaProjectionEnabled = false
 
     // ── 생명주기 ──
 
@@ -177,6 +187,12 @@ class VideoCallDetectService : Service() {
             monitorUseCase.observeAndControl().collect { isVideoCall ->
                 Log.d(TAG, "영상통화 상태: $isVideoCall")
                 if (isVideoCall) {
+                    // [Fix] 안드로이드 14 FGS 정책 대응: 백그라운드에서 실행된 서비스는 마이크/카메라 권한이 박탈됩니다.
+                    // 사용자가 영상통화 화면으로 진입하여 '포그라운드' 상태가 된 정확한 이 시점에
+                    // startForeground를 다시 호출하여 마이크 사용 권한(Capability)을 OS로부터 제대로 승격받습니다.
+                    // 이를 통해 홈 화면으로 나가도 통화 마이크가 먹통이 되는(AppOps 에러) 현상을 완벽히 방지합니다.
+                    startAsForeground(includeMediaProjection = isMediaProjectionEnabled)
+                    
                     // ── 새 영상통화 세션 시작 — 이전 세션 플래그 초기화 ──
                     isVideoCallSessionActive = true
                     cooldownJob?.cancel()
@@ -231,14 +247,15 @@ class VideoCallDetectService : Service() {
                     // ── 딥페이크 최초 감지 ──
                     isDeepfakeDetected = true
                     //
-                    // rmsep sork alertSoundManager.startAlert()
+                    // alertSoundManager.startAlert()
                     financialBlockOverlayManager.setEnabled(true)
                     startFinancialAppMonitoring()
                     if (!alertSentForCurrentSession) {
                         alertSentForCurrentSession = true
                         serviceScope.launch(Dispatchers.Main) {
                             Log.d(TAG, "딥페이크 최초 감지 — 보호자 카카오톡 알림 발송 시작")
-                            deepfakeAlertSender.sendAlert(LocalDateTime.now())
+                            val analysisTags = warningOverlayManager.getFormattedGmsTags()
+                            deepfakeAlertSender.sendAlert(LocalDateTime.now(), analysisTags)
                         }
                         // 인앱 영상통화 중이면 상대방 GPS 요청 콜백 호출
                         onInAppDeepfakeDetected?.let {
@@ -394,6 +411,7 @@ class VideoCallDetectService : Service() {
             val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0)
             val projectionData = intent.getParcelableExtra(EXTRA_PROJECTION_DATA, Intent::class.java)
             if (projectionData != null) {
+                isMediaProjectionEnabled = true
                 startAsForeground(includeMediaProjection = true)
 
                 val projectionManager = getSystemService(MediaProjectionManager::class.java)
@@ -599,14 +617,21 @@ class VideoCallDetectService : Service() {
             .setOngoing(true)
             .build()
 
-        val serviceType = if (includeMediaProjection) {
-            android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-        } else {
-            android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+        val hasMicPermission = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+
+        val baseType = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+        val mpType = if (includeMediaProjection) android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION else 0
+        val micType = if (hasMicPermission) android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0
+
+        if (!hasMicPermission) {
+            Log.w(TAG, "RECORD_AUDIO 미허용 상태 — microphone FGS 타입 제외 후 시작")
         }
+
+        val serviceType = baseType or mpType or micType
 
         ServiceCompat.startForeground(
             this,

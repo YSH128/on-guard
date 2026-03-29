@@ -4,6 +4,7 @@ package com.s14p21a404.shutter.di
 import android.content.Context
 import com.s14p21a404.shutter.data.detector.DeepfakeDetector
 import com.s14p21a404.shutter.data.detector.real.RealDeepfakeDetector
+import com.s14p21a404.shutter.data.detector.stub.BroadcastTriggerDetector
 import com.s14p21a404.shutter.data.repository.AlertRepositoryImpl
 import com.s14p21a404.shutter.data.repository.AuthRepositoryImpl
 import com.s14p21a404.shutter.data.repository.DeepfakeDetectionRepositoryImpl
@@ -66,9 +67,9 @@ class ServiceLocator private constructor(context: Context) {
 
     val criminalLocationApi = CriminalLocationApi(apiService)
 
-    val gpsWebSocketClient = GpsWebSocketClient(tokenManager)
+    val gpsWebSocketClient = GpsWebSocketClient(tokenManager, authRepository)
 
-    // val detector: DeepfakeDetector = BroadcastTriggerDetector(context)       // ADB 테스트용
+//    val detector: DeepfakeDetector = BroadcastTriggerDetector(context)       // ADB 테스트용
     val detector: DeepfakeDetector = RealDeepfakeDetector(context)       // JNI 파이프라인 (NDK SO 필요)
     val faceTracker = com.s14p21a404.shutter.data.detector.real.OpenCvFaceTracker(context)
 
