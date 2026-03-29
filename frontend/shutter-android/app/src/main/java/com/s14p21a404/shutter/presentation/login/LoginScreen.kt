@@ -92,7 +92,7 @@ fun LoginScreen(
 
             // ── 서비스명 타이틀 ──
             Text(
-                text = "Shutter",
+                text = "OnGuard",
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
                 color = TitleColor,

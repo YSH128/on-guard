@@ -77,7 +77,7 @@ private fun TimelineEntry.toUiItems(baseIndex: Int): List<TimelineUiItem> {
                 badgeColor = Color(0xFF4A6CF7),
                 type = "message",
                 personLabel = item.toName?.let { "to. $it" },
-                title = "[SHUTTER 긴급알림]",
+                title = "[OnGuard 긴급알림]",
                 description = "${wardName}님이 딥페이크 의심 통화 중입니다.",
                 details = buildList {
                     item.callStartedAt?.let { add("• 통화 시작시각: ${it.take(16).drop(11)}") }
