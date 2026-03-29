@@ -612,7 +612,7 @@ class VideoCallDetectService : Service() {
 
         val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .setContentTitle("Shutter 보호 활성화")
+            .setContentTitle("OnGuard 보호 활성화")
             .setContentText("영상통화를 모니터링 중입니다.")
             .setOngoing(true)
             .build()
