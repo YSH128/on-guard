@@ -600,15 +600,21 @@ class VideoCallDetectService : Service() {
             .setOngoing(true)
             .build()
 
-        val serviceType = if (includeMediaProjection) {
+        val hasMicPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+            this, android.Manifest.permission.RECORD_AUDIO
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+        var serviceType = if (includeMediaProjection) {
             android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
                     android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
         } else {
             android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+        }
+
+        if (hasMicPermission) {
+            serviceType = serviceType or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
         }
 
         ServiceCompat.startForeground(
