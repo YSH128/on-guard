@@ -86,11 +86,13 @@ class DeepfakeDetectionRepositoryImpl(
                 sendTelemetry(result)
             },
             onReady = {
-                // 모델 로드가 완료되었을 때 화면 캡처(ImageReader) 시작
-                Log.d(TAG, "모델 로드 완료 및 ScreenCaptureManager 캡처 시작 지시")
-                isModelReady = true
-                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    startScreenCaptureInternal()
+                if (!isModelReady) {
+                    // 모델 로드가 완료되었을 때 화면 캡처(ImageReader) 시작
+                    Log.d(TAG, "모델 로드 완료 및 ScreenCaptureManager 캡처 시작 지시")
+                    isModelReady = true
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        startScreenCaptureInternal()
+                    }
                 }
             }
         )
@@ -125,6 +127,11 @@ class DeepfakeDetectionRepositoryImpl(
         val projection = mediaProjection
         if (ctx == null || projection == null) {
             Log.w(TAG, "MediaProjection 없음 — 화면 캡처 불가 (감지는 Stub으로 동작)")
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                ctx?.let {
+                    android.widget.Toast.makeText(it, "화면 캡처 권한이 만료되었습니다. 보호를 껐다 켜주세요.", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
             return
         }
 

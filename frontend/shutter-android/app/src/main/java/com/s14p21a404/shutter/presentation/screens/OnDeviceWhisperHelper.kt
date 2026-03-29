@@ -150,6 +150,13 @@ class OnDeviceWhisperHelper(private val context: Context) {
                 val paddedChunk = if (audioChunk.size < 960000) {
                     ByteArray(960000).apply {
                         System.arraycopy(audioChunk, 0, this, 0, audioChunk.size)
+                        // [Fix] NPU/DSP 가속 환경에서 완벽한 무음(0) 버퍼가 들어가면 Log-Mel Spectrogram 계산 시 
+                        // log(0) = -Infinity가 발생하고, 이것이 NaN으로 전파되어 NDK/DSP가 통째로 다운되는 크래시 발생 방지.
+                        // 이 크래시로 인해 서비스가 죽으면서 MediaProjection이 1회용으로 터지는 증상이 나타납니다.
+                        // 무음 구간에 아주 미세한 노이즈(1)를 넣어서 크래시를 방지합니다.
+                        for (i in audioChunk.size until 960000) {
+                            this[i] = 1
+                        }
                     }
                 } else audioChunk
 
