@@ -212,7 +212,7 @@ class WarningBottomSheetView(
         // ── sheetFrame ──
         sheetFrame = FrameLayout(context).apply {
             clipChildren = false; clipToPadding = false
-            translationY = dpToPx(400).toFloat(); alpha = 0f
+            translationY = dpToPx(200).toFloat(); alpha = 0f
         }
         sheetFrame.addView(sheetContainer, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         addView(sheetFrame, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { gravity = Gravity.BOTTOM })
@@ -227,6 +227,7 @@ class WarningBottomSheetView(
     private fun buildTitleSection(): LinearLayout {
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            clipChildren = false; clipToPadding = false
             alpha = 0f; translationY = dpToPx(16).toFloat()
         }
 
@@ -293,8 +294,11 @@ class WarningBottomSheetView(
     private var locationDataReceived = false
     /** 지도가 화면에 완전히 표시되었는지 여부 */
     private var mapFullyShown = false
+    /** Stage 2 이후 진행을 지연/재스케줄하기 위한 참조 */
+    private var nextStagesRunnable: Runnable? = null
 
     private fun buildMapContent(): View {
+        android.util.Log.d("WarningSheet", "▶▶▶ buildMapContent() 호출 — 지도 UI 빌드 시작")
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             clipChildren = false; clipToPadding = false
@@ -302,11 +306,22 @@ class WarningBottomSheetView(
         }
 
         mapContainer = FrameLayout(context).apply { clipChildren = false; clipToPadding = false }
+        android.util.Log.d("WarningSheet", "  mapContainer 생성 완료: $mapContainer")
 
-        mapContainer!!.addView(ImageView(context).apply {
-            setImageResource(context.resources.getIdentifier("map", "drawable", context.packageName))
+        // 지도 이미지 추가
+        val mapResId = context.resources.getIdentifier("map", "drawable", context.packageName)
+        android.util.Log.d("WarningSheet", "  지도 리소스 ID: $mapResId (0이면 리소스 없음)")
+        val mapImageView = ImageView(context).apply {
+            if (mapResId != 0) {
+                setImageResource(mapResId)
+            } else {
+                // 지도 리소스가 없으면 회색 배경으로 대체
+                setBackgroundColor(Color.parseColor("#E5E7EB"))
+                android.util.Log.w("WarningSheet", "  ⚠️ 지도 리소스(map.drawable)를 찾을 수 없음! 회색 배경으로 대체")
+            }
             scaleType = ImageView.ScaleType.FIT_CENTER
-        }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dpToPx(140)))
+        }
+        mapContainer!!.addView(mapImageView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dpToPx(140)))
 
         // 핀 (가운데 고정, 드롭 애니메이션 없음)
         val pinContainer = FrameLayout(context).apply { clipChildren = false; clipToPadding = false }
@@ -327,31 +342,47 @@ class WarningBottomSheetView(
         }
         val pinCircle = FrameLayout(context).apply {
             background = GradientDrawable().apply { setColor(Color.parseColor("#FEE2E2")); shape = GradientDrawable.OVAL; setStroke(dpToPx(2), Color.parseColor("#FECACA")) }
-            elevation = dpToPx(2).toFloat()
+            elevation = dpToPx(6).toFloat()
+            translationZ = dpToPx(8).toFloat()
         }
         pinCircleRef = pinCircle
-        val pinIcon = TextView(context).apply { text = "⚠"; setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f); setTextColor(Color.parseColor("#EF4444")); gravity = Gravity.CENTER }
+        val pinIcon = TextView(context).apply { text = "⚠"; setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f); setTextColor(Color.parseColor("#EF4444")); gravity = Gravity.CENTER }
         pinIconTv = pinIcon
         pinCircle.addView(pinIcon,
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        pinContainer.addView(pinCircle, FrameLayout.LayoutParams(dpToPx(36), dpToPx(36)).apply { gravity = Gravity.CENTER })
+        pinContainer.addView(pinCircle, FrameLayout.LayoutParams(dpToPx(40), dpToPx(40)).apply { gravity = Gravity.CENTER })
 
-        // 핀을 지도 정 가운데에 배치
+        // 핀을 지도 정 가운데에 배치 — elevation 설정하여 지도 이미지 위에 확실히 보이도록
+        pinContainer.elevation = dpToPx(6).toFloat()
+        pinContainer.translationZ = dpToPx(8).toFloat()
         mapContainer!!.addView(pinContainer, FrameLayout.LayoutParams(dpToPx(80), dpToPx(80)).apply { gravity = Gravity.CENTER })
 
         // 국가명 라벨 (핀 아래, 가운데 정렬)
         labelContainer = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            background = GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = dpToPx(6).toFloat() }
-            elevation = dpToPx(2).toFloat(); setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4))
+            background = GradientDrawable().apply {
+                setColor(Color.WHITE)
+                cornerRadius = dpToPx(6).toFloat()
+                setStroke(dpToPx(1), Color.parseColor("#F3F4F6")) // 더 연한 테두리
+            }
+            elevation = dpToPx(1).toFloat()
+            translationZ = dpToPx(1).toFloat()
+            setPadding(dpToPx(8), dpToPx(5), dpToPx(8), dpToPx(5))
         }
-        countryNameTv = TextView(context).apply { text = "위치 확인 중..."; setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f); setTextColor(Color.parseColor("#374151")) }
+        countryNameTv = TextView(context).apply {
+            text = "위치 확인 중..."
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextColor(Color.parseColor("#1F2937"))
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+        }
         labelContainer!!.addView(countryNameTv)
         flagImageView = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER; visibility = View.GONE }
-        labelContainer!!.addView(flagImageView, LinearLayout.LayoutParams(dpToPx(18), (dpToPx(18) * 0.7f).toInt()).apply { marginStart = dpToPx(4); gravity = Gravity.CENTER_VERTICAL })
+        labelContainer!!.addView(flagImageView, LinearLayout.LayoutParams(dpToPx(20), dpToPx(14)).apply { marginStart = dpToPx(6); gravity = Gravity.CENTER_VERTICAL })
+        // 라벨은 핀 하단에서 일정 거리 아래에 고정 (추적 완료 시와 동일한 간격)
+        // 핀 중앙 배치 시: 지도높이 160dp, 핀 80dp → 핀 bottom = 120dp, 라벨 top = 110dp
         mapContainer!!.addView(labelContainer, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT
-        ).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = dpToPx(100) })
+        ).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = dpToPx(110) })
 
         root.addView(mapContainer, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(160)
@@ -386,21 +417,24 @@ class WarningBottomSheetView(
 
     /** 외부에서 위치 데이터가 연결됐을 때 하단 상태를 "상대방 위치 추적 완료"로 전환 */
     private fun markLocationResolved() {
-        if (locationResolved) return
+        android.util.Log.d("WarningSheet", "▶▶▶ markLocationResolved() 호출 — locationResolved=$locationResolved, locationDataReceived=$locationDataReceived")
+        if (locationResolved) {
+            android.util.Log.d("WarningSheet", "  이미 resolved 상태 → 스킵")
+            return
+        }
         locationResolved = true
         locationDataReceived = true
+        android.util.Log.d("WarningSheet", "  → locationResolved=true, locationDataReceived=true 로 설정")
         handler.post {
+            android.util.Log.d("WarningSheet", "  handler.post 내부 — 추적 상태 UI 업데이트")
             // 깜빡임 멈추고 완전 불투명
             trackingPulseAnim?.cancel()
             locationTrackingRow?.alpha = 1f
             // 빨간점 → 녹색점
             trackingRedDot?.background = GradientDrawable().apply { setColor(Color.parseColor("#22C55E")); shape = GradientDrawable.OVAL }
-            // 텍스트 전환
-            trackingStatusTv?.animate()?.alpha(0f)?.setDuration(150)?.withEndAction {
-                trackingStatusTv?.text = "상대방 위치 추적 완료"
-                trackingStatusTv?.setTextColor(Color.parseColor("#16A34A"))
-                trackingStatusTv?.animate()?.alpha(1f)?.setDuration(200)?.start()
-            }?.start()
+            // 텍스트 바로 변경 (애니메이션 없이)
+            trackingStatusTv?.text = "상대방 위치 추적 완료"
+            trackingStatusTv?.setTextColor(Color.parseColor("#16A34A"))
         }
     }
 
@@ -445,17 +479,46 @@ class WarningBottomSheetView(
             pinIconTv?.setTextColor(Color.parseColor("#9CA3AF"))
 
             // 폴백 UI 2초 보여주고 다음 단계 진행
-            handler.postDelayed({ proceedToNextStages() }, 2000L)
+            scheduleProceedAfterLocation(3000L)
         }
     }
 
     /** 지도 빌드 후 타임아웃을 걸어 서버 응답이 없으면 폴백 처리 */
     private fun scheduleLocationTimeout() {
+        android.util.Log.d("WarningSheet", "▶▶▶ scheduleLocationTimeout() — 10초 타임아웃 시작")
         handler.postDelayed({
+            android.util.Log.d("WarningSheet", "  [타임아웃 만료] locationDataReceived=$locationDataReceived")
             if (!locationDataReceived) {
+                android.util.Log.d("WarningSheet", "  → 위치 데이터 미수신 → markLocationUnavailable() 호출")
                 markLocationUnavailable()
+            } else {
+                android.util.Log.d("WarningSheet", "  → 이미 위치 데이터 수신됨 → 무시")
             }
         }, 10_000L)
+    }
+
+    /** 위치 UI를 충분히 보여준 뒤 다음 단계로 넘어가도록 지연을 재조정 */
+    private fun scheduleProceedAfterLocation(delayMs: Long = 2000L) {
+        val caller = Thread.currentThread().stackTrace.getOrNull(3)?.let { "${it.methodName}:${it.lineNumber}" } ?: "unknown"
+        android.util.Log.d("WarningSheet", "══════════════════════════════════════════════════════════")
+        android.util.Log.d("WarningSheet", "▶▶▶ scheduleProceedAfterLocation(delayMs=$delayMs) — Stage 2로 전환 예약")
+        android.util.Log.d("WarningSheet", "  호출 위치: $caller")
+        android.util.Log.d("WarningSheet", "  현재 상태: mapFullyShown=$mapFullyShown, nextStagesStarted=$nextStagesStarted, locationResolved=$locationResolved")
+        android.util.Log.d("WarningSheet", "  지도 UI 상태: mapContainer=${mapContainer != null}, pinContainerRef=${pinContainerRef != null}, labelContainer=${labelContainer != null}")
+        android.util.Log.d("WarningSheet", "  위치 데이터: countryNameTv?.text=${countryNameTv?.text}, flagImageView?.visibility=${flagImageView?.visibility}")
+        nextStagesRunnable?.let {
+            handler.removeCallbacks(it)
+            android.util.Log.d("WarningSheet", "  기존 nextStagesRunnable 제거")
+        }
+        val runnable = Runnable {
+            android.util.Log.d("WarningSheet", "══════════════════════════════════════════════════════════")
+            android.util.Log.d("WarningSheet", "  ★★★ [${delayMs}ms 지연 후 실행] proceedToNextStages() 호출 ★★★")
+            android.util.Log.d("WarningSheet", "  지도 UI가 곧 사라집니다! mapContainer=${mapContainer != null}")
+            proceedToNextStages()
+        }
+        nextStagesRunnable = runnable
+        handler.postDelayed(runnable, delayMs)
+        android.util.Log.d("WarningSheet", "  ${delayMs}ms 후 Stage 2 전환 예약 완료")
     }
 
     // ─────────────────────────────────────────────
@@ -890,10 +953,14 @@ class WarningBottomSheetView(
     // ─────────────────────────────────────────────
 
     private fun transitionStageContent(newContent: View, onShown: (() -> Unit)? = null) {
+        android.util.Log.d("WarningSheet", "▶▶▶ transitionStageContent() — Stage 전환 시작")
         val oldCount = stageContentContainer.childCount
+        android.util.Log.d("WarningSheet", "  oldCount=$oldCount, newContent=$newContent")
         if (oldCount > 0) {
             val old = stageContentContainer.getChildAt(0)
+            android.util.Log.d("WarningSheet", "  이전 콘텐츠 fade-out 시작: $old")
             old.animate().alpha(0f).translationY(dpToPx(-20).toFloat()).scaleX(0.95f).scaleY(0.95f).setDuration(250).withEndAction {
+                android.util.Log.d("WarningSheet", "  이전 콘텐츠 제거 완료 → addNewStageContent 호출")
                 stageContentContainer.removeView(old)
                 addNewStageContent(newContent, onShown)
             }.start()
@@ -903,9 +970,20 @@ class WarningBottomSheetView(
     }
 
     private fun addNewStageContent(content: View, onShown: (() -> Unit)?) {
+        android.util.Log.d("WarningSheet", "▶▶▶ addNewStageContent() — 새 콘텐츠 fade-in 시작: $content")
         content.alpha = 0f; content.translationY = dpToPx(20).toFloat()
         stageContentContainer.addView(content, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
-        content.animate().alpha(1f).translationY(0f).setDuration(350).setInterpolator(DecelerateInterpolator()).withEndAction { onShown?.invoke() }.start()
+        content.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(350)
+            .setInterpolator(DecelerateInterpolator())
+            .withLayer()
+            .withEndAction {
+                android.util.Log.d("WarningSheet", "  fade-in 완료 → onShown 콜백 호출 (onShown=${onShown != null})")
+                onShown?.invoke()
+            }
+            .start()
     }
 
     // ─────────────────────────────────────────────
@@ -1014,31 +1092,67 @@ class WarningBottomSheetView(
     // ─────────────────────────────────────────────
 
     fun updateCountry(country: String) {
+        val timestamp = System.currentTimeMillis()
+        android.util.Log.d("WarningSheet", "══════════════════════════════════════════════════════════")
+        android.util.Log.d("WarningSheet", "▶▶▶ updateCountry() 호출됨 [$timestamp] — country=$country")
+        android.util.Log.d("WarningSheet", "  현재 상태: mapFullyShown=$mapFullyShown, nextStagesStarted=$nextStagesStarted, locationResolved=$locationResolved")
+        android.util.Log.d("WarningSheet", "  mapContainer=${mapContainer != null}, countryNameTv=${countryNameTv != null}, flagImageView=${flagImageView != null}")
+        android.util.Log.d("WarningSheet", "  labelContainer=${labelContainer != null}, pinContainerRef=${pinContainerRef != null}")
         currentCountryName = country
         locationDataReceived = true
         handler.post {
+            android.util.Log.d("WarningSheet", "  [handler.post 내부 ${System.currentTimeMillis()}] mapFullyShown=$mapFullyShown, nextStagesStarted=$nextStagesStarted")
+            // 이미 Stage 전환이 시작됐으면 무시 (지도가 곧 사라짐)
+            if (nextStagesStarted) {
+                android.util.Log.d("WarningSheet", "  ⚠️ nextStagesStarted=true → Stage 전환 진행 중 → 스킵")
+                return@post
+            }
             // 지도가 아직 완전히 표시되지 않았으면 버퍼에 저장
             if (!mapFullyShown) {
                 bufferedCriminalCountry = country
-                android.util.Log.d("WarningSheet", "updateCountry → 범죄자 위치 버퍼 저장: $country (mapFullyShown=$mapFullyShown)")
+                android.util.Log.d("WarningSheet", "  → 버퍼에 저장: $country (mapFullyShown=false)")
                 return@post
             }
-            android.util.Log.d("WarningSheet", "updateCountry → 즉시 적용: $country")
-            applyCountryToMap(country)
+            // 위치 추적 느낌을 주기 위해 1초 대기 후 표시
+            android.util.Log.d("WarningSheet", "  → 1초 대기 후 applyCountryToMap() 호출 예약")
+            handler.postDelayed({
+                if (nextStagesStarted) return@postDelayed
+                android.util.Log.d("WarningSheet", "  → [1초 후] applyCountryToMap() 호출")
+                applyCountryToMap(country)
+            }, 1000)
         }
     }
 
     /** 지도 위에 국가명/국기/아이콘을 실제로 반영하는 내부 함수 */
     private fun applyCountryToMap(country: String) {
-        android.util.Log.d("WarningSheet", "applyCountryToMap 호출: $country")
+        android.util.Log.d("WarningSheet", "══════════════════════════════════════════════════════════")
+        android.util.Log.d("WarningSheet", "▶▶▶ applyCountryToMap() 호출 — country=$country")
+        android.util.Log.d("WarningSheet", "  현재 상태: nextStagesStarted=$nextStagesStarted, mapFullyShown=$mapFullyShown")
+
+        // Stage 전환이 이미 시작됐으면 지도가 곧 사라지므로 스킵
+        if (nextStagesStarted) {
+            android.util.Log.d("WarningSheet", "  ⚠️ nextStagesStarted=true → 이미 Stage 전환 중 → 스킵")
+            return
+        }
 
         val mc = mapContainer
-        android.util.Log.d("WarningSheet", "mapContainer=$mc, width=${mc?.width}, height=${mc?.height}, alpha=${mc?.alpha}, visibility=${mc?.visibility}, parent=${mc?.parent}")
+        android.util.Log.d("WarningSheet", "  mapContainer=$mc")
+        android.util.Log.d("WarningSheet", "    width=${mc?.width}, height=${mc?.height}, alpha=${mc?.alpha}")
+        android.util.Log.d("WarningSheet", "    visibility=${mc?.visibility}, isAttachedToWindow=${mc?.isAttachedToWindow}, parent=${mc?.parent}")
 
+        // mapContainer가 null이거나 뷰 계층에서 detach 됐으면 스킵
+        if (mc == null || !mc.isAttachedToWindow) {
+            android.util.Log.d("WarningSheet", "  ⚠️ mapContainer=null 또는 detached → 스킵")
+            return
+        }
+
+        android.util.Log.d("WarningSheet", "  ✓ 조건 충족 — UI 업데이트 시작")
+
+        // mc.post 대신 즉시 실행 — 이미 메인 스레드(handler.post)에서 호출됨
         // 국가명 텍스트 즉시 설정
         countryNameTv?.let { tv ->
             tv.text = country
-            tv.setTextColor(Color.parseColor("#374151"))
+            tv.setTextColor(Color.parseColor("#1F2937")) // 진한 회색
             tv.alpha = 1f; tv.scaleX = 1f; tv.scaleY = 1f; tv.visibility = View.VISIBLE
             android.util.Log.d("WarningSheet", "countryNameTv 설정 완료: text=${tv.text}, parent=${tv.parent}, parentAlpha=${(tv.parent as? View)?.alpha}")
         }
@@ -1065,12 +1179,17 @@ class WarningBottomSheetView(
         // 라벨 컨테이너 확실히 보이게 + 맨 위로
         labelContainer?.let { lc ->
             lc.alpha = 1f; lc.visibility = View.VISIBLE
-            lc.elevation = dpToPx(8).toFloat()
+            lc.elevation = dpToPx(1).toFloat()
+            lc.translationZ = dpToPx(1).toFloat()
             lc.bringToFront()
             android.util.Log.d("WarningSheet", "labelContainer: vis=${lc.visibility}, alpha=${lc.alpha}, w=${lc.width}, h=${lc.height}, x=${lc.x}, y=${lc.y}, elevation=${lc.elevation}")
         }
 
-        // 핀 아이콘을 위험(⚠) 상태로 유지
+        // 핀 아이콘을 위험(⚠) 상태로 유지 + z-depth 보정
+        pinContainerRef?.let { pin ->
+            pin.translationZ = dpToPx(2).toFloat()
+            pin.bringToFront()
+        }
         pinCircleRef?.let { pc ->
             pc.background = GradientDrawable().apply {
                 setColor(Color.parseColor("#FEE2E2"))
@@ -1078,25 +1197,43 @@ class WarningBottomSheetView(
                 setStroke(dpToPx(2), Color.parseColor("#FECACA"))
             }
             pc.elevation = dpToPx(4).toFloat()
+            pc.translationZ = dpToPx(6).toFloat()
             pc.bringToFront()
         }
         pinIconTv?.text = "⚠"
         pinIconTv?.setTextColor(Color.parseColor("#EF4444"))
 
+        mc.requestLayout()
+        mc.invalidate()
+
+        android.util.Log.d("WarningSheet", "  ✓ 지도 UI 업데이트 완료!")
+        android.util.Log.d("WarningSheet", "    countryNameTv: text='${countryNameTv?.text}', visibility=${countryNameTv?.visibility}, alpha=${countryNameTv?.alpha}")
+        android.util.Log.d("WarningSheet", "    flagImageView: visibility=${flagImageView?.visibility}, alpha=${flagImageView?.alpha}")
+        android.util.Log.d("WarningSheet", "    labelContainer: visibility=${labelContainer?.visibility}, alpha=${labelContainer?.alpha}, isAttached=${labelContainer?.isAttachedToWindow}")
+        android.util.Log.d("WarningSheet", "    pinIconTv: text='${pinIconTv?.text}'")
+
+        // 버퍼된 좌표가 있으면 핀 위치도 함께 적용
+        val bLat = bufferedCriminalLat
+        val bLng = bufferedCriminalLng
+        if (bLat != null && bLng != null) {
+            android.util.Log.d("WarningSheet", "  → 버퍼된 좌표 ($bLat, $bLng) 핀 위치 적용")
+            bufferedCriminalLat = null
+            bufferedCriminalLng = null
+            applyPinPosition(bLat, bLng)
+        }
+
+        android.util.Log.d("WarningSheet", "  → markLocationResolved() 호출")
         markLocationResolved()
         // 위치 확인 후 2초 동안 지도+국가명+국기 보여주고 나머지 단계 진행
-        handler.postDelayed({ proceedToNextStages() }, 2000L)
+        android.util.Log.d("WarningSheet", "  → scheduleProceedAfterLocation(2000L) 호출 (지도 2초 후 Stage 2 전환)")
+        scheduleProceedAfterLocation(2000L)
     }
 
     fun updatePinPosition(lat: Double, lng: Double) {
-        handler.post {
-            if (!mapFullyShown) {
-                bufferedCriminalLat = lat
-                bufferedCriminalLng = lng
-                return@post
-            }
-            applyPinPosition(lat, lng)
-        }
+        // 버퍼에 저장 - applyCountryToMap에서 함께 적용됨
+        bufferedCriminalLat = lat
+        bufferedCriminalLng = lng
+        android.util.Log.d("WarningSheet", "updatePinPosition: lat=$lat, lng=$lng → 버퍼에 저장")
     }
 
     private fun applyPinPosition(lat: Double, lng: Double) {
@@ -1104,13 +1241,41 @@ class WarningBottomSheetView(
         mc.post {
             val mapW = mc.width.toFloat(); val mapH = mc.height.toFloat()
             if (mapW <= 0 || mapH <= 0) return@post
+
+            // 핀은 위경도 기반으로 위치 계산
             val xRatio = ((lng + 180.0) / 360.0).toFloat().coerceIn(0f, 1f)
             val yRatio = ((90.0 - lat) / 180.0).toFloat().coerceIn(0f, 1f)
             val pinSize = dpToPx(80)
-            val pinX = (mapW * xRatio - pinSize / 2f).toInt().coerceAtLeast(0)
-            val pinY = (mapH * yRatio - pinSize / 2f).toInt().coerceAtLeast(0)
-            pinContainerRef?.let { pin -> (pin.layoutParams as? FrameLayout.LayoutParams)?.let { lp -> lp.leftMargin = pinX; lp.topMargin = pinY; pin.layoutParams = lp } }
-            labelContainer?.let { label -> (label.layoutParams as? FrameLayout.LayoutParams)?.let { lp -> lp.leftMargin = (pinX - dpToPx(10)).coerceAtLeast(0); lp.topMargin = (pinY + pinSize - dpToPx(6)).coerceAtLeast(0); label.layoutParams = lp } }
+            val pinX = (mapW * xRatio - pinSize / 2f).toInt().coerceIn(0, (mapW - pinSize).toInt())
+            val pinY = (mapH * yRatio - pinSize / 2f).toInt().coerceIn(0, (mapH - pinSize).toInt())
+
+            pinContainerRef?.let { pin ->
+                (pin.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
+                    lp.leftMargin = pinX
+                    lp.topMargin = pinY
+                    lp.gravity = Gravity.NO_GRAVITY
+                    pin.layoutParams = lp
+                }
+            }
+
+            // 라벨은 핀 바로 아래에 위치 (핀을 따라감)
+            labelContainer?.let { label ->
+                val labelW = label.width.takeIf { it > 0 } ?: dpToPx(100) // 추정 너비
+                val pinCenterX = pinX + pinSize / 2
+                // 라벨 중앙이 핀 중앙에 오도록, 화면 밖으로 나가지 않게 제한
+                val labelX = (pinCenterX - labelW / 2).coerceIn(dpToPx(8), (mapW - labelW - dpToPx(8)).toInt())
+                // 핀 하단에서 8dp 더 아래 (pinSize - 10dp 대신 pinSize - 5dp로)
+                val labelY = (pinY + pinSize - dpToPx(10)).coerceIn(0, (mapH - dpToPx(40)).toInt())
+
+                (label.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
+                    lp.leftMargin = labelX
+                    lp.topMargin = labelY
+                    lp.gravity = Gravity.NO_GRAVITY
+                    label.layoutParams = lp
+                }
+            }
+
+            android.util.Log.d("WarningSheet", "applyPinPosition: pinX=$pinX, pinY=$pinY, mapW=$mapW, mapH=$mapH")
         }
     }
 
@@ -1136,49 +1301,91 @@ class WarningBottomSheetView(
     private var nextStagesStarted = false
 
     fun startEntranceAnimation() {
-        if (isRestoredFromCache) return
-        android.util.Log.d("WarningSheet", "startEntranceAnimation: isInApp=$isInApp")
+        if (isRestoredFromCache) {
+            // 복원 시 부드러운 슬라이드업 애니메이션
+            android.util.Log.d("WarningSheet", "▶▶▶ 복원 애니메이션 시작 (isRestoredFromCache=true)")
+            sheetFrame.translationY = dpToPx(80).toFloat()
+            sheetFrame.alpha = 0f
+            // 레이아웃 완료 후 애니메이션 시작
+            sheetFrame.post {
+                sheetFrame.animate()
+                    .translationY(0f)
+                    .alpha(1f)
+                    .setDuration(350)
+                    .setInterpolator(android.view.animation.DecelerateInterpolator(2f))
+                    .withLayer()
+                    .start()
+            }
+            return
+        }
+        android.util.Log.d("WarningSheet", "══════════════════════════════════════════════════════════")
+        android.util.Log.d("WarningSheet", "▶▶▶ startEntranceAnimation() 호출 — isInApp=$isInApp")
+        android.util.Log.d("WarningSheet", "  bufferedCriminalCountry=$bufferedCriminalCountry, mapFullyShown=$mapFullyShown")
 
-        // 1) 바텀시트 slide-up
-        handler.postDelayed({
-            sheetFrame.animate().translationY(0f).alpha(1f).setDuration(600).setInterpolator(OvershootInterpolator(0.8f)).start()
-        }, 50)
+        // 시작 상태 확실히 설정
+        sheetFrame.translationY = dpToPx(200).toFloat()
+        sheetFrame.alpha = 0f
+        titleContainer.translationY = dpToPx(16).toFloat()
+        titleContainer.alpha = 0f
 
-        // 2) 타이틀 + pulse
+        // 레이아웃 완료 후 애니메이션 시작 (뚝끊김 방지)
+        sheetFrame.post {
+            // 바텀시트 slide-up
+            android.util.Log.d("WarningSheet", "  [post] 바텀시트 slide-up 시작")
+            sheetFrame.animate()
+                .translationY(0f)
+                .alpha(1f)
+                .setDuration(450)
+                .setInterpolator(android.view.animation.DecelerateInterpolator(1.8f))
+                .withLayer()
+                .start()
+        }
+
+        // 타이틀 + pulse - 부드러운 감속 애니메이션
         handler.postDelayed({
-            titleContainer.animate().translationY(0f).alpha(1f).setDuration(500).setInterpolator(OvershootInterpolator(1.0f)).start()
+            android.util.Log.d("WarningSheet", "  [200ms] 타이틀 애니메이션 + pulse 시작")
+            titleContainer.animate()
+                .translationY(0f)
+                .alpha(1f)
+                .setDuration(400)
+                .setInterpolator(android.view.animation.DecelerateInterpolator(1.5f))
+                .withLayer()
+                .start()
             pulseAnimators.forEach { it.start() }
-        }, 250)
+        }, 200)
 
         // ─── Stage 1: 지도 + 위치 추적 ───
         if (isInApp) {
             handler.postDelayed({
+                android.util.Log.d("WarningSheet", "  [500ms] Stage 1 지도 빌드 시작")
                 val mapView = buildMapContent()
+                android.util.Log.d("WarningSheet", "  mapView 생성 완료: $mapView")
                 transitionStageContent(mapView) {
+                    android.util.Log.d("WarningSheet", "  ★★★ transitionStageContent onShown 콜백 진입 ★★★")
+                    android.util.Log.d("WarningSheet", "    bufferedCriminalCountry=$bufferedCriminalCountry")
                     miscAnimators.forEach { it.start() }
                     pulseAnimators.forEach { if (!it.isStarted) it.start() }
-                    // 지도가 완전히 표시됨
+                    // 지도가 완전히 표시됨 — 즉시 플래그 설정 및 버퍼 적용
                     mapFullyShown = true
-                    android.util.Log.d("WarningSheet", "지도 완전 표시 → mapFullyShown=true, bufferedCriminalCountry=$bufferedCriminalCountry")
-                    // 버퍼에 보관된 범죄자 위치 데이터 적용
+                    android.util.Log.d("WarningSheet", "    → mapFullyShown=true 설정 완료")
                     val bc = bufferedCriminalCountry
                     if (bc != null) {
                         bufferedCriminalCountry = null
-                        android.util.Log.d("WarningSheet", "버퍼된 범죄자 국가 적용: $bc")
-                        applyCountryToMap(bc)
-                    }
-                    val bLat = bufferedCriminalLat
-                    val bLng = bufferedCriminalLng
-                    if (bLat != null && bLng != null) {
-                        bufferedCriminalLat = null; bufferedCriminalLng = null
-                        applyPinPosition(bLat, bLng)
+                        // 위치 추적 느낌을 주기 위해 1초 대기 후 표시
+                        android.util.Log.d("WarningSheet", "    → 버퍼된 국가 '$bc' 1초 대기 후 적용")
+                        handler.postDelayed({
+                            if (nextStagesStarted) return@postDelayed
+                            applyCountryToMap(bc)
+                        }, 1000)
+                    } else {
+                        android.util.Log.d("WarningSheet", "    → 버퍼된 국가 없음")
                     }
                 }
-                // 위치 데이터 타임아웃 (10초) — 안 오면 폴백 UI 후 다음 단계 진행
+                // 위치 데이터 타임아웃 (10초)
                 scheduleLocationTimeout()
-            }, 400)
+            }, 500)
         } else {
-            // 인앱이 아니면 바로 Stage 2~5 시작
+            android.util.Log.d("WarningSheet", "  인앱 아님 → 바로 proceedToNextStages() 호출")
             proceedToNextStages()
         }
     }
@@ -1188,24 +1395,48 @@ class WarningBottomSheetView(
      * 중복 호출 방지.
      */
     private fun proceedToNextStages() {
-        if (nextStagesStarted) return
+        android.util.Log.d("WarningSheet", "══════════════════════════════════════════════════════════")
+        android.util.Log.d("WarningSheet", "▶▶▶ proceedToNextStages() 호출 — nextStagesStarted=$nextStagesStarted")
+        if (nextStagesStarted) {
+            android.util.Log.d("WarningSheet", "  이미 시작됨 → 중복 호출 방지")
+            return
+        }
         nextStagesStarted = true
+        android.util.Log.d("WarningSheet", "  → nextStagesStarted=true 설정 → Stage 2~5 순차 진행 시작")
 
         // 위치 결과를 보여준 뒤 Stage 2로 전환
         val baseDelay = if (isInApp) 500L else 0L
+        android.util.Log.d("WarningSheet", "  baseDelay=${baseDelay}ms")
 
         // ─── Stage 2: 카카오톡 메시지 ───
         handler.postDelayed({
+            android.util.Log.d("WarningSheet", "══════════════════════════════════════════════════════════")
+            android.util.Log.d("WarningSheet", "  ★★★ [${baseDelay + 280}ms] Stage 2 카카오톡 전환 ★★★")
+            android.util.Log.d("WarningSheet", "  ⚠️ 지도 UI가 이제 사라집니다!")
+            android.util.Log.d("WarningSheet", "    현재 상태: mapContainer=${mapContainer != null}, labelContainer=${labelContainer != null}")
+            android.util.Log.d("WarningSheet", "    countryNameTv?.text='${countryNameTv?.text}'")
+            // Stage 2로 전환하면 지도 UI 참조는 더 이상 유효하지 않음
+            mapContainer = null
+            pinContainerRef = null
+            pinCircleRef = null
+            pinIconTv = null
+            countryNameTv = null
+            flagImageView = null
+            labelContainer = null
+            locationTrackingRow = null
+            mapFullyShown = false
+            android.util.Log.d("WarningSheet", "    → 지도 UI 참조 무효화 완료")
             transitionStageContent(buildKakaoTalkContent())
         }, baseDelay + 280)
 
         // pill: "보호자 알림 완료" + Stage 3 전환
         val stage3Start = baseDelay + 3200L
         handler.postDelayed({
+            android.util.Log.d("WarningSheet", "  [${stage3Start}ms] pill: 보호자 알림 완료")
             addCompletedPill(pillConfigs[1].label, pillConfigs[1].color)
         }, stage3Start)
 
-        // ─── Stage 3: GPS 공유 ───
+        // // ─── Stage 3: GPS 공유 ───
         handler.postDelayed({
             transitionStageContent(buildGPSContent())
         }, stage3Start + 350)

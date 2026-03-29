@@ -233,6 +233,8 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
      * 오버레이 업데이트를 여기서 처리해야 콜백이 null이어도 위치가 표시된다.
      */
     private fun handleCriminalLocation(data: Map<String, String>) {
+        Log.d(FCM_TAG, "══════════════════════════════════════════════════════════")
+        Log.d(FCM_TAG, "▶▶▶ handleCriminalLocation() 호출됨 [${System.currentTimeMillis()}]")
         val country = data["country"] ?: run {
             Log.w(FCM_TAG, "country 없음")
             return
@@ -240,20 +242,27 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
         val lat = data["lat"]?.toDoubleOrNull()
         val lng = data["lng"]?.toDoubleOrNull()
 
-        Log.d(FCM_TAG, "criminal_location 국가: $country lat=$lat lng=$lng")
+        Log.d(FCM_TAG, "  FCM 데이터: country=$country, lat=$lat, lng=$lng")
 
         Handler(Looper.getMainLooper()).post {
+            val timestamp = System.currentTimeMillis()
+            Log.d(FCM_TAG, "  [메인 스레드 $timestamp] 오버레이 업데이트 시작")
             // 1. 오버레이 직접 업데이트 (VideoCallScreen 생명주기와 무관)
             val sl = ServiceLocator.getInstance(applicationContext)
+            Log.d(FCM_TAG, "  warningOverlayManager.updateLocation() 호출 - country=$country, lat=$lat, lng=$lng")
             sl.warningOverlayManager.updateLocation(country, lat, lng)
             val fbManager = sl.financialBlockOverlayManager
+            Log.d(FCM_TAG, "  financialBlockOverlayManager.updateCountry() 호출")
             fbManager.updateCountry(country)
             if (lat != null && lng != null) {
+                Log.d(FCM_TAG, "  financialBlockOverlayManager.updatePinPosition() 호출")
                 fbManager.updatePinPosition(lat, lng)
             }
 
             // 2. VideoCallScreen이 활성 상태이면 isRequestingLocation 초기화
+            Log.d(FCM_TAG, "  CriminalLocationBridge.onLocationReceived 호출 (콜백=${CriminalLocationBridge.onLocationReceived != null})")
             CriminalLocationBridge.onLocationReceived?.invoke(country, lat, lng)
+            Log.d(FCM_TAG, "  오버레이 업데이트 완료 [${System.currentTimeMillis() - timestamp}ms 소요]")
         }
 
         // 3. 푸시 알림 표시
