@@ -235,6 +235,6 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
     companion object {
         private const val TAG = "RealDeepfakeDetector"
-        private const val BUFFER_SIZE = 7 // 원래 10
+        private const val BUFFER_SIZE = 3 // 원래 10
     }
 }
