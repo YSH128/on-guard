@@ -102,9 +102,9 @@ class WarningBottomSheetView(
     private data class PillConfig(val label: String, val color: String)
     private val pillConfigs = listOf(
         PillConfig("AI 위조 감지", "#EF4444"),
-        PillConfig("보호자 알림 완료", "#6AAFED"),
-        PillConfig("내 위치 공유 완료", "#79D888"),
-        PillConfig("금융 차단 활성화", "#EB5545")
+        PillConfig("보호자 알림", "#6AAFED"),
+        PillConfig("내 위치 공유", "#79D888"),
+        PillConfig("금융앱 차단", "#EB5545")
     )
 
     init {
@@ -1430,7 +1430,7 @@ class WarningBottomSheetView(
         }, baseDelay + 280)
 
         // pill: "보호자 알림 완료" + Stage 3 전환
-        val stage3Start = baseDelay + 3200L
+        val stage3Start = baseDelay + 4200L
         handler.postDelayed({
             android.util.Log.d("WarningSheet", "  [${stage3Start}ms] pill: 보호자 알림 완료")
             addCompletedPill(pillConfigs[1].label, pillConfigs[1].color)
@@ -1442,7 +1442,7 @@ class WarningBottomSheetView(
         }, stage3Start + 350)
 
         // pill: "GPS 공유 완료" + Stage 4 전환
-        val stage4Start = stage3Start + 2500L
+        val stage4Start = stage3Start + 3500L
         handler.postDelayed({
             addCompletedPill(pillConfigs[2].label, pillConfigs[2].color)
         }, stage4Start)
