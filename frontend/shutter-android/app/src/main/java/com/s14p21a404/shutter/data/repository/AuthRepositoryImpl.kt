@@ -1,5 +1,6 @@
 package com.s14p21a404.shutter.data.repository
 
+import android.util.Log
 import com.s14p21a404.shutter.data.token.TokenManager
 import com.s14p21a404.shutter.domain.model.KakaoLoginResult
 import com.s14p21a404.shutter.domain.repository.AuthRepository
@@ -28,6 +29,7 @@ class AuthRepositoryImpl(
         val data = response.data
         tokenManager.saveTokens(data.accessToken, data.refreshToken)
         tokenManager.saveUserId(data.userId)
+        Log.d("AUTH_TOKEN", "accessToken: ${data.accessToken}")
         KakaoLoginResult.LoggedIn(data.userId)
     }
 
