@@ -313,6 +313,7 @@ mydocs/
 # Andorid Studio
 .idea/
 
+
 # ----------Gemini CLI----------
 .geminiignore
 
