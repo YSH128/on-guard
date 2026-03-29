@@ -7,6 +7,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import android.view.KeyEvent
 import android.graphics.Color
 import android.graphics.PixelFormat
@@ -68,6 +71,33 @@ class FinancialBlockOverlayManager(private val context: Context) {
     private var labelContainer: LinearLayout? = null
     private var mapContainer: FrameLayout? = null
 
+    // 카운트다운 관련
+    private var countdownTv: TextView? = null
+    private var countdownSeconds = 5
+    private val countdownRunnable = object : Runnable {
+        override fun run() {
+            countdownSeconds--
+            if (countdownSeconds <= 0) {
+                try {
+                    val homeIntent = android.content.Intent(android.content.Intent.ACTION_MAIN).apply {
+                        addCategory(android.content.Intent.CATEGORY_HOME)
+                        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(homeIntent)
+                } catch (e: Exception) {
+                    Log.e(TAG, "홈 이동 실패", e)
+                }
+                dismiss()
+            } else {
+                countdownTv?.text = makeCountdownSpan(countdownSeconds)
+                handler.postDelayed(this, 1000L)
+            }
+        }
+    }
+
+    // 현재 금융앱 이름
+    private var currentAppName: String = "금융"
+
     // ── 캐시: show() 이전에 수신된 데이터를 보관하여 뷰 생성 시 반영 ──
     private var cachedCountryName: String = "위치 확인 중..."
     private var cachedCountryCode: String? = null
@@ -103,6 +133,29 @@ class FinancialBlockOverlayManager(private val context: Context) {
             return
         }
 
+        // 현재 포그라운드 금융앱 이름 가져오기
+        val foregroundPkg = ForegroundAppMonitorService.foregroundPackage.value
+        Log.d(TAG, "금융앱 패키지: $foregroundPkg")
+        currentAppName = APP_NAME_MAP[foregroundPkg]
+            ?: try {
+                if (foregroundPkg.isNotEmpty()) {
+                    val pm = context.packageManager
+                    val appInfo = pm.getApplicationInfo(
+                        foregroundPkg,
+                        android.content.pm.PackageManager.ApplicationInfoFlags.of(0)
+                    )
+                    pm.getApplicationLabel(appInfo).toString()
+                } else "금융"
+            } catch (e: Exception) {
+                Log.w(TAG, "앱 이름 조회 실패: pkg=$foregroundPkg → ${e.message}")
+                // 패키지명에서 직접 추출 (fallback)
+                foregroundPkg.split(".").lastOrNull { it.length > 2 }?.replaceFirstChar { it.uppercase() } ?: "금융"
+            }
+        Log.d(TAG, "금융앱 이름: $currentAppName")
+
+        // 카운트다운 초기화
+        countdownSeconds = 5
+
         // 전체 화면을 덮는 단일 윈도우 (터치 차단)
         addOverlay(
             view = buildFullScreenOverlay(isInApp),
@@ -114,10 +167,13 @@ class FinancialBlockOverlayManager(private val context: Context) {
 
         Log.d(TAG, "금융 차단 오버레이 표시")
 
-        // 홈버튼/메뉴(최근앱)버튼 감지 → 300ms 후 금융앱 여부 재확인
+        // 홈버튼/메뉴(최근앱)버튼 감지
         registerSystemButtonReceiver()
 
-        // show 이전에 수신된 국기/위경도 데이터를 뷰에 반영 (뷰가 레이아웃된 후 적용)
+        // 카운트다운 시작 (300ms 후)
+        handler.postDelayed({ handler.postDelayed(countdownRunnable, 1000L) }, 300)
+
+        // show 이전에 수신된 국기/위경도 데이터를 뷰에 반영
         if (isInApp) {
             handler.postDelayed({ applyCachedData() }, 200)
         }
@@ -129,6 +185,7 @@ class FinancialBlockOverlayManager(private val context: Context) {
         pulseAnimators.forEach { it.cancel() }
         pulseAnimators.clear()
         countryNameTv = null
+        countdownTv = null
         flagImageView = null
         pinContainerRef = null
         labelContainer = null
@@ -191,7 +248,7 @@ class FinancialBlockOverlayManager(private val context: Context) {
             }
         }
 
-        // 핀 위치
+        // 핀 위치 (지도 위 절대좌표)
         val lat = cachedLat
         val lng = cachedLng
         if (lat != null && lng != null) {
@@ -215,13 +272,7 @@ class FinancialBlockOverlayManager(private val context: Context) {
                         pin.layoutParams = lp
                     }
                 }
-                labelContainer?.let { label ->
-                    (label.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
-                        lp.leftMargin = (pinX - dpToPx(10)).coerceAtLeast(0)
-                        lp.topMargin = (pinY + pinSize - dpToPx(6)).coerceAtLeast(0)
-                        label.layoutParams = lp
-                    }
-                }
+                // labelContainer는 지도 아래 일반 흐름에 있으므로 위치 조작 불필요
             }
         }
     }
@@ -331,19 +382,19 @@ class FinancialBlockOverlayManager(private val context: Context) {
     private fun buildWhiteCard(isInApp: Boolean): View {
         val screenWidth = context.resources.displayMetrics.widthPixels
         val cardWidth = (screenWidth * 0.85f).roundToInt()
-        val radius = dpToPx(24).toFloat()
+        val radius = dpToPx(30).toFloat()
 
         val card = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            clipChildren = false
-            clipToPadding = false
-            setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(24))
             background = GradientDrawable().apply {
                 setColor(Color.WHITE)
                 cornerRadius = radius
             }
-            elevation = dpToPx(8).toFloat()
+            elevation = dpToPx(20).toFloat()
+            // 자식 뷰를 카드 둥근 모서리에 맞게 클리핑
+            outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
+            clipToOutline = true
         }
 
         val wrapper = FrameLayout(context).apply {
@@ -354,6 +405,7 @@ class FinancialBlockOverlayManager(private val context: Context) {
             gravity = Gravity.CENTER
         })
 
+        // 메인 콘텐츠
         if (isInApp) {
             buildInAppContent(card)
         } else {
@@ -368,31 +420,46 @@ class FinancialBlockOverlayManager(private val context: Context) {
     // ─────────────────────────────────────────────
 
     private fun buildInAppContent(parent: LinearLayout) {
-        // 타이틀: "금융앱 접근 제한"
+        parent.setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(20))
+
+        // 타이틀: "[앱이름] 앱에 접근 하셨나요?"
         parent.addView(TextView(context).apply {
-            text = "금융앱 접근 제한"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+            text = "${currentAppName} 앱에 접근 하셨나요?"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 21f)
             setTextColor(Color.parseColor("#111827"))
-            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            typeface = Typeface.create("sans-serif-black", Typeface.BOLD)
             gravity = Gravity.CENTER
         }, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = dpToPx(6) })
+
+        // 카운트다운 부제목 (숫자만 빨간색, 나머지 회색, 굵게)
+        countdownTv = TextView(context).apply {
+            text = makeCountdownSpan(countdownSeconds)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+        }
+        parent.addView(countdownTv, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = dpToPx(16) })
 
         // 세계 지도 + 핀
         buildMapSection(parent)
 
-        // 대화 감지 유형
-        buildDetectionTypeSection(parent)
+        // 태그 칩
+        buildTagsSection(parent)
 
-        // 설명 텍스트
+        // 구분선
         parent.addView(View(context).apply {
             setBackgroundColor(Color.parseColor("#E5E7EB"))
         }, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1)
-        ).apply { bottomMargin = dpToPx(16); topMargin = dpToPx(8) })
+        ).apply { topMargin = dpToPx(4); bottomMargin = dpToPx(12) })
 
+        // 경고 텍스트
         parent.addView(TextView(context).apply {
             text = "딥페이크 의심 전화와 통화 중입니다.\n통화 상대와의 거래를 권장하지 않습니다."
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
@@ -400,18 +467,7 @@ class FinancialBlockOverlayManager(private val context: Context) {
             gravity = Gravity.CENTER
             setLineSpacing(dpToPx(2).toFloat(), 1f)
         }, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = dpToPx(8) })
-
-        parent.addView(TextView(context).apply {
-            text = "통화를 종료해주세요"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            setTextColor(Color.parseColor("#EF4444"))
-            gravity = Gravity.CENTER
-            typeface = Typeface.DEFAULT_BOLD
-        }, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
         ))
     }
@@ -502,7 +558,12 @@ class FinancialBlockOverlayManager(private val context: Context) {
             topMargin = (mapHeight * 0.35f).toInt()
         })
 
-        // 국가명 라벨
+        parent.addView(mapContainer, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            mapHeight
+        ).apply { bottomMargin = dpToPx(10) })
+
+        // 국가명 + 국기 (지도 아래 가운데 정렬 — 흰 박스 스타일)
         labelContainer = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -531,53 +592,7 @@ class FinancialBlockOverlayManager(private val context: Context) {
             gravity = Gravity.CENTER_VERTICAL
         })
 
-        mapContainer!!.addView(labelContainer, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            leftMargin = dpToPx(70)
-            topMargin = (mapHeight * 0.35f).toInt() + pinWrapSize - dpToPx(6)
-        })
-
-        parent.addView(mapContainer, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = dpToPx(8) })
-    }
-
-    private fun buildDetectionTypeSection(parent: LinearLayout) {
-        val detectionTypeRow = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-
-        val typeLabelTv = TextView(context).apply {
-            text = "계좌 이체 요구"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            setTextColor(Color.parseColor("#374151"))
-        }
-        detectionTypeRow.addView(typeLabelTv)
-
-        val dollarBg = FrameLayout(context).apply {
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#F3F4F6"))
-                shape = GradientDrawable.OVAL
-            }
-        }
-        val dollarTv = TextView(context).apply {
-            text = "$"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-            setTextColor(Color.parseColor("#6B7280"))
-            gravity = Gravity.CENTER
-        }
-        dollarBg.addView(dollarTv, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
-        ))
-        val dollarSize = dpToPx(32)
-        detectionTypeRow.addView(dollarBg, LinearLayout.LayoutParams(dollarSize, dollarSize).apply {
-            leftMargin = dpToPx(8)
-        })
-
-        parent.addView(detectionTypeRow, LinearLayout.LayoutParams(
+        parent.addView(labelContainer, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply {
@@ -586,111 +601,96 @@ class FinancialBlockOverlayManager(private val context: Context) {
         })
     }
 
-    // ─────────────────────────────────────────────
-    // 외부앱 컨텐츠 (금지 아이콘 + 타이틀만)
-    // ─────────────────────────────────────────────
-
-    private fun buildExternalContent(parent: LinearLayout) {
-        // 타이틀 행: 금지 아이콘(pulse) + "금융앱 접근 제한"
-        val titleRow = LinearLayout(context).apply {
+    private fun buildTagsSection(parent: LinearLayout) {
+        val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
+            // 그림자가 칩 밖으로 나오므로 클리핑 해제
             clipChildren = false
             clipToPadding = false
+            setPadding(0, dpToPx(4), 0, dpToPx(8))
         }
 
-        // 금지 아이콘 컨테이너 (pulse 원 + 🚫 아이콘)
-        val iconWrap = FrameLayout(context).apply {
-            clipChildren = false
-            clipToPadding = false
-        }
-
-        // pulse circles
-        for (i in 0..1) {
-            val pulseCircle = View(context).apply {
+        val sttTags = com.s14p21a404.shutter.presentation.service.SttTagBridge.tags.value
+        val tagLabels = if (sttTags.isNotEmpty()) sttTags else listOf("# 금융 거래", "# 개인정보 요구")
+        tagLabels.forEach { label ->
+            val chip = TextView(context).apply {
+                text = label
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextColor(Color.WHITE)
+                typeface = Typeface.DEFAULT_BOLD
+                setPadding(dpToPx(12), dpToPx(5), dpToPx(12), dpToPx(5))
                 background = GradientDrawable().apply {
-                    setColor(Color.parseColor("#80EF4444"))
-                    shape = GradientDrawable.OVAL
+                    setColor(Color.parseColor("#EF4444"))
+                    cornerRadius = dpToPx(10).toFloat()
                 }
-                alpha = 0f
+                elevation = dpToPx(5).toFloat()
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    outlineAmbientShadowColor = Color.parseColor("#EF4444")
+                    outlineSpotShadowColor = Color.parseColor("#EF4444")
+                }
             }
-            val pulseSize = dpToPx(32)
-            iconWrap.addView(pulseCircle, FrameLayout.LayoutParams(pulseSize, pulseSize).apply {
-                gravity = Gravity.CENTER
-            })
-
-            val scaleX = ObjectAnimator.ofFloat(pulseCircle, "scaleX", 1f, 2.5f).apply {
-                duration = if (i == 0) 1500L else 2000L
-                repeatCount = ValueAnimator.INFINITE
-                startDelay = (i * 300).toLong()
-            }
-            val scaleY = ObjectAnimator.ofFloat(pulseCircle, "scaleY", 1f, 2.5f).apply {
-                duration = if (i == 0) 1500L else 2000L
-                repeatCount = ValueAnimator.INFINITE
-                startDelay = (i * 300).toLong()
-            }
-            val alphaAnim = ObjectAnimator.ofFloat(pulseCircle, "alpha", 0.7f, 0f).apply {
-                duration = if (i == 0) 1500L else 2000L
-                repeatCount = ValueAnimator.INFINITE
-                startDelay = (i * 300).toLong()
-            }
-            val set = AnimatorSet().apply { playTogether(scaleX, scaleY, alphaAnim) }
-            pulseAnimators.add(set)
+            row.addView(chip, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { marginEnd = dpToPx(8) })
         }
 
-        // 금지 아이콘 원
-        val alertCircle = FrameLayout(context).apply {
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#FEE2E2"))
-                shape = GradientDrawable.OVAL
-                setStroke(dpToPx(2), Color.parseColor("#FECACA"))
-            }
-            elevation = dpToPx(2).toFloat()
-        }
-        val alertIcon = TextView(context).apply {
-            text = "🚫"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            setTextColor(Color.parseColor("#EF4444"))
-            gravity = Gravity.CENTER
-        }
-        alertCircle.addView(alertIcon, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
-        ))
-        val circleSize = dpToPx(32)
-        iconWrap.addView(alertCircle, FrameLayout.LayoutParams(circleSize, circleSize).apply {
-            gravity = Gravity.CENTER
-        })
+        // 부모도 클리핑 해제해야 그림자가 보임
+        parent.clipChildren = false
+        parent.clipToPadding = false
 
-        val iconWrapSize = dpToPx(56)
-        titleRow.addView(iconWrap, LinearLayout.LayoutParams(iconWrapSize, iconWrapSize).apply {
-            marginEnd = dpToPx(6)
-        })
-
-        // "금융앱 접근 제한" 텍스트
-        val tv = TextView(context).apply {
-            text = "금융앱 접근 제한"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
-            setTextColor(Color.parseColor("#111827"))
-            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-        }
-        titleRow.addView(tv)
-
-        parent.addView(titleRow, LinearLayout.LayoutParams(
+        parent.addView(row, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply {
             gravity = Gravity.CENTER_HORIZONTAL
-            bottomMargin = dpToPx(20)
+            bottomMargin = dpToPx(4)
         })
+    }
+
+    // ─────────────────────────────────────────────
+    // 외부앱 컨텐츠 (지도 없이 타이틀 + 카운트다운 + 태그)
+    // ─────────────────────────────────────────────
+
+    private fun buildExternalContent(parent: LinearLayout) {
+        parent.setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(20))
+
+        // 타이틀: "[앱이름] 앱에 접근 하셨나요?"
+        parent.addView(TextView(context).apply {
+            text = "${currentAppName} 앱에 접근 하셨나요?"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 21f)
+            setTextColor(Color.parseColor("#111827"))
+            typeface = Typeface.create("sans-serif-black", Typeface.BOLD)
+            gravity = Gravity.CENTER
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = dpToPx(6) })
+
+        // 카운트다운 부제목 (숫자만 빨간색, 나머지 회색, 굵게)
+        countdownTv = TextView(context).apply {
+            text = makeCountdownSpan(countdownSeconds)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+        }
+        parent.addView(countdownTv, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = dpToPx(20) })
+
+        // 태그 칩
+        buildTagsSection(parent)
 
         // 구분선
         parent.addView(View(context).apply {
             setBackgroundColor(Color.parseColor("#E5E7EB"))
         }, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1)
-        ).apply { bottomMargin = dpToPx(16) })
+        ).apply { topMargin = dpToPx(8); bottomMargin = dpToPx(12) })
 
-        // 설명 텍스트
+        // 경고 텍스트
         parent.addView(TextView(context).apply {
             text = "딥페이크 의심 전화와 통화 중입니다.\n통화 상대와의 거래를 권장하지 않습니다."
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
@@ -698,23 +698,69 @@ class FinancialBlockOverlayManager(private val context: Context) {
             gravity = Gravity.CENTER
             setLineSpacing(dpToPx(2).toFloat(), 1f)
         }, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            bottomMargin = dpToPx(8)
-        })
+        ))
+    }
 
-        parent.addView(TextView(context).apply {
-            text = "통화를 종료해주세요"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            setTextColor(Color.parseColor("#EF4444"))
-            gravity = Gravity.CENTER
-            typeface = Typeface.DEFAULT_BOLD
-        }, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { gravity = Gravity.CENTER_HORIZONTAL })
+    // ─────────────────────────────────────────────
+    // 카운트다운 SpannableString (숫자만 빨간색, 나머지 회색)
+    // ─────────────────────────────────────────────
+
+    private fun makeCountdownSpan(seconds: Int): SpannableString {
+        val full = "OnGuard가 ${seconds}초 후에 앱을 닫습니다."
+        val span = SpannableString(full)
+        val numStr = seconds.toString()
+        val start = full.indexOf(numStr)
+        val end = start + numStr.length + 1  // 숫자 + "초"
+        // 숫자 + "초" 빨간색
+        span.setSpan(ForegroundColorSpan(Color.parseColor("#EF4444")), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        // 나머지 회색
+        span.setSpan(ForegroundColorSpan(Color.parseColor("#9CA3AF")), 0, start, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        span.setSpan(ForegroundColorSpan(Color.parseColor("#9CA3AF")), end, full.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        return span
+    }
+
+    // ─────────────────────────────────────────────
+    // 하단 다크 바 ("악성앱이 있는지 검사하고 있어요")
+    // ─────────────────────────────────────────────
+
+    private fun buildBottomBar(): View {
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setBackgroundColor(Color.parseColor("#1C1C1E"))
+            setPadding(dpToPx(16), dpToPx(12), dpToPx(16), dpToPx(12))
+
+            // MA 로고 원
+            val logoCircle = FrameLayout(context).apply {
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#3A3A3C"))
+                    shape = GradientDrawable.OVAL
+                }
+            }
+            val logoTv = TextView(context).apply {
+                text = "MA"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 9f)
+                setTextColor(Color.WHITE)
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+            }
+            val logoSize = dpToPx(28)
+            logoCircle.addView(logoTv, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            ))
+            addView(logoCircle, LinearLayout.LayoutParams(logoSize, logoSize).apply {
+                marginEnd = dpToPx(10)
+            })
+
+            addView(TextView(context).apply {
+                text = "악성앱이 있는지 검사하고 있어요"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setTextColor(Color.WHITE)
+            })
+        }
     }
 
     // ─────────────────────────────────────────────
@@ -852,6 +898,66 @@ class FinancialBlockOverlayManager(private val context: Context) {
 
         /** 시스템 버튼 감지 후 포그라운드 앱 재확인까지 대기 시간 */
         private const val BUTTON_DISMISS_DELAY_MS = 50L
+
+        /**
+         * 패키지명 → 표시할 한국어 앱 이름.
+         * PackageManager.getApplicationLabel() 보다 이 맵을 우선 사용한다.
+         */
+        val APP_NAME_MAP = mapOf(
+            // ── 은행 ──
+            "com.kbstar.kbbank" to "국민은행",
+            "com.shinhan.sbanking" to "신한은행",
+            "com.wooribank.smart.npib" to "우리은행",
+            "com.kebhana.hanapush" to "하나은행",
+            "nh.smart.banking" to "농협은행",
+            "com.ibk.neobanking" to "기업은행",
+            "com.kdb.talk" to "산업은행",
+            "com.epost.psf.sdsi" to "우체국",
+            "com.sc.danb" to "SC제일은행",
+            "com.citi.android.citibank.kr" to "씨티은행",
+            "com.bnk.busanbank" to "부산은행",
+            "com.bnk.cbank" to "경남은행",
+            "com.knb.psb" to "광주은행",
+            "com.jeonbukbank.jbm" to "전북은행",
+            "kr.co.kwangju.bank" to "광주은행",
+            "com.jeju.jbank" to "제주은행",
+            "com.suhyup.mbanking" to "수협은행",
+            // ── 인터넷/디지털 뱅크 ──
+            "com.kakaobank.channel" to "카카오뱅크",
+            "com.kbanknow" to "케이뱅크",
+            "viva.republica.toss" to "토스",
+            // ── 증권 ──
+            "com.kiwoom.hero" to "키움증권",
+            "com.kiwoom.herots" to "키움증권",
+            "com.samsung.android.samsungpop" to "삼성증권",
+            "com.mirae.mstock" to "미래에셋증권",
+            "com.daishin.cybos" to "대신증권",
+            "com.nhqv.namuh" to "NH투자증권",
+            "com.shinhan.smartstock" to "신한투자증권",
+            "com.kbsec.mstocku" to "KB증권",
+            "com.hanwha.investment" to "한화투자증권",
+            "com.hana.fnc.securities" to "하나증권",
+            // ── 보험 ──
+            "com.samsung.life.samsunglife" to "삼성생명",
+            "kr.co.hanwhalife" to "한화생명",
+            "com.kyobo.kcpi" to "교보생명",
+            "com.samsung.android.samsungfire" to "삼성화재",
+            "com.dbins.smart" to "DB손해보험",
+            "com.kbinsure.smart" to "KB손해보험",
+            // ── 카드 ──
+            "com.shinhancard.smartshinhan" to "신한카드",
+            "com.samsung.android.samsungcard" to "삼성카드",
+            "com.kbcard.cxh.appcard" to "KB국민카드",
+            "com.hyundaicard.appcard" to "현대카드",
+            "com.lottecard.app" to "롯데카드",
+            "com.wooricard.smartapp" to "우리카드",
+            "com.hanacard.smart" to "하나카드",
+            "kr.co.bccard.bcsmartpay" to "BC카드",
+            // ── 간편결제/핀테크 ──
+            "com.kakaopay.app" to "카카오페이",
+            "com.nhnent.payapp" to "페이코",
+            "com.nhn.android.search" to "네이버페이",
+        )
 
         /**
          * 금융 앱 패키지 목록 (VideoCallRepositoryImpl과 동일).

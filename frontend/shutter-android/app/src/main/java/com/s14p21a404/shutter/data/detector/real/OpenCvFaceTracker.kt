@@ -104,11 +104,17 @@ class OpenCvFaceTracker(private val context: Context) : DeepfakeDetector {
             if (faceArray.isNotEmpty()) {
                 val largestFace = faceArray.maxByOrNull { it.width * it.height }
                 if (largestFace != null) {
-                    opencvRoi = FloatArray(4)
-                    opencvRoi[0] = largestFace.x.toFloat() / width
-                    opencvRoi[1] = largestFace.y.toFloat() / height
-                    opencvRoi[2] = (largestFace.x + largestFace.width).toFloat() / width
-                    opencvRoi[3] = (largestFace.y + largestFace.height).toFloat() / height
+                    val faceWidthRatio = largestFace.width.toFloat() / width
+                    val faceHeightRatio = largestFace.height.toFloat() / height
+                    
+                    // 얼굴이 프레임 가로의 15%, 세로의 10% 이상일 때만 박스를 침 (너무 작은 얼굴 무시)
+                    if (faceWidthRatio >= 0.15f && faceHeightRatio >= 0.10f) {
+                        opencvRoi = FloatArray(4)
+                        opencvRoi[0] = largestFace.x.toFloat() / width
+                        opencvRoi[1] = largestFace.y.toFloat() / height
+                        opencvRoi[2] = (largestFace.x + largestFace.width).toFloat() / width
+                        opencvRoi[3] = (largestFace.y + largestFace.height).toFloat() / height
+                    }
                 }
             }
             
@@ -124,6 +130,15 @@ class OpenCvFaceTracker(private val context: Context) : DeepfakeDetector {
                     rawResultJson = "OpenCV tracking"
                 )
                 onFrameResultCallback?.invoke(quickResult)
+            } else {
+                // 얼굴이 검출되지 않았거나 기준보다 작으면 BBox 제거를 위해 빈 결과 전달
+                val emptyResult = DeepfakeDetectionResult(
+                    detected = true, // 오버레이 유지를 위해 true 유지
+                    fakeProb = 0f,
+                    roi = null,
+                    rawResultJson = "OpenCV tracking - No Face"
+                )
+                onFrameResultCallback?.invoke(emptyResult)
             }
         } catch (e: Exception) {
             Log.e(TAG, "OpenCV face detection failed", e)

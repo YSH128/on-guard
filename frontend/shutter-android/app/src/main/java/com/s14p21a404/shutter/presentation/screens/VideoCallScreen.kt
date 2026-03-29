@@ -220,6 +220,7 @@ fun VideoCallScreen(
         
         whisperHelper.onAnalysisResult = { gmsResult ->
             warningOverlayManager.updateAnalysisResult(gmsResult)
+            com.s14p21a404.shutter.presentation.service.SttTagBridge.update(gmsResult)
         }
         
         whisperHelper.initModel()
@@ -228,6 +229,7 @@ fun VideoCallScreen(
         onDispose {
             whisperHelper.onResult = null
             whisperHelper.onAnalysisResult = null
+            com.s14p21a404.shutter.presentation.service.SttTagBridge.clear()
         }
     }
 
