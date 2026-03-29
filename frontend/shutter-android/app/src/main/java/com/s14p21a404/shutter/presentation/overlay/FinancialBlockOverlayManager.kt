@@ -611,7 +611,9 @@ class FinancialBlockOverlayManager(private val context: Context) {
             setPadding(0, dpToPx(4), 0, dpToPx(8))
         }
 
-        listOf("# 금융 거래", "# 개인정보 요구").forEach { label ->
+        val sttTags = com.s14p21a404.shutter.presentation.service.SttTagBridge.tags.value
+        val tagLabels = if (sttTags.isNotEmpty()) sttTags else listOf("# 금융 거래", "# 개인정보 요구")
+        tagLabels.forEach { label ->
             val chip = TextView(context).apply {
                 text = label
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
