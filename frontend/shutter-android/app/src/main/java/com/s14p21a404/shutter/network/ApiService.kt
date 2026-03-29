@@ -233,6 +233,27 @@ data class CriminalLocationReportBody(
     val lng: Double,
 )
 
+// ── 통화 세션 GPS ──────────────────────────────────────────────────────────────
+
+/** 통화 연결 시 내 GPS를 세션 전용 Redis에 저장하는 요청 Body */
+data class GpsSessionRequestBody(
+    @SerializedName("channel_name") val channelName: String,
+    val lat: Double,
+    val lng: Double,
+)
+
+/** 딥페이크 감지 시 상대방 GPS 조회 응답에서 data 필드 */
+data class GpsSessionData(
+    val country: String,
+)
+
+/** 통화 세션 상대방 위치 조회 응답 */
+data class GpsSessionResponse(
+    val success: Boolean,
+    val message: String,
+    val data: GpsSessionData,
+)
+
 data class MessageResponse(
     val success: Boolean,
     val message: String,
@@ -294,4 +315,17 @@ interface ApiService {
 
     @POST("api/v1/location/criminal-report")
     suspend fun reportCriminalLocation(@Body request: CriminalLocationReportBody): MessageResponse
+
+    // ── 통화 세션 GPS ──────────────────────────────────────────────────────────
+
+    /** 통화 연결 시 내 GPS를 세션 전용 Redis에 1회 저장 */
+    @POST("api/v1/gps/session")
+    suspend fun postGpsSession(@Body request: GpsSessionRequestBody): MessageResponse
+
+    /** 딥페이크 감지 시 상대방의 저장된 세션 GPS → 국가명 반환 */
+    @GET("api/v1/gps/session/{channelName}")
+    suspend fun getSessionOpponentGps(
+        @Path("channelName") channelName: String,
+        @Query("opponentKakaoId") opponentKakaoId: Long,
+    ): GpsSessionResponse
 }

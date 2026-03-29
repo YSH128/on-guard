@@ -180,16 +180,37 @@ fun VideoCallScreen(
             android.util.Log.d("VideoCallScreen", "🛡️ 인앱 영상통화 활성화 → 딥페이크 감지 시작")
             videoCallRepository.setInAppCallActive(true)
             VideoCallDetectService.onInAppCallEnd = { endCall() }
-            // 딥페이크 감지 시 상대방 GPS 자동 요청
+
+            // 통화 연결 시 내 GPS를 세션 Redis에 1회 저장 (TTL 1시간)
+            // 상대방이 딥페이크 감지 시 이 데이터를 꺼내 국가 확인에 사용
+            scope.launch {
+                val location = getLastKnownSessionLocation(context)
+                if (location != null) {
+                    criminalLocationApi.saveSessionGps(channelId, location.first, location.second)
+                        .onSuccess { android.util.Log.d("SessionGPS", "세션 GPS 저장 완료 — channel: $channelId") }
+                        .onFailure { e -> android.util.Log.w("SessionGPS", "세션 GPS 저장 실패: ${e.message}") }
+                } else {
+                    android.util.Log.w("SessionGPS", "위치 정보 없음 — 세션 GPS 저장 생략")
+                }
+            }
+
+            // 딥페이크 감지 시 세션 GPS 조회로 상대방 국가 확인 (FCM 불필요)
+            val overlayManager = ServiceLocator.getInstance(context).warningOverlayManager
+            val financialBlockManager = ServiceLocator.getInstance(context).financialBlockOverlayManager
             VideoCallDetectService.onInAppDeepfakeDetected = {
                 if (!isRequestingLocation && opponentKakaoId != 0L) {
                     isRequestingLocation = true
-                    android.util.Log.d("CriminalLocation", "딥페이크 감지 → 위치 자동 요청 — opponentKakaoId: $opponentKakaoId")
+                    android.util.Log.d("CriminalLocation", "딥페이크 감지 → 세션 GPS 조회 — channel: $channelId, opponentKakaoId: $opponentKakaoId")
                     scope.launch {
-                        criminalLocationApi.requestLocation(opponentKakaoId)
-                            .onSuccess { android.util.Log.d("CriminalLocation", "위치 요청 API 성공") }
+                        criminalLocationApi.getOpponentSessionCountry(channelId, opponentKakaoId)
+                            .onSuccess { country ->
+                                android.util.Log.d("CriminalLocation", "세션 GPS 조회 성공 — country: $country")
+                                overlayManager.updateLocation(country, null, null)
+                                financialBlockManager.updateCountry(country)
+                                CriminalLocationBridge.onLocationReceived?.invoke(country, null, null)
+                            }
                             .onFailure { e ->
-                                android.util.Log.e("CriminalLocation", "위치 요청 API 실패: ${e.message}", e)
+                                android.util.Log.e("CriminalLocation", "세션 GPS 조회 실패: ${e.message}", e)
                                 isRequestingLocation = false
                             }
                     }
@@ -874,6 +895,37 @@ private fun formatDuration(seconds: Int): String {
     val mins = seconds / 60
     val secs = seconds % 60
     return "%02d:%02d".format(mins, secs)
+}
+
+/**
+ * 통화 연결 시 세션 GPS 저장을 위해 캐시된 위치를 조회.
+ * 5분 이내 캐시 우선 사용 (나라 특정 목적이므로 높은 정확도 불필요).
+ * 반환값: Pair(lat, lng) 또는 null (권한 없음 / 캐시 없음)
+ */
+@android.annotation.SuppressLint("MissingPermission")
+private fun getLastKnownSessionLocation(context: android.content.Context): Pair<Double, Double>? {
+    if (androidx.core.content.ContextCompat.checkSelfPermission(
+            context, android.Manifest.permission.ACCESS_FINE_LOCATION
+        ) != android.content.pm.PackageManager.PERMISSION_GRANTED &&
+        androidx.core.content.ContextCompat.checkSelfPermission(
+            context, android.Manifest.permission.ACCESS_COARSE_LOCATION
+        ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+    ) {
+        android.util.Log.w("SessionGPS", "위치 권한 없음 — 세션 GPS 저장 생략")
+        return null
+    }
+    val CACHE_TTL_MS = 5 * 60 * 1000L // 5분
+    val locationManager = context.getSystemService(android.content.Context.LOCATION_SERVICE)
+            as android.location.LocationManager
+    return listOf(
+        android.location.LocationManager.NETWORK_PROVIDER,
+        android.location.LocationManager.GPS_PROVIDER
+    )
+        .mapNotNull { provider ->
+            runCatching { locationManager.getLastKnownLocation(provider) }.getOrNull()
+        }
+        .firstOrNull { System.currentTimeMillis() - it.time < CACHE_TTL_MS }
+        ?.let { Pair(it.latitude, it.longitude) }
 }
 
 /*

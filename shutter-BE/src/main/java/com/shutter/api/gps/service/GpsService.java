@@ -6,12 +6,15 @@ import com.shutter.api.global.exception.BusinessException;
 import com.shutter.api.global.exception.ErrorCode;
 import com.shutter.api.gps.dto.request.GpsRequest;
 import com.shutter.api.gps.dto.request.GpsSharingToggleRequest;
+import com.shutter.api.gps.dto.request.GpsSessionRequest;
 import com.shutter.api.gps.dto.response.GpsLocationResponse;
 import com.shutter.api.gps.dto.response.GpsResponse;
 import com.shutter.api.gps.dto.response.GpsSharingToggleResponse;
+import com.shutter.api.gps.dto.response.GpsSessionResponse;
 import com.shutter.api.gps.dto.response.LocationExpiredDto;
 import com.shutter.api.gps.dto.response.LocationSharingOnDto;
 import com.shutter.api.gps.dto.response.LocationUpdateDto;
+import com.shutter.api.location.service.GeocodingService;
 import com.shutter.api.notification.client.KakaoPushClient;
 import com.shutter.api.notification.domain.NotificationEventType;
 import com.shutter.api.user.domain.User;
@@ -42,9 +45,14 @@ public class GpsService {
     private final ObjectMapper objectMapper;
     private final SimpMessagingTemplate messagingTemplate;
     private final KakaoPushClient kakaoPushClient;
+    private final GeocodingService geocodingService;
 
     private static final String GPS_KEY_PREFIX = "location:";
     private static final long GPS_TTL_SECONDS = 60; // 1분
+
+    /** 통화 세션 전용 GPS 키: call_location:{channelName}:{userId} */
+    private static final String CALL_GPS_KEY_PREFIX = "call_location:";
+    private static final long CALL_GPS_TTL_SECONDS = 60 * 60; // 1시간
 
     /**
      * 피보호자(WARD)의 GPS 위치 정보를 Redis에 저장
@@ -197,5 +205,63 @@ public class GpsService {
         }
 
         return new GpsSharingToggleResponse(user.getGpsSharing());
+    }
+
+    /**
+     * 통화 연결 시 현재 유저의 GPS를 통화 세션 전용 Redis 키에 저장.
+     * 키: call_location:{channelName}:{userId}, TTL: 1시간
+     */
+    public void saveSessionLocation(Long userId, GpsSessionRequest request) {
+        String redisKey = CALL_GPS_KEY_PREFIX + request.getChannelName() + ":" + userId;
+        try {
+            Map<String, Object> locationData = new HashMap<>();
+            locationData.put("lat", request.getLat());
+            locationData.put("lng", request.getLng());
+            locationData.put("saved_at", LocalDateTime.now().toString());
+
+            String value = objectMapper.writeValueAsString(locationData);
+            redisTemplate.opsForValue().set(redisKey, value, CALL_GPS_TTL_SECONDS, TimeUnit.SECONDS);
+            log.debug("Saved session GPS for user {} in channel {}", userId, request.getChannelName());
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize session GPS data for user {}", userId, e);
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * 딥페이크 감지 시 상대방의 통화 세션 GPS를 조회하여 국가명으로 변환 후 반환.
+     * 데이터 없으면 "알 수 없는 위치" 반환 (예외 발생 안 함 — Soft Fail)
+     */
+    public GpsSessionResponse getSessionOpponentCountry(String channelName, Long opponentKakaoId) {
+        User opponent = userRepository.findByKakaoId(opponentKakaoId).orElse(null);
+        if (opponent == null) {
+            log.warn("getSessionOpponentCountry: opponentKakaoId={} not found in DB", opponentKakaoId);
+            return new GpsSessionResponse("알 수 없는 위치");
+        }
+
+        String redisKey = CALL_GPS_KEY_PREFIX + channelName + ":" + opponent.getId();
+        String jsonValue = redisTemplate.opsForValue().get(redisKey);
+
+        if (jsonValue == null) {
+            log.warn("getSessionOpponentCountry: no session GPS found - channel={}, opponentKakaoId={}",
+                    channelName, opponentKakaoId);
+            return new GpsSessionResponse("알 수 없는 위치");
+        }
+
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> locationData = objectMapper.readValue(jsonValue, Map.class);
+            double lat = Double.parseDouble(locationData.get("lat").toString());
+            double lng = Double.parseDouble(locationData.get("lng").toString());
+
+            String country = geocodingService.getCountryName(lat, lng);
+            log.info("Session GPS resolved: channel={}, opponentKakaoId={} -> country={}",
+                    channelName, opponentKakaoId, country);
+            return new GpsSessionResponse(country);
+        } catch (Exception e) {
+            log.error("Failed to parse session GPS - channel={}, opponentKakaoId={}",
+                    channelName, opponentKakaoId, e);
+            return new GpsSessionResponse("알 수 없는 위치");
+        }
     }
 }
