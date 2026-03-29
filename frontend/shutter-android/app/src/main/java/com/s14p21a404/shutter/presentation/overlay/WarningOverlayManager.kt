@@ -1,6 +1,9 @@
 package com.s14p21a404.shutter.presentation.overlay
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.os.Handler
@@ -42,8 +45,7 @@ class WarningOverlayManager(
     private var bottomSheetView: WarningBottomSheetView? = null
 
 
-    // 푸쉬 알림 pill 뷰 참조
-    private val notificationPillViews = mutableListOf<NotificationPillView>()
+    // NotificationPillView 제거됨 — 모든 보호 조치 상태는 WarningBottomSheetView 내부에서 처리
 
     /** 오버레이 활성화 여부 — false이면 show 호출을 무시한다. */
     @Volatile
@@ -76,6 +78,50 @@ class WarningOverlayManager(
 
     /** 콜백: 재탐지 */
     var onRescan: (() -> Unit)? = null
+
+    /** 홈/최근앱 버튼 감지용 BroadcastReceiver */
+    private var closeSystemDialogsReceiver: BroadcastReceiver? = null
+
+    // ─────────────────────────────────────────────
+    // 홈 버튼 감지
+    // ─────────────────────────────────────────────
+
+    private fun registerSystemButtonReceiver() {
+        if (closeSystemDialogsReceiver != null) return
+
+        closeSystemDialogsReceiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context?, i: Intent?) {
+                if (i?.action == Intent.ACTION_CLOSE_SYSTEM_DIALOGS) {
+                    Log.d("WarningOverlay", "🏠 홈/최근앱 버튼 감지 → 오버레이 숨김 (상태 보존)")
+                    hideOverlaysKeepState()
+                }
+            }
+        }
+        try {
+            context.registerReceiver(
+                closeSystemDialogsReceiver,
+                IntentFilter(Intent.ACTION_CLOSE_SYSTEM_DIALOGS),
+                Context.RECEIVER_EXPORTED
+            )
+        } catch (_: Exception) {
+            try {
+                @Suppress("UnspecifiedRegisterReceiverFlag")
+                context.registerReceiver(
+                    closeSystemDialogsReceiver,
+                    IntentFilter(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
+                )
+            } catch (e2: Exception) {
+                Log.e("WarningOverlay", "리시버 등록 실패", e2)
+            }
+        }
+    }
+
+    private fun unregisterSystemButtonReceiver() {
+        closeSystemDialogsReceiver?.let {
+            try { context.unregisterReceiver(it) } catch (_: Exception) {}
+        }
+        closeSystemDialogsReceiver = null
+    }
 
     // ─────────────────────────────────────────────
     // Public API
@@ -120,7 +166,7 @@ class WarningOverlayManager(
             Log.w(TAG, "오버레이 권한 없음 — 경고 표시 불가")
             return
         }
-        lastResult?.let { showDetectionOverlays(it) }
+        lastResult?.let { showDetectionOverlays(it, restoredFromCache = true) }
     }
 
     fun dismissWarning() {
@@ -145,9 +191,8 @@ class WarningOverlayManager(
             removeOverlayView(it)
         }
         bottomSheetView = null
-        // Notification pills
-        notificationPillViews.forEach { removeOverlayView(it) }
-        notificationPillViews.clear()
+        // 홈 버튼 리시버 해제
+        unregisterSystemButtonReceiver()
         handler.removeCallbacksAndMessages(null)
         // lastResult, bottomSheetShownForSession, receivedCountryName 등은 유지
         Log.d(TAG, "오버레이 뷰 숨김 (세션 상태 보존)")
@@ -165,7 +210,7 @@ class WarningOverlayManager(
 
     /** 하위 호환용 show() — 기존 코드가 호출하는 경우 대비 */
     fun show() {
-        lastResult?.let { showDetectionOverlays(it) } ?: showScanningPill()
+        lastResult?.let { showDetectionOverlays(it, restoredFromCache = false) } ?: showScanningPill()
     }
 
     fun dismiss() {
@@ -173,7 +218,7 @@ class WarningOverlayManager(
     }
 
     fun isShowing(): Boolean =
-        scanningPillView != null || roiBoundingBoxView != null || bottomSheetView != null || notificationPillViews.isNotEmpty()
+        scanningPillView != null || roiBoundingBoxView != null || bottomSheetView != null
 
     /** 기존 API 호환용. 새 UI에서는 face preview를 바텀시트 내에 포함하지 않으므로 no-op. */
     fun updateFacePreview(bitmap: Bitmap?) {
@@ -190,7 +235,7 @@ class WarningOverlayManager(
         handler.post {
             bottomSheetView?.setAnalysisResult(result)
         }
-        Log.d(TAG, "GMS 결과 오버레이 라우팅 완료: $result")
+        Log.d(TAG, "[WarningBottomSheet] GMS 분석 결과 수신: $result (금융앱차단X, 영상통화 분석용)")
     }
 
     /**
@@ -254,7 +299,7 @@ class WarningOverlayManager(
     // 2) ROI Bounding Box + 3) Bottom Sheet
     // ─────────────────────────────────────────────
 
-    private fun showDetectionOverlays(result: DeepfakeDetectionResult) {
+    private fun showDetectionOverlays(result: DeepfakeDetectionResult, restoredFromCache: Boolean = false) {
         if (!enabled) return
         if (!Settings.canDrawOverlays(context)) return
 
@@ -293,13 +338,18 @@ class WarningOverlayManager(
 
         // ── 2. Warning Bottom Sheet (500ms 지연 후 표시) ──
         handler.postDelayed({
-            if (!enabled) return@postDelayed
+            Log.d(TAG, "▶▶▶ 바텀시트 생성 시도 (50ms 후)")
+            if (!enabled) {
+                Log.d(TAG, "  enabled=false → 스킵")
+                return@postDelayed
+            }
             // 이미 바텀시트가 존재하면 중복 생성 방지
             if (bottomSheetView != null) {
-                Log.d(TAG, "바텀시트 이미 존재 → 중복 생성 스킵")
+                Log.d(TAG, "  바텀시트 이미 존재 → 중복 생성 스킵")
                 return@postDelayed
             }
             val isInApp = videoCallRepository?.isInAppCallActive() ?: false
+            Log.d(TAG, "  isInApp=$isInApp, receivedCountryName=$receivedCountryName")
             val sheet = WarningBottomSheetView(
                 context = context,
                 isInApp = isInApp,
@@ -315,7 +365,8 @@ class WarningOverlayManager(
                     Log.d(TAG, "닫기 버튼 클릭 → 바텀시트+dim만 닫기, ROI box는 유지")
                     dismissBottomSheetAndDim()
                 },
-                analysisResult = latestGmsResult
+                analysisResult = latestGmsResult,
+                isRestoredFromCache = restoredFromCache
             )
             addOverlayView(
                 view = sheet,
@@ -324,73 +375,26 @@ class WarningOverlayManager(
                 gravity = Gravity.BOTTOM or Gravity.START,
                 touchable = true
             )
+            Log.d(TAG, "  sheet 오버레이에 추가 완료 → startEntranceAnimation() 호출")
             sheet.startEntranceAnimation()
             // 이미 수신된 국가명/좌표가 있으면 바텀시트에 반영
-            receivedCountryName?.let { country -> sheet.updateCountry(country) }
+            if (receivedCountryName != null) {
+                Log.d(TAG, "  → 캐시된 국가명 '$receivedCountryName' 바텀시트에 전달")
+                sheet.updateCountry(receivedCountryName!!)
+            }
             val lat = receivedLat
             val lng = receivedLng
-            if (lat != null && lng != null) sheet.updatePinPosition(lat, lng)
+            if (lat != null && lng != null) {
+                Log.d(TAG, "  → 캐시된 좌표 ($lat, $lng) 바텀시트에 전달")
+                sheet.updatePinPosition(lat, lng)
+            }
             bottomSheetView = sheet
-            Log.d(TAG, "바텀시트 표시")
-
-            // ── 푸쉬 알림 pills (바텀시트 등장 후 표시) ──
-            showNotificationPills()
+            Log.d(TAG, "  bottomSheetView 할당 완료: $sheet")
+            // 홈 버튼 감지 등록
+            registerSystemButtonReceiver()
         }, 50)
     }
 
-    // ─────────────────────────────────────────────
-    // 4) Push Notification Pills
-    // ─────────────────────────────────────────────
-
-    /**
-     * 레퍼런스 기반 푸쉬 알림 pill 순차 표시:
-     * 1) "보호자 카톡 알림 완료" (0ms 딜레이)
-     * 2) "GPS 위치 공유 완료" (500ms 딜레이)
-     * 3) "금융앱 접근 차단 활성화" (1000ms 딜레이)
-     *
-     * 각 pill은 우측 상단에서 슬라이드 인 → 3.5초 유지 → 페이드 아웃 후 자동 제거.
-     */
-    private fun showNotificationPills() {
-        if (!enabled) return
-        if (!Settings.canDrawOverlays(context)) return
-
-        val types = listOf(
-            NotificationPillView.Type.KAKAO,
-            NotificationPillView.Type.GPS,
-            NotificationPillView.Type.FINANCE
-        )
-
-        types.forEachIndexed { index, type ->
-            handler.postDelayed({
-                if (!enabled) return@postDelayed
-                val pillView = NotificationPillView(context, type)
-
-                // 각 pill은 이전 pill 아래에 배치 (겹치지 않도록 yOffset 조절)
-                addOverlayView(
-                    view = pillView,
-                    width = WindowManager.LayoutParams.WRAP_CONTENT,
-                    height = WindowManager.LayoutParams.WRAP_CONTENT,
-                    gravity = Gravity.TOP or Gravity.END,
-                    touchable = false,
-                    xOffset = dpToPx(12),
-                    yOffset = dpToPx(80) + dpToPx(index * 44) // 각 pill 사이 간격
-                )
-                notificationPillViews.add(pillView)
-
-                pillView.startSlideInFadeOut {
-                    // 애니메이션 종료 후 자동 제거
-                    removeOverlayView(pillView)
-                    notificationPillViews.remove(pillView)
-                }
-                Log.d(TAG, "알림 pill 표시: $type")
-            }, (index * 500).toLong())
-        }
-    }
-
-    private fun dismissNotificationPills() {
-        notificationPillViews.forEach { removeOverlayView(it) }
-        notificationPillViews.clear()
-    }
 
     /**
      * ROI bounding box만 업데이트한다.
@@ -444,13 +448,35 @@ class WarningOverlayManager(
     fun updateRoiRealtime(result: DeepfakeDetectionResult) {
         if (!enabled || !result.hasRoi) return
 
-        // 이미 ROI 박스가 떠 있는 상태라면 위치만 즉시 업데이트
-        roiBoundingBoxView?.let { view ->
-            view.setRoi(
+        // lastResult의 ROI 값도 실시간으로 업데이트 (복원 시 최신 위치 사용)
+        lastResult = lastResult?.copy(roi = result.roi) ?: result
+
+        // ROI 박스가 있으면 위치 업데이트, 없으면 새로 생성
+        val roiView = roiBoundingBoxView
+        if (roiView != null) {
+            roiView.setRoi(
                 result.roiMinX, result.roiMinY,
                 result.roiMaxX, result.roiMaxY,
                 result.fakeProb * 100f
             )
+        } else if (bottomSheetShownForSession && Settings.canDrawOverlays(context)) {
+            // ROI 박스가 없지만 딥페이크 감지 세션 중인 경우 → ROI 박스 생성
+            val newRoiView = RoiBoundingBoxView(context)
+            addOverlayView(
+                view = newRoiView,
+                width = WindowManager.LayoutParams.MATCH_PARENT,
+                height = WindowManager.LayoutParams.MATCH_PARENT,
+                gravity = Gravity.TOP or Gravity.START,
+                touchable = false
+            )
+            newRoiView.setRoi(
+                result.roiMinX, result.roiMinY,
+                result.roiMaxX, result.roiMaxY,
+                result.fakeProb * 100f
+            )
+            newRoiView.startAnimations()
+            roiBoundingBoxView = newRoiView
+            Log.d(TAG, "ROI 박스 실시간 생성: roi=${result.roi?.contentToString()}")
         }
     }
 
@@ -487,7 +513,7 @@ class WarningOverlayManager(
     fun dismissAll() {
         dismissScanningPill()
         dismissDetectionOverlays()
-        dismissNotificationPills()
+        unregisterSystemButtonReceiver()
         handler.removeCallbacksAndMessages(null)
         lastResult = null
         bottomSheetShownForSession = false
@@ -503,16 +529,28 @@ class WarningOverlayManager(
      * 아직 표시되지 않았으면 저장해두었다가 바텀시트 생성 시 반영한다.
      */
     fun updateLocation(country: String, lat: Double? = null, lng: Double? = null) {
+        val timestamp = System.currentTimeMillis()
+        Log.d(TAG, "══════════════════════════════════════════════════════════")
+        Log.d(TAG, "▶▶▶ updateLocation() 호출됨 [$timestamp]")
+        Log.d(TAG, "  country=$country, lat=$lat, lng=$lng")
+        Log.d(TAG, "  bottomSheetView=${bottomSheetView != null}")
         receivedCountryName = country
         receivedLat = lat
         receivedLng = lng
         handler.post {
-            bottomSheetView?.updateCountry(country)
-            if (lat != null && lng != null) {
-                bottomSheetView?.updatePinPosition(lat, lng)
+            Log.d(TAG, "  [handler.post 내부 ${System.currentTimeMillis()}] bottomSheetView=${bottomSheetView != null}")
+            if (bottomSheetView != null) {
+                Log.d(TAG, "  → bottomSheetView.updateCountry('$country') 호출")
+                bottomSheetView?.updateCountry(country)
+                if (lat != null && lng != null) {
+                    Log.d(TAG, "  → bottomSheetView.updatePinPosition($lat, $lng) 호출")
+                    bottomSheetView?.updatePinPosition(lat, lng)
+                }
+                Log.d(TAG, "  → 업데이트 완료")
+            } else {
+                Log.d(TAG, "  → bottomSheetView=null → 저장만 해둠 (receivedCountryName=$receivedCountryName)")
             }
         }
-        Log.d(TAG, "위치 업데이트: $country lat=$lat lng=$lng")
     }
 
     // ─────────────────────────────────────────────

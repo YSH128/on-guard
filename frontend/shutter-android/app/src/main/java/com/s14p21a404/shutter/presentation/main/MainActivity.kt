@@ -49,6 +49,20 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        // ── 키해시 출력 (디버그용) ──
+        try {
+            val info = packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+            val signings = info.signingInfo?.apkContentsSigners
+            signings?.forEach { sig ->
+                val md = java.security.MessageDigest.getInstance("SHA")
+                md.update(sig.toByteArray())
+                val keyHash = android.util.Base64.encodeToString(md.digest(), android.util.Base64.NO_WRAP)
+                Log.d("KeyHash", "키해시: $keyHash")
+            }
+        } catch (e: Exception) {
+            Log.e("KeyHash", "키해시 가져오기 실패", e)
+        }
+
         handleDeepLinkIntent(intent)
 
         setContent {
