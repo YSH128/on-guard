@@ -293,7 +293,7 @@ class ShutterFirebaseMessagingService : FirebaseMessagingService() {
 
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Shutter 딥페이크 알림",
+            "OnGuard 딥페이크 알림",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = "딥페이크 감지 시 보호자에게 전달되는 긴급 알림"
