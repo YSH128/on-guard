@@ -15,7 +15,7 @@
 | 모듈 | 링크 |
 |------|------|
 | Android 앱 (Frontend) | [frontend/shutter-android/README.md](frontend/shutter-android/README.md) |
-| 온디바이스 AI 모델 | [frontend/shutter-android/app/src/main/cpp/AI_README.md](frontend/shutter-android/app/src/main/cpp/AI_README.md) |
+| 온디바이스 AI 모델 | [frontend/shutter-android/app/src/main/cpp/AI_README.md](frontend/shutter-android/app/src/main/cpp/README.md) |
 | 딥페이크 발신자 시뮬레이터 (Demo) | [frontend/shutter-android/demo/README.md](frontend/shutter-android/demo/README.md) |
 | 백엔드 서버 (Backend) | [shutter-BE/README.md](shutter-BE/README.md) |
 | 포팅 매뉴얼 | [exec/포팅매뉴얼.md](exec/포팅매뉴얼.md) |
