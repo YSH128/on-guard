@@ -68,7 +68,7 @@ private fun TimelineEntry.toUiItems(baseIndex: Int): List<TimelineUiItem> {
                 type = "alert",
                 title = "높은 위험 감지",
                 description = "AI 딥페이크 감지로 자동 알림이 발송되었습니다.",
-                analysisTag = "# 대화분석유형",
+                analysisTag = "#금융거래",
             ),
             TimelineUiItem(
                 id = baseIndex * 10 + 1,
