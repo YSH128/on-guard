@@ -10,29 +10,42 @@
 
 ---
 
+## Background
+
+스마트폰 영상통화가 일상화되면서 **생성형 AI 기반 딥페이크** 기술을 악용한 보이스피싱 범죄가 급증하고 있습니다. 공격자는 지인의 얼굴을 실시간으로 합성하여 영상통화를 시도하며, 피해자 입장에서는 영상을 보고도 가짜임을 인지하기가 사실상 불가능합니다.
+
+| 문제 | OnGuard의 해결 방법 |
+|------|---------------------|
+| 영상통화 중 딥페이크를 실시간으로 감지할 수 없음 | 온디바이스 AI 모델(ForensicAdapter)로 통화 화면을 실시간 분석, 이상 감지 즉시 경고 오버레이 표시 |
+| 딥페이크 감지 시 보호자에게 알릴 수단 없음 | 감지 즉시 등록된 보호자에게 FCM 푸시 알림 + GPS 위치 자동 공유 |
+| 통화 상대방의 실제 위치 확인 불가 | 상대방 IP 기반 국가 위치를 지도에 시각화하여 표시 |
+| 통화 중 대화 내용 실시간 분석 도구 없음 | 온디바이스 Whisper STT + GPT-4o-mini 위험 키워드 자동 태깅 |
+| 피해 발생 후 대응 수단 부재 | 금융 거래 차단 가이드 오버레이, 최근 감지 기록 타임라인 제공 |
+
+---
+
 ## Sub-module README
 
 | 모듈 | 링크 |
 |------|------|
 | Android 앱 (Frontend) | [frontend/shutter-android/README.md](frontend/shutter-android/README.md) |
-| 온디바이스 AI 모델 | [frontend/shutter-android/app/src/main/cpp/AI_README.md](frontend/shutter-android/app/src/main/cpp/README.md) |
+| 온디바이스 AI 모델 | [frontend/shutter-android/app/src/main/cpp/AI_README.md](frontend/shutter-android/app/src/main/cpp/AI_README.md) |
 | 딥페이크 발신자 시뮬레이터 (Demo) | [frontend/shutter-android/demo/README.md](frontend/shutter-android/demo/README.md) |
 | 백엔드 서버 (Backend) | [shutter-BE/README.md](shutter-BE/README.md) |
 | 포팅 매뉴얼 | [exec/포팅매뉴얼.md](exec/포팅매뉴얼.md) |
 
 ---
 
-## System Architecture
+## 1. Key Features & System Architecture
 
-<img src="docs/images/system_architecture.png" alt="System Architecture" width="800"/>
+### System Architecture
+
+<div style="background-color:white; display:inline-block; padding:8px;">
+<img src="docs/images/system_architecture.png" alt="System Architecture" width="500"/>
+</div>
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         [공격자 측] Demo                             │
-│  deepfake-caller.html  ──▶  server.py (InsightFace 페이스스왑)       │
-└────────────────────────────────┬────────────────────────────────────┘
-                                 │ Agora RTC (딥페이크 영상 송출)
-┌────────────────────────────────▼────────────────────────────────────┐
 │                      OnGuard Android App                             │
 │                                                                      │
 │   ┌─────────────────────────┐   ┌──────────────────────────────┐   │
@@ -60,25 +73,6 @@
               (영구 데이터)  (GPS·캐시)  (모니터링)
 ```
 
-
----
-
-## 1. Background
-
-스마트폰 영상통화가 일상화되면서 **생성형 AI 기반 딥페이크** 기술을 악용한 보이스피싱 범죄가 급증하고 있습니다. 공격자는 지인의 얼굴을 실시간으로 합성하여 영상통화를 시도하며, 피해자 입장에서는 영상을 보고도 가짜임을 인지하기가 사실상 불가능합니다.
-
-| 문제 | OnGuard의 해결 방법 |
-|------|---------------------|
-| 영상통화 중 딥페이크를 실시간으로 감지할 수 없음 | 온디바이스 AI 모델(ForensicAdapter)로 통화 화면을 실시간 분석, 이상 감지 즉시 경고 오버레이 표시 |
-| 딥페이크 감지 시 보호자에게 알릴 수단 없음 | 감지 즉시 등록된 보호자에게 FCM 푸시 알림 + GPS 위치 자동 공유 |
-| 통화 상대방의 실제 위치 확인 불가 | 상대방 IP 기반 국가 위치를 지도에 시각화하여 표시 |
-| 통화 중 대화 내용 실시간 분석 도구 없음 | 온디바이스 Whisper STT + GPT-4o-mini 위험 키워드 자동 태깅 |
-| 피해 발생 후 대응 수단 부재 | 금융 거래 차단 가이드 오버레이, 최근 감지 기록 타임라인 제공 |
-
----
-
-## 2. Key Features & System Architecture
-
 ### 주요 기능
 
 | 기능 | 설명 |
@@ -103,7 +97,6 @@
 | **Backend** | Java 21, Spring Boot 3.5.11, Spring Security, Spring WebSocket (STOMP) |
 | **Database** | MySQL 8+ (영구 데이터), Redis (GPS·세션 캐시) |
 | **인프라** | Docker, Docker Compose, Jenkins CI/CD, Nginx, Grafana |
-| **Demo** | Python, FastAPI, InsightFace (`inswapper_128`), ONNX Runtime |
 
 ### Project Structure
 
@@ -124,10 +117,7 @@ S14P21A404/
 │       │   │   ├── jniLibs/              # 프리컴파일 네이티브 라이브러리 (arm64-v8a)
 │       │   │   └── assets/              # AI 모델 파일 (face_deepfake_v6.onnx)
 │       │   └── build.gradle.kts
-│       └── demo/                         # 딥페이크 발신자 시뮬레이터
-│           ├── server.py                 # FastAPI 페이스스왑 WebSocket 서버
-│           ├── deepfake-caller.html      # 브라우저 기반 발신자 클라이언트
-│           └── README.md
+│       └── demo/                         # 딥페이크 발신자 시뮬레이터 (→ 5. App Test 참고)
 ├── shutter-BE/                           # Spring Boot 백엔드
 │   ├── src/main/java/com/shutter/api/
 │   │   ├── global/                       # JWT, Security, Redis 설정
@@ -140,12 +130,12 @@ S14P21A404/
 │   └── README.md
 ├── convention/                           # Git·Jira 협업 규칙
 └── docs/
-    └── images/                           # README 이미지 리소스 (로고, 아키텍처 등)
+    └── images/                           # README 이미지 리소스
 ```
 
 ---
 
-## 3. Setup
+## 2. Setup
 
 ### Android 앱
 
@@ -201,26 +191,7 @@ JWT_SECRET=your_jwt_secret_key_at_least_32_chars
 
 ---
 
-### Demo (딥페이크 발신자 시뮬레이터)
-
-| 항목 | 권장 사양 |
-|------|-----------|
-| Python | 3.10 ~ 3.12 |
-| GPU | NVIDIA (CUDA 12.x, cuDNN 9.x) 권장 |
-
-```bash
-pip install fastapi "uvicorn[standard]" opencv-python insightface pillow "numpy<2"
-# GPU 사용 시
-pip install onnxruntime-gpu
-```
-
-`inswapper_128.onnx` 모델을 [HuggingFace](https://huggingface.co/deepinsight/inswapper/resolve/main/inswapper_128.onnx)에서 다운로드하여 `demo/` 디렉터리에 배치합니다.
-
-자세한 내용은 [Demo README](frontend/shutter-android/demo/README.md)를 참고하세요.
-
----
-
-## 4. Usage
+## 3. Usage
 
 ### Android 앱 빌드 및 실행
 
@@ -247,21 +218,63 @@ docker-compose -f docker-compose.local.yml up -d
 
 API 명세: `http://localhost:8080/swagger-ui.html`
 
-### Demo 서버 실행
+---
+
+## 4. App Test
+
+OnGuard의 딥페이크 감지 기능을 실제로 검증하려면 **딥페이크 영상을 송출하는 공격자 환경**이 필요합니다. `demo/` 폴더에는 웹캠 영상에 실시간 페이스스왑을 적용하여 Agora 채널로 송출하는 시뮬레이터가 포함되어 있습니다. 이를 통해 OnGuard 앱이 실제 딥페이크 통화를 수신했을 때 감지 및 경고 오버레이가 정상 동작하는지 end-to-end로 시연할 수 있습니다.
+
+자세한 내용은 [Demo README](frontend/shutter-android/demo/README.md)를 참고하세요.
+
+### Setup
+
+| 항목 | 권장 사양 |
+|------|-----------|
+| Python | 3.10 ~ 3.12 |
+| GPU | NVIDIA (CUDA 12.x, cuDNN 9.x) 권장 |
 
 ```bash
 cd frontend/shutter-android/demo
 
+python -m venv venv
 # Windows
+venv\Scripts\activate
+# macOS / Linux
+source venv/bin/activate
+
+pip install fastapi "uvicorn[standard]" opencv-python insightface pillow "numpy<2"
+# GPU 사용 시
+pip install onnxruntime-gpu
+```
+
+`inswapper_128.onnx` 모델을 [HuggingFace](https://huggingface.co/deepinsight/inswapper/resolve/main/inswapper_128.onnx)에서 다운로드하여 `demo/` 디렉터리에 배치합니다.
+
+`deepfake-caller.html` 상단의 상수를 환경에 맞게 수정합니다.
+
+```javascript
+const APP_ID = 'YOUR_AGORA_APP_ID';
+const WS_URL = 'ws://localhost:8765';
+```
+
+### Usage
+
+```bash
+# 1. 페이스스왑 서버 실행
+# Windows (GPU 사용 시 cuDNN 경로 추가)
 set PATH=venv\Lib\site-packages\nvidia\cudnn\bin;%PATH%
 python server.py
 
-# 브라우저에서 클라이언트 열기
+# 2. 브라우저 클라이언트 서빙
 python -m http.server 8080
 # → http://localhost:8080/deepfake-caller.html
 ```
 
-자세한 시연 순서는 [Demo README](frontend/shutter-android/demo/README.md)를 참고하세요.
+**시연 순서**
+
+1. 브라우저에서 카카오 로그인
+2. 소스 얼굴 이미지 업로드 → 페이스스왑 ON
+3. 피해자(OnGuard 앱 설치 기기) 카카오 ID 입력 → 통화 시작
+4. OnGuard 앱에서 통화 수락 → 딥페이크 감지 경고 오버레이 확인
 
 ---
 
