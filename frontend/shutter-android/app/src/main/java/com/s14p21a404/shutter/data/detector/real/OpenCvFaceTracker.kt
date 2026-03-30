@@ -108,7 +108,7 @@ class OpenCvFaceTracker(private val context: Context) : DeepfakeDetector {
                     val faceHeightRatio = largestFace.height.toFloat() / height
                     
                     // 얼굴이 프레임 가로의 15%, 세로의 10% 이상일 때만 박스를 침 (너무 작은 얼굴 무시)
-                    if (faceWidthRatio >= 0.15f && faceHeightRatio >= 0.10f) {
+                    if (faceWidthRatio >= 0.2f && faceHeightRatio >= 0.2f) {
                         opencvRoi = FloatArray(4)
                         opencvRoi[0] = largestFace.x.toFloat() / width
                         opencvRoi[1] = largestFace.y.toFloat() / height

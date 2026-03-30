@@ -178,7 +178,7 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
     private fun averageResults(results: List<DeepfakeDetectionResult>): DeepfakeDetectionResult {
         // detected: 과반수(5개 이상)가 true면 true
         val avgFakeProb = results.map { it.fakeProb }.average().toFloat()
-        val detected = avgFakeProb > 0.1f // 테스트 중 좋은 threshold: 0.3
+        val detected = avgFakeProb <= 0.8f // 가짜일 확률이 0.8 이하이면 위조 영상(가짜)으로 판정
 
         // ROI는 averageResults에서 계산하지 않음 — 얼굴 박스는 OpenCV 전용
         return DeepfakeDetectionResult(
@@ -235,7 +235,6 @@ class RealDeepfakeDetector(private val context: Context) : DeepfakeDetector {
 
     companion object {
         private const val TAG = "RealDeepfakeDetector"
-        private const val BUFFER_SIZE = 1 // 원래 10
+        private const val BUFFER_SIZE = 3 // 원래 10
     }
 }
-

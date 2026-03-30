@@ -89,7 +89,7 @@ public class KakaoPushRequest {
         private String body;
 
         public FcmNotification(String title, String body) {
-            this.title = (title != null && !title.isBlank()) ? title : "SHUTTER 긴급 알림";
+            this.title = (title != null && !title.isBlank()) ? title : "OnGuard 긴급 알림";
             this.body = body;
         }
     }

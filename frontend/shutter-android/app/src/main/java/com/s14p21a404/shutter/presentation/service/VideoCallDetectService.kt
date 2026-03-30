@@ -247,7 +247,7 @@ class VideoCallDetectService : Service() {
                     // ── 딥페이크 최초 감지 ──
                     isDeepfakeDetected = true
                     //
-                    // alertSoundManager.startAlert()
+                    alertSoundManager.startAlert()
                     financialBlockOverlayManager.setEnabled(true)
                     startFinancialAppMonitoring()
                     if (!alertSentForCurrentSession) {
