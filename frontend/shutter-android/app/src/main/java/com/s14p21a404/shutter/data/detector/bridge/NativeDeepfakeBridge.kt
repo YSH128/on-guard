@@ -306,7 +306,7 @@ class NativeDeepfakeBridge(private val context: Context) {
                 val fakeProb      = results[0]  // softmax(logits)[1] = fake 확률
                 val realProb      = results[1]  // softmax(logits)[0] = real 확률
                 val inferenceTime = results[3]
-                val isFake        = realProb < 0.5f  // 진짜일 확률이 0.5 미만이면 가짜
+                val isFake        = fakeProb <= 0.8f  // 가짜일 확률이 0.8 이하이면 위조 영상(가짜)으로 판정
                 val status        = if (isFake) "FAKE" else "REAL"
 
                 var roi: FloatArray? = null
@@ -394,7 +394,7 @@ class NativeDeepfakeBridge(private val context: Context) {
             }
 
             if (isSuccess) {
-                isFake = avgReal < 0.5f // 진짜일 확률이 0.5 미만이면 가짜
+                isFake = avgFake <= 0.8f // 가짜일 확률이 0.8 이하이면 위조 영상(가짜)으로 판정
                 status = if (isFake) "FAKE" else "REAL"
                 faceFakeProb = avgFake
                 faceRealProb = avgReal
