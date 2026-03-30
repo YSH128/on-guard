@@ -36,18 +36,21 @@ class OnDeviceWhisperHelper(private val context: Context) {
      * ONNX 초기화 완료 후 자동 호출됨
      */
     suspend fun preloadModel() = withContext(Dispatchers.IO) {
-        try {
-            if (whisperKit != null) {
-                Log.d("WhisperSTT", "모델이 이미 로드됨 — preload 스킵")
-                return@withContext
-            }
-            Log.d("WhisperSTT", "🔄 WhisperKit 모델 사전 로딩 시작 (마이크 접근 없음)...")
+        var retryCount = 0
+        val maxRetries = 3
+        while (retryCount < maxRetries) {
+            try {
+                if (whisperKit != null) {
+                    Log.d("WhisperSTT", "모델이 이미 로드됨 — preload 스킵")
+                    return@withContext
+                }
+                Log.d("WhisperSTT", "🔄 WhisperKit 모델 사전 로딩 시작 (마이크 접근 없음)... 시도 ${retryCount + 1}/$maxRetries")
 
-            whisperKit = WhisperKit.Builder()
-                .setModel(WhisperKit.Builder.OPENAI_BASE)
-                .setEncoderBackend(WhisperKit.Builder.CPU_ONLY)
-                .setDecoderBackend(WhisperKit.Builder.CPU_ONLY)
-                .setApplicationContext(context.applicationContext)
+                val tempKit = WhisperKit.Builder()
+                    .setModel(WhisperKit.Builder.OPENAI_BASE)
+                    .setEncoderBackend(WhisperKit.Builder.CPU_ONLY)
+                    .setDecoderBackend(WhisperKit.Builder.CPU_ONLY)
+                    .setApplicationContext(context.applicationContext)
                 .setCallback { what, result ->
                     when (what) {
                         WhisperKit.TextOutputCallback.MSG_INIT -> {
@@ -86,13 +89,24 @@ class OnDeviceWhisperHelper(private val context: Context) {
                 }
                 .build()
 
-            whisperKit?.loadModel()?.collect { progress ->
-                Log.d("WhisperSTT_Init", "Model loading progress: ${progress.fractionCompleted}%")
-            }
-            Log.d("WhisperSTT_Init", "✅ WhisperKit 모델 사전 로딩 완료 (init은 통화 시작 시 호출)")
+                tempKit.loadModel().collect { progress ->
+                    Log.d("WhisperSTT_Init", "Model loading progress: ${progress.fractionCompleted}%")
+                }
+                
+                // 성공적으로 로드 완료되면 실제 할당
+                whisperKit = tempKit
+                Log.d("WhisperSTT_Init", "✅ WhisperKit 모델 사전 로딩 완료 (init은 통화 시작 시 호출)")
+                return@withContext
 
-        } catch (e: Exception) {
-            Log.e("WhisperSTT_Init", "❌ Error preloading WhisperKit: ${e.message}")
+            } catch (e: Exception) {
+                retryCount++
+                Log.e("WhisperSTT_Init", "❌ Error preloading WhisperKit (시도 $retryCount/$maxRetries): ${e.message}")
+                if (retryCount >= maxRetries) {
+                    Log.e("WhisperSTT_Init", "❌ 최대 재시도 횟수 초과. WhisperKit 사전 로딩 실패 (C++ 크래시 방지를 위해 whisperKit=null 유지).")
+                } else {
+                    kotlinx.coroutines.delay(2000)
+                }
+            }
         }
     }
 
@@ -111,6 +125,11 @@ class OnDeviceWhisperHelper(private val context: Context) {
             if (whisperKit == null) {
                 Log.d("WhisperSTT", "모델 미로드 상태 — preloadModel() 먼저 실행")
                 preloadModel()
+            }
+            
+            if (whisperKit == null) {
+                Log.e("WhisperSTT", "❌ WhisperKit 모델 다운로드/준비에 실패하여 오디오 초기화를 취소합니다. (C++ 크래시 방지)")
+                return@withContext
             }
 
             Log.d("WhisperSTT", "🎙️ WhisperKit 오디오 초기화 시작...")
