@@ -41,7 +41,7 @@
 ### System Architecture
 
 <div style="background-color:white; display:inline-block; padding:8px;">
-<img src="docs/images/system_architecture.png" alt="System Architecture" width="500"/>
+<img src="docs/images/system_architecture.jpg" alt="System Architecture" width="500"/>
 </div>
 
 ```
