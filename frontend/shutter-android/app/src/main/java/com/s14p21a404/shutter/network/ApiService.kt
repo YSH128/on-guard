@@ -1,0 +1,297 @@
+package com.s14p21a404.shutter.network
+
+import com.google.gson.annotations.SerializedName
+import retrofit2.http.Body
+import retrofit2.http.DELETE
+import retrofit2.http.GET
+import retrofit2.http.POST
+import retrofit2.http.PUT
+import retrofit2.http.Path
+
+// ── 카카오 로그인 ──────────────────────────────────────────────────────────────
+
+data class KakaoLoginRequest(
+    @SerializedName("kakao_access_token") val kakaoAccessToken: String,
+    @SerializedName("kakao_refresh_token") val kakaoRefreshToken: String,
+    @SerializedName("device_uuid") val deviceUuid: String,
+)
+
+/**
+ * /auth/kakao 응답의 data 필드.
+ *
+ * 기존 회원: isNewUser=false → userId, accessToken, refreshToken 존재
+ * 신규 회원: isNewUser=true  → kakaoId 만 존재
+ */
+data class KakaoLoginData(
+    @SerializedName("user_id") val userId: Long,
+    @SerializedName("access_token") val accessToken: String,
+    @SerializedName("refresh_token") val refreshToken: String,
+)
+
+data class KakaoLoginResponse(
+    val success: Boolean,
+    val message: String,
+    val data: KakaoLoginData,
+)
+
+// ── 토큰 갱신 ──────────────────────────────────────────────────────────────────
+
+data class RefreshRequest(
+    @SerializedName("refresh_token") val refreshToken: String,
+)
+
+data class RefreshResponse(
+    val success: Boolean,
+    val message: String,
+    val data: String, // 새로운 access_token
+)
+
+// ── 보호자 등록 POST /guardians ────────────────────────────────────────────────
+
+data class RegisterGuardianRequest(
+    @SerializedName("guardian_kakao_id") val guardianKakaoId: Long,
+)
+
+data class RegisterGuardianData(
+    @SerializedName("relationship_id") val relationshipId: Long,
+    @SerializedName("guardian_id") val guardianId: Long,
+    @SerializedName("guardian_name") val guardianName: String,
+    @SerializedName("created_at") val createdAt: String,
+)
+
+data class RegisterGuardianResponse(
+    val success: Boolean,
+    val message: String,
+    val data: RegisterGuardianData,
+)
+
+// ── 내 보호자 목록 GET /guardians/me ──────────────────────────────────────────
+
+data class GuardianItem(
+    @SerializedName("relationship_id") val relationshipId: Long,
+    @SerializedName("guardian_id") val guardianId: Long,
+    @SerializedName("guardian_name") val guardianName: String,
+    @SerializedName("created_at") val createdAt: String,
+    @SerializedName("profile_image_url") val profileImageUrl: String? = null,
+)
+
+data class GuardianListData(val guardians: List<GuardianItem>)
+
+data class GuardianListResponse(
+    val success: Boolean,
+    val message: String,
+    val data: GuardianListData,
+)
+
+// ── 보호자 관계 해제 DELETE /guardians/{relationshipId} ───────────────────────
+
+data class DeleteGuardianData(
+    @SerializedName("relationship_id") val relationshipId: Long,
+)
+
+data class DeleteGuardianResponse(
+    val success: Boolean,
+    val message: String,
+    val data: DeleteGuardianData,
+)
+
+// ── 내 피보호자 목록 GET /guardians/wards/me ──────────────────────────────────
+
+data class WardItem(
+    @SerializedName("ward_id") val wardId: Long,
+    val name: String,
+    val lat: Double?,
+    val lng: Double?,
+    @SerializedName("gps_updated_at") val gpsUpdatedAt: String?,
+    @SerializedName("profile_image_url") val profileImageUrl: String? = null,
+)
+
+data class WardListData(val wards: List<WardItem>)
+
+data class WardListResponse(
+    val success: Boolean,
+    val message: String,
+    val data: WardListData,
+)
+
+// ── GPS 위치 전송 POST /gps ────────────────────────────────────────────────────
+
+data class GpsRequest(
+    val lat: Double,
+    val lng: Double,
+)
+
+data class GpsResponseData(
+    @SerializedName("updated_at") val updatedAt: String,
+)
+
+data class GpsResponse(
+    val success: Boolean,
+    val message: String,
+    val data: GpsResponseData,
+)
+
+// ── 피보호자 위치 조회 GET /gps/{wardId} ──────────────────────────────────────
+
+data class GpsLocationData(
+    @SerializedName("ward_id") val wardId: Long,
+    val name: String,
+    val lat: Double?,
+    val lng: Double?,
+    @SerializedName("updated_at") val updatedAt: String?,
+    @SerializedName("is_sharing") val isSharing: Boolean,
+)
+
+data class GpsLocationResponse(
+    val success: Boolean,
+    val message: String,
+    val data: GpsLocationData,
+)
+
+// ── GPS 공유 토글 PUT /gps/sharing ─────────────────────────────────────────────
+
+data class GpsSharingRequest(
+    @SerializedName("gps_sharing") val gpsSharing: Boolean,
+)
+
+data class GpsSharingData(
+    @SerializedName("gps_sharing") val gpsSharing: Boolean,
+)
+
+data class GpsSharingResponse(
+    val success: Boolean,
+    val message: String,
+    val data: GpsSharingData,
+)
+
+// ── 딥페이크 알림 전송 POST /alerts/send ──────────────────────────────────────
+
+data class AlertSendRequest(
+    @SerializedName("event_type") val eventType: String,
+    @SerializedName("caller") val caller: String? = null,
+    @SerializedName("call_started_at") val callStartedAt: String? = null,
+)
+
+data class AlertSendItem(
+    @SerializedName("notification_id") val notificationId: Long,
+    @SerializedName("status") val status: String,
+    @SerializedName("sent_at") val sentAt: String,
+)
+
+data class AlertSendResponse(
+    val success: Boolean,
+    val message: String,
+    val data: List<AlertSendItem>,
+)
+
+// ── 타임라인 조회 GET /timeline/{wardId} ──────────────────────────────────────
+
+data class TimelineItem(
+    val type: String,
+    val timestamp: String,
+    val tag: String,
+    @SerializedName("to_name") val toName: String? = null,
+    val status: String? = null,
+    @SerializedName("call_started_at") val callStartedAt: String? = null,
+    val caller: String? = null,
+)
+
+data class TimelineData(val timeline: List<TimelineItem>)
+
+data class TimelineResponse(
+    val success: Boolean,
+    val message: String,
+    val data: TimelineData,
+)
+
+// ── 영상 통화 요청 POST /calls ──────────────────────────────────────────────────
+
+data class CallRequest(
+    @SerializedName("callee_kakao_id") val calleeKakaoId: Long
+)
+
+data class CallResponseData(
+    @SerializedName("channel_name") val channelName: String,
+    @SerializedName("token") val token: String
+)
+
+data class CallResponse(
+    val success: Boolean,
+    val message: String,
+    val data: CallResponseData
+)
+
+// ── 범죄자 위치 요청/신고 ──────────────────────────────────────────────────────
+
+data class CriminalLocationRequestBody(
+    @SerializedName("opponent_kakao_id") val opponentKakaoId: Long,
+)
+
+data class CriminalLocationReportBody(
+    @SerializedName("requester_kakao_id") val requesterKakaoId: Long,
+    val lat: Double,
+    val lng: Double,
+)
+
+data class MessageResponse(
+    val success: Boolean,
+    val message: String,
+)
+
+// ── 인터페이스 ─────────────────────────────────────────────────────────────────
+
+interface ApiService {
+
+    @POST("api/v1/auth/kakao")
+    suspend fun loginWithKakao(@Body request: KakaoLoginRequest): KakaoLoginResponse
+
+    @POST("api/v1/auth/refresh")
+    suspend fun refreshToken(@Body request: RefreshRequest): RefreshResponse
+
+    @POST("api/v1/guardians")
+    suspend fun registerGuardian(@Body request: RegisterGuardianRequest): RegisterGuardianResponse
+
+    @GET("api/v1/guardians/me")
+    suspend fun getMyGuardians(): GuardianListResponse
+
+    @DELETE("api/v1/guardians/{relationshipId}")
+    suspend fun deleteGuardian(@Path("relationshipId") relationshipId: Long): DeleteGuardianResponse
+
+    @GET("api/v1/guardians/wards/me")
+    suspend fun getMyWards(): WardListResponse
+
+    @POST("api/v1/gps")
+    suspend fun postGps(@Body request: GpsRequest): GpsResponse
+
+    @GET("api/v1/gps/{wardId}")
+    suspend fun getWardGps(@Path("wardId") wardId: Long): GpsLocationResponse
+
+    @PUT("api/v1/gps/sharing")
+    suspend fun toggleGpsSharing(@Body request: GpsSharingRequest): GpsSharingResponse
+
+    @POST("api/v1/alerts/send")
+    suspend fun sendAlert(@Body request: AlertSendRequest): AlertSendResponse
+
+    @GET("api/v1/timeline/{wardId}")
+    suspend fun getTimeline(@Path("wardId") wardId: Long): TimelineResponse
+
+    // ── 통화(RTC) ──────────────────────────────────────────────────────────────
+
+    @POST("api/v1/calls")
+    suspend fun requestCall(@Body request: CallRequest): CallResponse
+
+    @POST("api/v1/calls/{channelName}/accept")
+    suspend fun acceptCall(@Path("channelName") channelName: String): CallResponse
+
+    @POST("api/v1/calls/{channelName}/reject")
+    suspend fun rejectCall(@Path("channelName") channelName: String): MessageResponse
+
+    @POST("api/v1/calls/{channelName}/cancel")
+    suspend fun cancelCall(@Path("channelName") channelName: String): MessageResponse
+
+    @POST("api/v1/location/criminal-request")
+    suspend fun requestCriminalLocation(@Body request: CriminalLocationRequestBody): MessageResponse
+
+    @POST("api/v1/location/criminal-report")
+    suspend fun reportCriminalLocation(@Body request: CriminalLocationReportBody): MessageResponse
+}

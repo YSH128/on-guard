@@ -1,0 +1,133 @@
+pipeline {
+    agent any
+
+    environment {
+        IMAGE_NAME  = "shutter-be"
+        DEPLOY_PATH = "/home/ubuntu/shutter"
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                cleanWs()
+                checkout scm
+                echo "Branch: ${env.GIT_BRANCH}"
+            }
+        }
+
+        stage('Build') {
+            steps {
+                dir('shutter-BE') {
+                    sh 'chmod +x gradlew'
+                    sh './gradlew bootJar -x test --no-daemon'
+                }
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                dir('shutter-BE') {
+                    sh """
+                        docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} .
+                        docker tag ${IMAGE_NAME}:${BUILD_NUMBER} ${IMAGE_NAME}:latest
+                    """
+                }
+            }
+        }
+
+        stage('Deploy (Blue-Green)') {
+            steps {
+                script {
+
+                    def NGINX      = 'shutter-be-nginx-1'
+                    def NGINX_CONF = '/home/ubuntu/apps/S14P21A404/shutter-BE/nginx'
+
+                    dir('shutter-BE') {
+                        withCredentials([file(credentialsId: 'ENV_FILE', variable: 'SECRET_ENV')]) {
+
+                            // 0. 인프라 컨테이너(mysql, redis, nginx) 없으면 먼저 기동
+                            sh """
+                                tr -d '\\r' < \${SECRET_ENV} > /tmp/clean_env
+                                set -a; . /tmp/clean_env; set +a
+                                export COMPOSE_IGNORE_ORPHANS=True
+
+                                if ! docker ps --filter 'name=shutter-be-mysql-1' --filter 'status=running' -q | grep -q .; then
+                                    echo "⚙️ 인프라 컨테이너 초기 기동 중..."
+                                    docker compose --profile prod up -d mysql redis nginx grafana
+                                    echo "MySQL 헬스체크 대기 중..."
+                                    sleep 30
+                                else
+                                    echo "✅ 인프라 컨테이너 이미 실행 중"
+                                fi
+                            """
+
+                            // 현재 운영 컨테이너 확인
+                            def current = sh(
+                                script: "docker ps --filter 'name=spring-blue' --filter 'status=running' --format '{{.Names}}'",
+                                returnStdout: true
+                            ).trim()
+
+                            def next     = (current == 'spring-blue') ? 'green' : 'blue'
+                            def nextName = "spring-${next}"
+                            def prevName = (next == 'blue') ? 'spring-green' : 'spring-blue'
+
+                            echo "현재: ${current ?: '없음'} → 다음: ${nextName}"
+
+                            // 1. 새 버전 컨테이너 실행
+                            sh """
+                                set -a; . /tmp/clean_env; set +a
+                                export SPRING_PROFILES_ACTIVE=prod
+                                export COMPOSE_IGNORE_ORPHANS=True
+                                docker compose --profile ${next} up -d --build ${nextName}
+                                rm -f /tmp/clean_env
+                            """
+
+                            // 2. 헬스체크
+                            sh """
+                                IS_HEALTHY=false
+                                for i in \$(seq 1 12); do
+                                    if docker exec ${NGINX} nc -z ${nextName} 8080 2>/dev/null; then
+                                        echo "✅ 헬스체크 통과: ${nextName} 서버 기동 완료"
+                                        IS_HEALTHY=true
+                                        break
+                                    fi
+                                    echo "서버 기동 기다리는 중... (\$i/12)"
+                                    sleep 5
+                                done
+
+                                if [ "\$IS_HEALTHY" = "false" ]; then
+                                    echo "❌ 헬스체크 실패! 배포를 중지하고 롤백"
+                                    docker stop ${nextName} || true
+                                    exit 1
+                                fi
+                            """
+
+                            // 3. nginx upstream 전환
+                            // echo > 방식: 파일 교체 없이 내용만 덮어씀 → bind mount 문제 없음
+                            sh """
+                                echo 'server ${nextName}:8080;' > ${NGINX_CONF}/upstream.conf
+                                docker exec ${NGINX} nginx -s reload
+                            """
+
+                            // 4. 이전 버전 종료
+                            sh """
+                                sleep 5
+                                docker stop ${prevName} 2>/dev/null || true
+                            """
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ 배포 성공! Build #${BUILD_NUMBER}"
+        }
+        failure {
+            echo "❌ 배포 실패! Build #${BUILD_NUMBER}"
+        }
+    }
+}

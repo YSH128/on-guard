@@ -312,3 +312,20 @@ mydocs/
 
 # Andorid Studio
 .idea/
+
+
+# ----------Gemini CLI----------
+.geminiignore
+
+# -------Claude code CLI---------
+.claude
+
+# --------------AI---------------
+*.flac
+*.jpg
+*.mp4
+*.pt
+*.ptl
+AI/
+*.aar
+*.onnx

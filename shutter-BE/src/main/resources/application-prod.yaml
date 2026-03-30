@@ -1,0 +1,69 @@
+spring:
+  # Nginx의 X-Forwarded 헤더를 인식하도록 설정 (Swagger URL HTTPS로 생성)
+  forward-headers-strategy: framework
+
+  # ───── 운영 환경 설정 (EC2 Docker 배포) ─────
+  datasource:
+    url: jdbc:mysql://${DB_HOST:mysql}:${DB_PORT:3306}/${DB_NAME}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&useUnicode=true&characterEncoding=UTF-8
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      connection-init-sql: "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+
+  jpa:
+    show-sql: false # 운영에서는 SQL 미출력
+
+# Actuator - 운영에서는 헬스체크만 (공통 설정 유지)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, metrics
+  endpoint:
+    health:
+      show-details: always
+
+# 운영 로그 설정
+logging:
+  level:
+    root: WARN
+    com.shutter: INFO
+    com.shutter.api.gps: DEBUG
+  file:
+    name: /var/log/shutter/app.log
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 7
+
+# Swagger UI (운영에서 비활성화)
+springdoc:
+  swagger-ui:
+    enabled: true
+  api-docs:
+    enabled: true
+
+# Kakao OAuth
+kakao:
+  rest-api-key: ${KAKAO_REST_API_KEY}
+  admin-key: ${KAKAO_ADMIN_KEY}
+
+# JWT
+jwt:
+  secret: ${JWT_SECRET}
+  access-expiry-ms: ${JWT_ACCESS_EXPIRY_MS:3600000}
+  refresh-expiry-ms: ${JWT_REFRESH_EXPIRY_MS:1209600000}
+
+# Agora RTC
+agora:
+  app-id: ${AGORA_APP_ID}
+  app-certificate: ${AGORA_APP_CERTIFICATE}
