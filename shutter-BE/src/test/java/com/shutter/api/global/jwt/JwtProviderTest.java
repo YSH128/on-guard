@@ -1,5 +1,7 @@
 package com.shutter.api.global.jwt;
 
+import com.shutter.api.global.exception.ErrorCode;
+import com.shutter.api.user.domain.Role;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,6 +41,36 @@ class JwtProviderTest {
     }
 
     @Test
+    @DisplayName("Role을 포함하여 Access Token 발급 시 getRole로 정상 조회된다")
+    void generateAccessToken_withRole_and_getRole() {
+        // given
+        Long userId = 1L;
+        Role role = Role.GUARDIAN;
+
+        // when
+        String token = jwtProvider.generateAccessToken(userId, role);
+
+        // then
+        assertThat(token).isNotBlank();
+        assertThat(jwtProvider.getUserId(token)).isEqualTo(userId);
+        assertThat(jwtProvider.getRole(token)).isEqualTo("GUARDIAN");
+    }
+
+    @Test
+    @DisplayName("Role이 null일 때 generateAccessToken 호출 시 기본 PENDING 권한이 부여된다")
+    void generateAccessToken_nullRole_defaultsToPending() {
+        // given
+        Long userId = 2L;
+
+        // when
+        String token = jwtProvider.generateAccessToken(userId, (Role) null);
+
+        // then
+        assertThat(token).isNotBlank();
+        assertThat(jwtProvider.getRole(token)).isEqualTo("PENDING");
+    }
+
+    @Test
     @DisplayName("Refresh Token 발급 후 userId를 정상적으로 추출할 수 있다")
     void generateRefreshToken_and_getUserId() {
         // given
@@ -60,6 +92,25 @@ class JwtProviderTest {
 
         // when & then
         assertThat(jwtProvider.validateToken(token)).isTrue();
+    }
+
+    @Test
+    @DisplayName("checkTokenValidity는 토큰 상태에 따라 올바른 ErrorCode를 반환한다")
+    void checkTokenValidity_returnsCorrectStatus() {
+        // given
+        String validToken = jwtProvider.generateAccessToken(1L);
+
+        JwtProvider expiredProvider = new JwtProvider();
+        ReflectionTestUtils.setField(expiredProvider, "secretValue", SECRET);
+        ReflectionTestUtils.setField(expiredProvider, "accessExpiryMs", 0L);
+        ReflectionTestUtils.setField(expiredProvider, "refreshExpiryMs", REFRESH_MS);
+        expiredProvider.init();
+        String expiredToken = expiredProvider.generateAccessToken(1L);
+
+        // when & then
+        assertThat(jwtProvider.checkTokenValidity(validToken)).isNull();
+        assertThat(jwtProvider.checkTokenValidity(expiredToken)).isEqualTo(ErrorCode.EXPIRED_JWT);
+        assertThat(jwtProvider.checkTokenValidity("invalid-token-string")).isEqualTo(ErrorCode.INVALID_JWT);
     }
 
     @Test
