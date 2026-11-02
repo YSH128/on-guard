@@ -50,6 +50,10 @@ public enum ErrorCode {
     SELF_CALL_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "SELF_CALL_NOT_ALLOWED", "본인에게 통화를 요청할 수 없습니다."),
     CALLEE_NOT_FOUND(HttpStatus.NOT_FOUND, "CALLEE_NOT_FOUND", "수신자가 앱에 가입되어 있지 않습니다."),
 
+    // GPS 위치 공유 관련
+    GPS_SHARING_DISABLED(HttpStatus.FORBIDDEN, "GPS_SHARING_DISABLED", "위치 공유가 비활성화되어 있습니다."),
+    INVALID_COORDINATE_RANGE(HttpStatus.BAD_REQUEST, "INVALID_COORDINATE_RANGE", "유효하지 않은 GPS 좌표 범위입니다."),
+
     // 서버 관련
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "서버 오류가 발생했습니다.");
 
