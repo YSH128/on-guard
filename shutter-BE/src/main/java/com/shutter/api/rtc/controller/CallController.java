@@ -29,7 +29,7 @@ public class CallController {
     public ApiResponse<CallResponse> acceptCall(
             @AuthenticationPrincipal Long userId,
             @PathVariable("channelName") String channelName) {
-        
+
         CallResponse response = callService.acceptCall(userId, channelName);
         return ApiResponse.of("통화 수락이 완료되었습니다.", response);
     }
@@ -38,7 +38,7 @@ public class CallController {
     public ApiResponse<Void> rejectCall(
             @AuthenticationPrincipal Long userId,
             @PathVariable("channelName") String channelName) {
-        
+
         callService.rejectCall(userId, channelName);
         return ApiResponse.of("통화 거절 처리가 완료되었습니다.", null);
     }
@@ -47,8 +47,17 @@ public class CallController {
     public ApiResponse<Void> cancelCall(
             @AuthenticationPrincipal Long userId,
             @PathVariable("channelName") String channelName) {
-        
+
         callService.cancelCall(userId, channelName);
         return ApiResponse.of("통화 취소 처리가 완료되었습니다.", null);
+    }
+
+    @PostMapping("/{channelName}/end")
+    public ApiResponse<Void> endCall(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable("channelName") String channelName) {
+
+        callService.endCall(userId, channelName);
+        return ApiResponse.of("통화 종료 처리가 완료되었습니다.", null);
     }
 }

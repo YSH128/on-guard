@@ -46,6 +46,7 @@ public enum ErrorCode {
     // 통화 관련
     CALL_NOT_FOUND(HttpStatus.NOT_FOUND, "CALL_NOT_FOUND", "통화 세션이 만료되었거나 존재하지 않습니다."),
     CALL_ALREADY_IN_PROGRESS(HttpStatus.CONFLICT, "CALL_ALREADY_IN_PROGRESS", "이미 발신 중인 통화가 존재합니다. 잠시 후 다시 시도해주세요."),
+    CALLEE_ALREADY_BUSY(HttpStatus.CONFLICT, "CALLEE_ALREADY_BUSY", "상대방이 현재 다른 통화 중이거나 응답 대기 중입니다."),
     SELF_CALL_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "SELF_CALL_NOT_ALLOWED", "본인에게 통화를 요청할 수 없습니다."),
     CALLEE_NOT_FOUND(HttpStatus.NOT_FOUND, "CALLEE_NOT_FOUND", "수신자가 앱에 가입되어 있지 않습니다."),
 

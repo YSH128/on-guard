@@ -26,6 +26,14 @@ public class AgoraTokenService {
     }
 
     /**
+     * 특정 사용자 ID(Long)를 바인딩하여 Agora 토큰 발급 (보안 강화)
+     */
+    public String createToken(String channelName, Long userId) {
+        int uid = (userId != null) ? (int) (userId & 0x7FFFFFFFL) : 0;
+        return createToken(channelName, uid);
+    }
+
+    /**
      * RtcTokenBuilder2를 이용한 토큰 발급 (Privilege = Publisher)
      */
     public String createToken(String channelName, int uid) {
@@ -41,7 +49,7 @@ public class AgoraTokenService {
                 TOKEN_EXPIRE_TIME_IN_SECONDS  // privilegeExpire (초 단위 상대값)
         );
 
-        log.debug("Generated Agora Token for channel: {}", channelName);
+        log.debug("Generated Agora Token for channel: {}, uid: {}", channelName, uid);
         return token;
     }
 }
