@@ -14,6 +14,7 @@ import com.shutter.api.gps.dto.response.LocationSharingOnDto;
 import com.shutter.api.gps.dto.response.LocationUpdateDto;
 import com.shutter.api.notification.client.KakaoPushClient;
 import com.shutter.api.notification.domain.NotificationEventType;
+import com.shutter.api.user.domain.Role;
 import com.shutter.api.user.domain.User;
 import com.shutter.api.user.domain.UserRelationship;
 import com.shutter.api.user.repository.UserRelationshipRepository;
@@ -53,6 +54,18 @@ public class GpsService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
+        // 1. 역할(Role) 인가 검증: 피보호자(WARD)만 위치를 업로드할 수 있음
+        if (user.getRole() != Role.WARD) {
+            log.warn("Unauthorized GPS upload attempt by user {} with role {}", userId, user.getRole());
+            throw new BusinessException(ErrorCode.UNAUTHORIZED_ACCESS);
+        }
+
+        // 2. 위치 공유 활성화 상태 검증: 사용자가 공유를 껐다면(false) 저장 및 브로드캐스트 차단
+        if (!Boolean.TRUE.equals(user.getGpsSharing())) {
+            log.warn("User {} attempted to upload GPS while sharing is disabled", userId);
+            throw new BusinessException(ErrorCode.GPS_SHARING_DISABLED);
+        }
+
         LocalDateTime now = LocalDateTime.now();
         String redisKey = GPS_KEY_PREFIX + userId;
 
@@ -76,12 +89,16 @@ public class GpsService {
 
             List<UserRelationship> relationships = userRelationshipRepository.findByWardIdWithGuardian(userId);
             if (!relationships.isEmpty()) {
-                // 최초 GPS 전송 시 보호자들에게 FCM 발송
+                // 최초 GPS 전송 시 보호자들에게 FCM 발송 (외부 푸시 장애 격리: try-catch)
                 if (Boolean.TRUE.equals(isFirstGps)) {
                     String pushMessage = NotificationEventType.LOCATION.getPushMessage(user.getName());
                     for (UserRelationship rel : relationships) {
-                        kakaoPushClient.sendPush(rel.getGuardian().getKakaoId(), user.getName(),
-                                NotificationEventType.LOCATION, pushMessage);
+                        try {
+                            kakaoPushClient.sendPush(rel.getGuardian().getKakaoId(), user.getName(),
+                                    NotificationEventType.LOCATION, pushMessage);
+                        } catch (Exception e) {
+                            log.warn("Failed to send LOCATION push to guardian KakaoId: {}", rel.getGuardian().getKakaoId(), e);
+                        }
                     }
                     log.info("Sent LOCATION FCM to {} guardians for ward {}", relationships.size(), userId);
                 }
@@ -161,12 +178,10 @@ public class GpsService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-        // 2. 권한 검증: 모든 유저가 자신의 위치 공유를 토글할 수 있음
-
-        // 3. DB 공유 상태 업데이트 (Dirty Checking)
+        // 2. DB 공유 상태 업데이트 (Dirty Checking)
         user.updateGpsSharing(request.getGpsSharing());
 
-        // 4. 공유 중지 시 Redis 잔여 데이터 즉시 삭제
+        // 3. 공유 중지 시 Redis 잔여 데이터 즉시 삭제
         if (Boolean.FALSE.equals(request.getGpsSharing())) {
             String redisKey = GPS_KEY_PREFIX + userId;
             redisTemplate.delete(redisKey);
@@ -183,7 +198,7 @@ public class GpsService {
             log.debug("Published LOCATION_EXPIRED to {} on toggle OFF", destination);
 
         } else {
-            // 5. 공유 ON 재전환 시 보호자들에게 LOCATION_SHARING_ON 이벤트 발송
+            // 4. 공유 ON 재전환 시 보호자들에게 LOCATION_SHARING_ON 이벤트 발송
             List<UserRelationship> relationships = userRelationshipRepository.findByWardIdWithGuardian(userId);
             if (!relationships.isEmpty()) {
                 LocationSharingOnDto sharingOnDto = LocationSharingOnDto.builder()

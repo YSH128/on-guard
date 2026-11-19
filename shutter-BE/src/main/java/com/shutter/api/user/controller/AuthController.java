@@ -4,7 +4,9 @@ import com.shutter.api.global.common.ApiResponse;
 import com.shutter.api.user.dto.request.KakaoLoginRequest;
 import com.shutter.api.user.dto.request.TokenRefreshRequest;
 import com.shutter.api.user.dto.response.LoginResponse;
+import com.shutter.api.user.dto.response.TokenRefreshResult;
 import com.shutter.api.user.service.AuthService;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -31,12 +33,14 @@ public class AuthController {
     }
 
     /**
-     * JWT Access Token 재발급
+     * JWT Access Token 재발급 (RTR 지원: 회전된 Refresh Token은 X-Refresh-Token 헤더로 전달)
      */
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<String>> refresh(
-            @Valid @RequestBody TokenRefreshRequest request) {
-        String newAccessToken = authService.refresh(request.refreshToken());
-        return ResponseEntity.ok(ApiResponse.of("토큰 갱신 성공", newAccessToken));
+            @Valid @RequestBody TokenRefreshRequest request,
+            HttpServletResponse response) {
+        TokenRefreshResult result = authService.refresh(request.refreshToken());
+        response.setHeader("X-Refresh-Token", result.newRefreshToken());
+        return ResponseEntity.ok(ApiResponse.of("토큰 갱신 성공", result.newAccessToken()));
     }
 }
