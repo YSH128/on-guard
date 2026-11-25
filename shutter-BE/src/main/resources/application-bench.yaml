@@ -1,0 +1,57 @@
+spring:
+  docker:
+    compose:
+      enabled: false
+  datasource:
+    url: jdbc:mysql://${DB_HOST:shutter-bench-mysql}:${DB_PORT:3306}/${DB_NAME:shutter}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&useUnicode=true&characterEncoding=UTF-8
+    username: ${DB_USERNAME:shutter}
+    password: ${DB_PASSWORD:shutter1234}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      connection-init-sql: "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+
+  data:
+    redis:
+      host: ${REDIS_HOST:shutter-bench-redis}
+      port: ${REDIS_PORT:6379}
+
+  jpa:
+    show-sql: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: WARN
+    com.shutter: WARN
+
+springdoc:
+  swagger-ui:
+    enabled: false
+  api-docs:
+    enabled: false
+
+kakao:
+  rest-api-key: ${KAKAO_REST_API_KEY:bench-dummy-kakao-rest-key}
+  admin-key: ${KAKAO_ADMIN_KEY:bench-dummy-kakao-admin-key}
+  push:
+    mock: true
+
+jwt:
+  secret: ${JWT_SECRET:bench_jwt_secret_key_for_load_testing_minimum_32_chars}
+  access-expiry-ms: ${JWT_ACCESS_EXPIRY_MS:86400000}
+  refresh-expiry-ms: ${JWT_REFRESH_EXPIRY_MS:1209600000}
+
+agora:
+  app-id: ${AGORA_APP_ID:bench-dummy-agora-app-id}
+  app-certificate: ${AGORA_APP_CERTIFICATE:bench-dummy-agora-cert}

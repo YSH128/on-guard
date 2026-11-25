@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/test")
-@Profile("local")
+@Profile({"local", "bench"})
 public class TestAuthController {
 
     private final JwtProvider jwtProvider;

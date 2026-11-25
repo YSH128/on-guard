@@ -34,6 +34,9 @@ public class KakaoPushClient {
     @Value("${kakao.admin-key}")
     private String adminKey;
 
+    @Value("${kakao.push.mock:false}")
+    private boolean mockPush;
+
     private static final String KAKAO_PUSH_SEND_URL = "https://kapi.kakao.com/v2/push/send";
 
     /**
@@ -45,6 +48,9 @@ public class KakaoPushClient {
      * @return 성공 여부 (HTTP 200 시 true)
      */
     public PushResult sendPush(Long kakaoId, String title, NotificationEventType eventType, String message) {
+        if (mockPush) {
+            return PushResult.SUCCESS;
+        }
         try {
             KakaoPushRequest request = KakaoPushRequest.builder()
                     .kakaoId(String.valueOf(kakaoId))
@@ -99,6 +105,9 @@ public class KakaoPushClient {
      * @return 전송 결과
      */
     public PushResult sendDataPush(Long kakaoId, Map<String, String> data) {
+        if (mockPush) {
+            return PushResult.SUCCESS;
+        }
         try {
             Map<String, Object> forFcm = Map.of("custom_field", data);
             Map<String, Object> pushMessage = Map.of("for_fcm", forFcm);
